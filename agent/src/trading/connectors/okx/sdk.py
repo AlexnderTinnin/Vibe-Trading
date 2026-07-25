@@ -8,10 +8,10 @@ restricted to BTC/ETH USDT swaps, and hard-gated to OKX Demo.
 Paper-vs-live is selected by the SDK ``flag`` (``"1"`` demo/paper sets the
 ``x-simulated-trading`` header, ``"0"`` live) and reinforced by OKX's separate
 demo key namespace. OKX returns NO field echoing demo/live, so there is no hard
-self-verifying guard: the discriminator is the configured flag plus best-effort
-UID pinning. When ``expected_uid`` is set, :func:`check_status` calls the account
-config endpoint and asserts the returned ``uid`` matches, reporting any mismatch
-as an error. The guard marker recorded on every payload is
+self-verifying guard: the discriminator is the configured flag plus UID pinning.
+When ``expected_uid`` is set, :func:`check_status` requires the
+account config endpoint to return a matching ``uid``; an API error, missing UID,
+or mismatch fails the check. The guard marker recorded on every payload is
 ``header_flag+uid_pin``. The selected profile is recorded as ``paper`` on every
 payload and never flipped implicitly.
 """
@@ -237,8 +237,8 @@ def check_status(config: OKXConfig | None = None) -> dict[str, Any]:
     """Check SDK readiness, config completeness, and account identity.
 
     Returns a JSON-serializable health report. Does not place or mutate any
-    broker state. When ``expected_uid`` is set, the account config endpoint is
-    queried (best effort) and a UID mismatch is reported as an error.
+    broker state. When ``expected_uid`` is set, the account config endpoint must
+    return a matching UID or the check fails closed.
     """
     cfg = config or load_config()
     report: dict[str, Any] = {
@@ -277,14 +277,22 @@ def check_status(config: OKXConfig | None = None) -> dict[str, Any]:
         try:
             account = _account_client(cfg)
             resp = _safe_call(account, "get_account_config")
-            rows = _extract_data(resp)
-            uid = _first(rows[0], ("uid",)) if rows else None
-            if uid is not None and str(uid) != cfg.expected_uid:
-                report["status"] = "error"
-                report["error"] = f"UID mismatch: expected {cfg.expected_uid}, broker returned {uid}."
-                return report
-        except Exception as exc:  # noqa: BLE001 - uid pinning is best effort
-            report["uid_check"] = {"ok": False, "error": str(exc)}
+            rows = _checked_read_rows(resp, "account configuration")
+            if not rows:
+                raise OKXConfigError("OKX returned no account configuration")
+            uid = _first(rows[0], ("uid",))
+            if uid in (None, ""):
+                raise OKXConfigError(
+                    "OKX account configuration did not include a UID; identity cannot be verified"
+                )
+            if str(uid) != cfg.expected_uid:
+                raise OKXConfigError(
+                    "UID mismatch: the configured OKX Demo UID does not match the authenticated account"
+                )
+        except Exception as exc:  # noqa: BLE001 - health report fails closed
+            report["status"] = "error"
+            report["error"] = str(exc)
+            return report
 
     report["account"] = {
         "profile": cfg.profile,
@@ -316,7 +324,7 @@ def get_account_snapshot(config: OKXConfig | None = None) -> dict[str, Any]:
     cfg = config or load_config()
     account = _account_client(cfg)
     resp = _safe_call(account, "get_account_balance")
-    rows = _extract_data(resp)
+    rows = _checked_read_rows(resp, "account balance")
     summary = rows[0] if rows else {}
     return {
         "status": "ok",
@@ -335,7 +343,7 @@ def get_positions(config: OKXConfig | None = None) -> dict[str, Any]:
     cfg = config or load_config()
     account = _account_client(cfg)
     resp = _safe_call(account, "get_positions")
-    rows = [_position_to_dict(item) for item in _extract_data(resp)]
+    rows = [_position_to_dict(item) for item in _checked_read_rows(resp, "positions")]
     return {
         "status": "ok",
         "profile": cfg.profile,
@@ -355,11 +363,13 @@ def get_open_orders(config: OKXConfig | None = None, *, include_executions: bool
         "profile": cfg.profile,
         "is_demo": cfg.is_demo,
         "paper_guard": "header_flag+uid_pin",
-        "open_orders": [_order_to_dict(item) for item in _extract_data(resp)],
+        "open_orders": [_order_to_dict(item) for item in _checked_read_rows(resp, "open orders")],
     }
     if include_executions:
         fills = _safe_call(trade, "get_fills")
-        result["executions"] = [_fill_to_dict(item) for item in _extract_data(fills)]
+        result["executions"] = [
+            _fill_to_dict(item) for item in _checked_read_rows(fills, "fills")
+        ]
     return result
 
 
@@ -444,7 +454,7 @@ def get_account_configuration(config: OKXConfig | None = None) -> dict[str, Any]
         return _order_error(cfg, f"OKX connector not configured: missing {', '.join(missing)}.")
     try:
         resp = _safe_call(_account_client(cfg), "get_account_config")
-        rows = _extract_data(resp)
+        rows = _checked_read_rows(resp, "account configuration")
         if not rows:
             raise OKXConfigError(_resp_message(resp) or "OKX returned no account configuration")
         row = rows[0]
@@ -1322,8 +1332,11 @@ def _checked_read_rows(resp: Any, subject: str) -> list[Any]:
     """Require an explicit OKX success envelope for authenticated reads."""
     if not isinstance(resp, Mapping):
         raise OKXConfigError(f"OKX returned a malformed {subject} response")
-    if str(resp.get("code") or "") != "0":
-        raise OKXConfigError(_resp_message(resp) or f"failed to read OKX {subject}")
+    code = str(resp.get("code") or "")
+    if code != "0":
+        message = _resp_message(resp) or f"failed to read OKX {subject}"
+        suffix = f" (OKX code {code})" if code else ""
+        raise OKXConfigError(f"{message}{suffix}")
     rows = resp.get("data")
     if not isinstance(rows, (list, tuple)):
         raise OKXConfigError(f"OKX returned malformed {subject} data")
@@ -1377,7 +1390,7 @@ def _load_swap_instrument(cfg: OKXConfig, symbol: str) -> SwapInstrument:
 def _load_account_configuration(cfg: OKXConfig) -> dict[str, str | None]:
     account = _account_client(cfg)
     resp = _safe_call(account, "get_account_config")
-    rows = _extract_data(resp)
+    rows = _checked_read_rows(resp, "account configuration")
     if not rows:
         raise OKXConfigError(_resp_message(resp) or "OKX returned no account configuration")
     return _account_configuration_to_dict(rows[0])

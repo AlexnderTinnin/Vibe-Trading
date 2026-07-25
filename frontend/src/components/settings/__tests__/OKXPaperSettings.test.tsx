@@ -68,8 +68,10 @@ describe("OKX Demo settings", () => {
     expect(screen.getByLabelText("Passphrase")).toHaveValue("");
     expect(screen.getByLabelText("API Key")).toHaveAttribute(
       "placeholder",
-      "Configured - leave blank to keep",
+      "Configured",
     );
+    expect(screen.getByLabelText("API Key")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Replace credentials" })).toBeEnabled();
     expect(screen.getByDisplayValue("demo-uid")).toBeInTheDocument();
   });
 
@@ -124,13 +126,33 @@ describe("OKX Demo settings", () => {
     render(<OKXPaperSettings />);
 
     await screen.findByText("Configured");
+    fireEvent.click(screen.getByRole("button", { name: "Replace credentials" }));
     fireEvent.change(screen.getByLabelText("API Key"), { target: { value: "only-one-field" } });
     fireEvent.click(screen.getByRole("button", { name: "Save OKX Demo settings" }));
 
-    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith(
-      "API Key, Secret, and Passphrase must be entered together.",
-    ));
+    expect(screen.getByLabelText("Secret")).toBeRequired();
+    expect(screen.getByLabelText("Passphrase")).toBeRequired();
     expect(apiMock.updateOkxPaperConfig).not.toHaveBeenCalled();
+  });
+
+  it("replaces the saved credentials only after all three new values are entered", async () => {
+    render(<OKXPaperSettings />);
+
+    await screen.findByText("Configured");
+    fireEvent.click(screen.getByRole("button", { name: "Replace credentials" }));
+    expect(screen.getByLabelText("API Key")).toBeEnabled();
+    expect(screen.getByLabelText("API Key")).toBeRequired();
+    fireEvent.change(screen.getByLabelText("API Key"), { target: { value: "replacement-key" } });
+    fireEvent.change(screen.getByLabelText("Secret"), { target: { value: "replacement-secret" } });
+    fireEvent.change(screen.getByLabelText("Passphrase"), { target: { value: "replacement-pass" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save OKX Demo settings" }));
+
+    await waitFor(() => expect(apiMock.updateOkxPaperConfig).toHaveBeenCalledTimes(1));
+    expect(apiMock.updateOkxPaperConfig).toHaveBeenCalledWith(expect.objectContaining({
+      api_key: "replacement-key",
+      api_secret: "replacement-secret",
+      passphrase: "replacement-pass",
+    }));
   });
 
   it("tests only the saved configuration and displays the verified equity", async () => {

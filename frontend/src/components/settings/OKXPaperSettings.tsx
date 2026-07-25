@@ -10,6 +10,7 @@ import {
   Save,
   ShieldCheck,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -57,6 +58,16 @@ function formFromStatus(status: OKXPaperConfigStatus): OKXPaperForm {
   };
 }
 
+function hasNonCredentialChanges(form: OKXPaperForm, status: OKXPaperConfigStatus): boolean {
+  const currentInstruments = [...form.instruments].sort().join(",");
+  const savedInstruments = [...status.allowed_swap_instruments].sort().join(",");
+  return form.expectedUid.trim() !== status.expected_uid
+    || currentInstruments !== savedInstruments
+    || form.maxLeverage !== status.max_swap_leverage
+    || Boolean(form.proxy.trim())
+    || form.clearProxy;
+}
+
 interface SecretInputProps {
   id: string;
   label: string;
@@ -81,7 +92,7 @@ function SecretInput({
   onToggleVisibility,
 }: SecretInputProps) {
   const placeholder = configured
-    ? "Configured - leave blank to keep"
+    ? "Configured"
     : `Enter OKX Demo ${label}`;
 
   return (
@@ -139,6 +150,7 @@ export function OKXPaperSettings() {
   const [saving, setSaving] = useState(false);
   const [checking, setChecking] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [replacingCredentials, setReplacingCredentials] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checkResult, setCheckResult] = useState<OKXConnectionCheck | null>(null);
 
@@ -150,6 +162,7 @@ export function OKXPaperSettings() {
       setConfig(next);
       setForm(formFromStatus(next));
       setDirty(false);
+      setReplacingCredentials(false);
       setCheckResult(null);
     } catch (loadError) {
       setError(
@@ -169,6 +182,7 @@ export function OKXPaperSettings() {
         if (!alive) return;
         setConfig(next);
         setForm(formFromStatus(next));
+        setReplacingCredentials(false);
       })
       .catch((loadError) => {
         if (!alive) return;
@@ -199,10 +213,37 @@ export function OKXPaperSettings() {
     updateForm({ instruments });
   };
 
-  const credentialsRequired = !config?.credentials_configured || !config.is_demo;
+  const configuredDemoCredentials = Boolean(config?.credentials_configured && config.is_demo);
+  const credentialsLocked = configuredDemoCredentials && !replacingCredentials;
+  const credentialsRequired = !configuredDemoCredentials || replacingCredentials;
   const busy = loading || saving || checking;
   const saveDisabled = busy || config?.runner_running === true;
-  const testDisabled = busy || dirty || !config?.configured;
+  const testDisabled = busy || dirty || replacingCredentials || !config?.configured;
+
+  const beginCredentialReplacement = () => {
+    setReplacingCredentials(true);
+    setError(null);
+    setCheckResult(null);
+  };
+
+  const cancelCredentialReplacement = () => {
+    setForm((current) => ({
+      ...current,
+      apiKey: "",
+      apiSecret: "",
+      passphrase: "",
+    }));
+    setVisible((current) => ({
+      ...current,
+      apiKey: false,
+      apiSecret: false,
+      passphrase: false,
+    }));
+    setReplacingCredentials(false);
+    setDirty(config ? hasNonCredentialChanges(form, config) : false);
+    setError(null);
+    setCheckResult(null);
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -247,6 +288,7 @@ export function OKXPaperSettings() {
       setConfig(next);
       setForm(formFromStatus(next));
       setDirty(false);
+      setReplacingCredentials(false);
       setCheckResult(null);
       toast.success("OKX Demo configuration saved");
     } catch (saveError) {
@@ -338,9 +380,24 @@ export function OKXPaperSettings() {
       <form onSubmit={submit}>
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="grid content-start gap-4">
-            <div>
-              <h3 className="text-sm font-semibold">Credentials</h3>
-              <p className={hintClass}>Saved values are never returned to the browser.</p>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold">Credentials</h3>
+                <p className={hintClass}>Saved values are never returned to the browser.</p>
+              </div>
+              {configuredDemoCredentials ? (
+                <button
+                  type="button"
+                  onClick={replacingCredentials ? cancelCredentialReplacement : beginCredentialReplacement}
+                  disabled={busy || config?.runner_running === true}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {replacingCredentials
+                    ? <X className="h-3.5 w-3.5" />
+                    : <KeyRound className="h-3.5 w-3.5" />}
+                  {replacingCredentials ? "Cancel" : "Replace credentials"}
+                </button>
+              ) : null}
             </div>
 
             <SecretInput
@@ -348,8 +405,8 @@ export function OKXPaperSettings() {
               label="API Key"
               value={form.apiKey}
               visible={visible.apiKey}
-              configured={Boolean(config?.is_demo && config.api_key_configured)}
-              disabled={busy}
+              configured={Boolean(credentialsLocked && config?.api_key_configured)}
+              disabled={busy || credentialsLocked}
               required={credentialsRequired}
               onChange={(apiKey) => updateForm({ apiKey })}
               onToggleVisibility={() => setVisible((current) => ({ ...current, apiKey: !current.apiKey }))}
@@ -359,8 +416,8 @@ export function OKXPaperSettings() {
               label="Secret"
               value={form.apiSecret}
               visible={visible.apiSecret}
-              configured={Boolean(config?.is_demo && config.api_secret_configured)}
-              disabled={busy}
+              configured={Boolean(credentialsLocked && config?.api_secret_configured)}
+              disabled={busy || credentialsLocked}
               required={credentialsRequired}
               onChange={(apiSecret) => updateForm({ apiSecret })}
               onToggleVisibility={() => setVisible((current) => ({ ...current, apiSecret: !current.apiSecret }))}
@@ -370,8 +427,8 @@ export function OKXPaperSettings() {
               label="Passphrase"
               value={form.passphrase}
               visible={visible.passphrase}
-              configured={Boolean(config?.is_demo && config.passphrase_configured)}
-              disabled={busy}
+              configured={Boolean(credentialsLocked && config?.passphrase_configured)}
+              disabled={busy || credentialsLocked}
               required={credentialsRequired}
               onChange={(passphrase) => updateForm({ passphrase })}
               onToggleVisibility={() => setVisible((current) => ({ ...current, passphrase: !current.passphrase }))}

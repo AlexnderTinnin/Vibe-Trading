@@ -289,6 +289,76 @@ def test_okx_service_unconfigured(monkeypatch, tmp_path) -> None:
     assert result["connector"] == "okx"
 
 
+class _FakeOkxAccountReads:
+    def __init__(self, *, config_response: dict, balance_response: dict | None = None) -> None:
+        self.config_response = config_response
+        self.balance_response = balance_response or {
+            "code": "0",
+            "data": [{"totalEq": "100", "details": []}],
+        }
+
+    def get_account_balance(self):
+        return self.balance_response
+
+    def get_account_config(self):
+        return self.config_response
+
+
+def _configured_okx() -> ox.OKXConfig:
+    return ox.OKXConfig(
+        api_key="demo-key",
+        api_secret="demo-secret",
+        passphrase="demo-passphrase",
+        expected_uid="demo-uid",
+    )
+
+
+def test_okx_account_snapshot_rejects_non_success_envelope(monkeypatch) -> None:
+    account = _FakeOkxAccountReads(
+        config_response={"code": "0", "data": []},
+        balance_response={
+            "code": "50101",
+            "msg": "APIKey does not match current environment.",
+            "data": [],
+        },
+    )
+    monkeypatch.setattr(ox, "_account_client", lambda _cfg: account)
+
+    with pytest.raises(ox.OKXConfigError, match=r"OKX code 50101"):
+        ox.get_account_snapshot(_configured_okx())
+
+
+def test_okx_status_surfaces_account_config_api_error(monkeypatch) -> None:
+    account = _FakeOkxAccountReads(
+        config_response={
+            "code": "50101",
+            "msg": "APIKey does not match current environment.",
+            "data": [],
+        }
+    )
+    monkeypatch.setattr(ox, "_account_client", lambda _cfg: account)
+    monkeypatch.setattr(ox, "okx_available", lambda: True)
+
+    result = ox.check_status(_configured_okx())
+
+    assert result["status"] == "error"
+    assert result["error"] == "APIKey does not match current environment. (OKX code 50101)"
+    assert "could not be verified" not in result["error"]
+
+
+def test_okx_status_fails_when_account_config_omits_uid(monkeypatch) -> None:
+    account = _FakeOkxAccountReads(
+        config_response={"code": "0", "data": [{"acctLv": "2", "posMode": "net_mode"}]}
+    )
+    monkeypatch.setattr(ox, "_account_client", lambda _cfg: account)
+    monkeypatch.setattr(ox, "okx_available", lambda: True)
+
+    result = ox.check_status(_configured_okx())
+
+    assert result["status"] == "error"
+    assert "did not include a UID" in result["error"]
+
+
 # --------------------------------------------------------------------------- #
 # Binance
 # --------------------------------------------------------------------------- #

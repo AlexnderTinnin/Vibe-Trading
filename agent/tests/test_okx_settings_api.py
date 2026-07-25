@@ -278,6 +278,25 @@ def test_connection_check_redacts_secrets_from_connector_errors(
     assert "[redacted]" in response.text
 
 
+def test_connection_check_surfaces_okx_environment_error(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert client.put("/quant/okx/config", json=_payload()).status_code == 200
+    message = "APIKey does not match current environment. (OKX code 50101)"
+    monkeypatch.setattr(
+        okx_settings_routes,
+        "check_status",
+        lambda _config: {"status": "error", "error": message},
+    )
+
+    response = client.post("/quant/okx/config/check")
+
+    assert response.status_code == 200
+    assert response.json()["message"] == message
+    assert response.json()["uid_verified"] is False
+
+
 def test_live_profile_is_visible_but_cannot_pass_demo_connection_check(
     client: TestClient,
     tmp_path: Path,
