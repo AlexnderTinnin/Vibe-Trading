@@ -71,6 +71,26 @@ def test_logs_none_when_no_env_found(tmp_path, fresh, monkeypatch, caplog):
     assert "none (no .env file found)" in msg
 
 
+def test_loading_dotenv_refreshes_an_early_config_singleton(tmp_path, fresh, monkeypatch):
+    """A config cached during API imports must not hide later dotenv values."""
+    env = tmp_path / ".env"
+    env.write_text(
+        "LANGCHAIN_PROVIDER=openai\nLANGCHAIN_MODEL_NAME=gpt-test\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(llm, "_ENV_CANDIDATES", [env])
+    monkeypatch.delenv("LANGCHAIN_PROVIDER", raising=False)
+    monkeypatch.delenv("LANGCHAIN_MODEL_NAME", raising=False)
+
+    llm.reset_env_config()
+    assert llm.get_env_config().llm.langchain_model_name == ""
+
+    llm._ensure_dotenv()
+
+    assert llm.get_env_config().llm.langchain_provider == "openai"
+    assert llm.get_env_config().llm.langchain_model_name == "gpt-test"
+
+
 def test_logs_redacted_base_url_without_credentials(tmp_path, fresh, monkeypatch, caplog):
     monkeypatch.setattr(llm, "_ENV_CANDIDATES", [tmp_path / "does-not-exist.env"])
     monkeypatch.setenv("OPENAI_BASE_URL", "https://sk-secret@example.com:8443/v1?api_key=sk-hidden")

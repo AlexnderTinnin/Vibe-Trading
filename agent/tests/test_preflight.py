@@ -75,6 +75,40 @@ def test_llm_preflight_probe_reports_request_errors(monkeypatch) -> None:
     assert "Timeout: timed out" in result.message
 
 
+def test_okx_preflight_uses_dedicated_proxy(monkeypatch) -> None:
+    """The OKX probe must use the same dedicated proxy as the SDK connector."""
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class FakeResponse:
+        @staticmethod
+        def json() -> dict[str, str]:
+            return {"code": "0"}
+
+    def fake_get(url: str, **kwargs: object) -> FakeResponse:
+        calls.append((url, kwargs))
+        return FakeResponse()
+
+    monkeypatch.setenv("OKX_PROXY", "http://127.0.0.1:10808")
+    monkeypatch.setattr(requests, "get", fake_get)
+
+    result = preflight._check_okx()
+
+    assert result.status == "ready"
+    assert calls == [
+        (
+            "https://www.okx.com/api/v5/market/candles",
+            {
+                "params": {"instId": "BTC-USDT", "bar": "1D", "limit": "1"},
+                "timeout": 10,
+                "proxies": {
+                    "http": "http://127.0.0.1:10808",
+                    "https": "http://127.0.0.1:10808",
+                },
+            },
+        )
+    ]
+
+
 def test_akshare_check_uses_spec_without_import(monkeypatch) -> None:
     """AKShare's package import is heavy; preflight should only check discovery."""
     monkeypatch.delitem(sys.modules, "akshare", raising=False)

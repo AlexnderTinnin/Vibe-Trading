@@ -50,6 +50,25 @@ _CEILINGS = {
     "universe": ["AAPL", "MSFT", "NVDA", "GOOGL"],
 }
 
+_PERPETUAL_CEILINGS = {
+    "account_funding_usd": 10_000.0,
+    "max_order_notional_usd": 2_000.0,
+    "max_total_exposure_usd": 5_000.0,
+    "max_leverage": 5.0,
+    "max_trades_per_day": 20,
+    "allowed_instruments": ["perpetual_swap"],
+    "asset_classes": ["crypto"],
+    "include_symbols": ["BTC-USDT-SWAP", "ETH-USDT-SWAP"],
+    "max_position_notional_usd": 1_500.0,
+    "max_correlated_exposure_usd": 3_000.0,
+    "max_daily_loss_usd": 100.0,
+    "max_drawdown_pct": 0.08,
+    "min_liquidation_buffer_pct": 0.20,
+    "max_margin_utilization_pct": 0.40,
+    "max_consecutive_losses": 3,
+    "require_stop_loss": True,
+}
+
 
 def _propose(broker: str = "robinhood", reauth_for=None) -> dict:
     """Run the propose tool and return the parsed proposal payload."""
@@ -62,6 +81,17 @@ def _propose(broker: str = "robinhood", reauth_for=None) -> dict:
         reauth_for=reauth_for,
     )
     payload = json.loads(raw)
+    assert payload.get("type") == "mandate.proposal", payload
+    return payload
+
+
+def _propose_perpetual() -> dict:
+    payload = json.loads(
+        ProposeMandateProfilesTool().execute(
+            broker="okx",
+            ceilings=dict(_PERPETUAL_CEILINGS),
+        )
+    )
     assert payload.get("type") == "mandate.proposal", payload
     return payload
 
@@ -94,6 +124,83 @@ def test_propose_persists_for_commit(live_runtime: Path) -> None:
     assert saved.is_file()
     # Persisting a proposal must NOT have written a mandate.
     assert load_mandate("robinhood") is None
+
+
+def test_perpetual_proposal_clamps_derivative_caps_and_commits_v2(
+    live_runtime: Path,
+) -> None:
+    """BTC/ETH swap profiles carry every derivative safety cap end to end."""
+    proposal = _propose_perpetual()
+
+    assert proposal["account"]["type"] == "margin"
+    for profile in proposal["profiles"]:
+        assert profile["instruments"] == ["perpetual_swap"]
+        assert profile["asset_classes"] == ["crypto"]
+        assert profile["include_symbols"] == ["BTC-USDT-SWAP", "ETH-USDT-SWAP"]
+        assert 1 <= profile["leverage"] <= 5
+        assert profile["max_position_notional_usd"] <= 1_500
+        assert profile["max_correlated_exposure_usd"] <= 3_000
+        assert profile["max_daily_loss_usd"] <= 100
+        assert profile["max_drawdown_pct"] <= 0.08
+        assert profile["min_liquidation_buffer_pct"] >= 0.20
+        assert profile["max_margin_utilization_pct"] <= 0.40
+        assert profile["max_consecutive_losses"] <= 3
+        assert profile["require_stop_loss"] is True
+
+    commit_mandate(
+        proposal_id=proposal["proposal_id"],
+        ordinal=2,
+        adjustments=None,
+        consent_ack=True,
+        broker="okx",
+        account_ref="dedicated-demo",
+    )
+    mandate = load_mandate("okx")
+    assert mandate is not None
+    assert mandate.schema_version == 2
+    assert [item.value for item in mandate.hard_caps.allowed_instruments] == [
+        "perpetual_swap"
+    ]
+    assert [item.value for item in mandate.universe.asset_classes] == ["crypto"]
+    assert mandate.universe.include_symbols == (
+        "BTC-USDT-SWAP",
+        "ETH-USDT-SWAP",
+    )
+    assert mandate.hard_caps.require_stop_loss is True
+
+
+def test_perpetual_commit_requires_account_ref_before_writing(
+    live_runtime: Path,
+) -> None:
+    """A missing dedicated account binding cannot produce an unreadable mandate."""
+    proposal = _propose_perpetual()
+
+    with pytest.raises(CommitError, match="dedicated account reference"):
+        commit_mandate(
+            proposal_id=proposal["proposal_id"],
+            ordinal=1,
+            adjustments=None,
+            consent_ack=True,
+            broker="okx",
+            account_ref="   ",
+        )
+
+    assert load_mandate("okx") is None
+    proposal_path = paths.broker_dir("okx") / "proposals" / f"{proposal['proposal_id']}.json"
+    assert proposal_path.is_file()
+    assert not (paths.broker_dir("okx") / "consent").exists()
+
+    commit_mandate(
+        proposal_id=proposal["proposal_id"],
+        ordinal=1,
+        adjustments=None,
+        consent_ack=True,
+        broker="okx",
+        account_ref="  demo-uid-001  ",
+    )
+    mandate = load_mandate("okx")
+    assert mandate is not None
+    assert mandate.consent.account_ref == "demo-uid-001"
 
 
 # ---------------------------------------------------------------------------

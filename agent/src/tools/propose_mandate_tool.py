@@ -202,9 +202,22 @@ class ProposeMandateProfilesTool(BaseTool):
         ceil_daily = canon.get("max_trades_per_day")
         ceil_daily = int(ceil_daily) if ceil_daily is not None else None
         instruments = list(canon.get("allowed_instruments") or ["equity"])
-        universe = ceilings.get("universe") or ["AAPL", "MSFT", "NVDA", "GOOGL"]
+        derivative = "perpetual_swap" in {str(value) for value in instruments}
+        include_symbols = list(
+            canon.get("include_symbols")
+            or ceilings.get("include_symbols")
+            or []
+        )
+        universe = ceilings.get("universe") or (
+            include_symbols if derivative else ["AAPL", "MSFT", "NVDA", "GOOGL"]
+        )
+        asset_classes = list(
+            ceilings.get("asset_classes")
+            or (["crypto"] if derivative else ["us_equity"])
+        )
         # Leverage is always clamped to the ceiling; default cash-only.
         leverage = canon.get("leverage", "none")
+        leverage_ceiling = 1.0 if leverage in ("none", None) else float(leverage)
 
         # A reauth seed nudges the top option toward the breached level, still
         # clamped: we never propose past the ceiling.
@@ -223,6 +236,11 @@ class ProposeMandateProfilesTool(BaseTool):
             daily = tpl["daily_trade_cap"]
             if ceil_daily is not None:
                 daily = min(daily, ceil_daily)
+            ordinal = int(tpl["ordinal"])
+            derivative_fraction = (0.25, 0.50, 1.0)[ordinal - 1]
+            resolved_leverage: str | float = leverage
+            if derivative:
+                resolved_leverage = min(leverage_ceiling, (2.0, 3.0, 5.0)[ordinal - 1])
             profile = {
                 "ordinal": tpl["ordinal"],
                 "label": tpl["label"],
@@ -230,16 +248,58 @@ class ProposeMandateProfilesTool(BaseTool):
                 "max_order_usd": max_order,
                 "max_total_exposure_usd": ceil_exposure,
                 "daily_trade_cap": daily,
-                "leverage": leverage,
+                "leverage": resolved_leverage,
                 "instruments": instruments,
+                "asset_classes": asset_classes,
+                "include_symbols": include_symbols,
                 "flatten_on_halt": flatten_on_halt,
-                "notes": tpl["notes"],
+                "notes": (
+                    "Derivative risk caps tighten with this profile; protective stops remain mandatory."
+                    if derivative
+                    else tpl["notes"]
+                ),
             }
+            if derivative:
+                profile.update(
+                    {
+                        "max_position_notional_usd": min(
+                            float(canon.get("max_position_notional_usd", ceil_exposure)),
+                            max_order * 2.0,
+                        ),
+                        "max_correlated_exposure_usd": float(
+                            canon.get("max_correlated_exposure_usd", ceil_exposure)
+                        )
+                        * derivative_fraction,
+                        "max_daily_loss_usd": float(
+                            canon.get("max_daily_loss_usd", funding * 0.02)
+                        )
+                        * derivative_fraction,
+                        "max_drawdown_pct": float(
+                            canon.get("max_drawdown_pct", 0.10)
+                        )
+                        * derivative_fraction,
+                        "min_liquidation_buffer_pct": float(
+                            canon.get("min_liquidation_buffer_pct", 0.15)
+                        ),
+                        "max_margin_utilization_pct": float(
+                            canon.get("max_margin_utilization_pct", 0.50)
+                        )
+                        * derivative_fraction,
+                        "max_consecutive_losses": max(
+                            1,
+                            min(
+                                int(canon.get("max_consecutive_losses", 3)),
+                                ordinal,
+                            ),
+                        ),
+                        "require_stop_loss": True,
+                    }
+                )
             profiles.append(profile)
         return profiles
 
     @staticmethod
     def _account_type(ceilings: dict[str, Any]) -> str:
         """Return the account type label ('cash' unless ceilings allow leverage)."""
-        leverage = ceilings.get("leverage", "none")
+        leverage = _normalize_limits(ceilings).get("leverage", "none")
         return "cash" if leverage in ("none", None, 1, 1.0) else "margin"

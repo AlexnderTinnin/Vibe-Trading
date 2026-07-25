@@ -439,6 +439,10 @@ def _ensure_dotenv() -> None:
     for candidate in _ENV_CANDIDATES:
         if candidate.exists():
             _load_env_file(candidate)
+            # API startup may construct EnvConfig before provider setup reaches
+            # this resolver. Refresh the singleton so values loaded from the
+            # selected dotenv file are visible to preflight and ChatLLM.
+            reset_env_config()
             loaded = candidate
             break
     _dotenv_loaded = True

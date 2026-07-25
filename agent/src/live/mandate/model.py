@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-MANDATE_SCHEMA_VERSION = 1
+MANDATE_SCHEMA_VERSION = 2
 
 
 class InstrumentType(str, Enum):
@@ -21,6 +21,7 @@ class InstrumentType(str, Enum):
     ETF = "etf"
     OPTION = "option"
     CRYPTO = "crypto"
+    PERPETUAL_SWAP = "perpetual_swap"
 
 
 class AssetClass(str, Enum):
@@ -62,6 +63,16 @@ class HardCaps:
     max_leverage: float
     allowed_instruments: tuple[InstrumentType, ...]
     max_trades_per_day: int
+    # Derivative-specific caps. Defaults keep legacy cash mandates source-
+    # compatible; a perpetual mandate must persist explicit finite values.
+    max_position_notional_usd: float = 1.0e18
+    max_correlated_exposure_usd: float = 1.0e18
+    max_daily_loss_usd: float = 1.0e18
+    max_drawdown_pct: float = 1.0
+    min_liquidation_buffer_pct: float = 0.0
+    max_margin_utilization_pct: float = 1.0
+    max_consecutive_losses: int = 2_147_483_647
+    require_stop_loss: bool = False
 
 
 @dataclass(frozen=True)
@@ -85,6 +96,9 @@ class UniverseConstraint:
     min_market_cap_usd: float | None
     min_avg_daily_volume_usd: float | None
     exclude_symbols: tuple[str, ...]
+    # Empty means the structural asset/instrument rules decide. Perpetual
+    # mandates should set this to an explicit BTC/ETH swap allowlist.
+    include_symbols: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

@@ -3447,7 +3447,7 @@ def cmd_live_status(broker: Optional[str] = None) -> int:
     mandate = load_mandate(key)
     if mandate is None:
         table.add_row("Mandate", "[yellow]none on file[/yellow] (read-only)")
-    elif mandate.schema_version != MANDATE_SCHEMA_VERSION:
+    elif mandate.schema_version not in (1, MANDATE_SCHEMA_VERSION):
         table.add_row(
             "Mandate",
             f"[red]unknown schema v{mandate.schema_version}[/red] (gate fail-closed)",
@@ -3796,18 +3796,31 @@ def cmd_connector_configure(
     port: int | None = None,
     client_id: int = 77,
     account: str | None = None,
+    expected_uid: str | None = None,
+    swap_instruments: str | None = None,
+    max_swap_leverage: float | None = None,
     yes: bool = False,
 ) -> int:
-    """Configure a local connector profile."""
-    from src.trading.connectors.ibkr.local import IBKRLocalConfig, config_path, save_config
-
+    """Configure an IBKR local profile or an OKX Demo SDK profile."""
     try:
         profile = _selected_profile_or(profile_id)
     except ValueError as exc:
         console.print(f"[red]{exc}[/red]")
         return EXIT_USAGE_ERROR
+
+    if profile.connector == "okx" and profile.transport == "broker_sdk":
+        return _configure_okx_demo_profile(
+            profile,
+            expected_uid=expected_uid,
+            swap_instruments=swap_instruments,
+            max_swap_leverage=max_swap_leverage,
+            yes=yes,
+        )
+
+    from src.trading.connectors.ibkr.local import IBKRLocalConfig, config_path, save_config
+
     if profile.transport != "local_tws" or profile.connector != "ibkr":
-        console.print(f"[red]{profile.id} is not a local TWS/Gateway profile.[/red]")
+        console.print(f"[red]{profile.id} does not support connector configuration.[/red]")
         return EXIT_USAGE_ERROR
 
     path = config_path()
@@ -3833,6 +3846,107 @@ def cmd_connector_configure(
     )
     path = save_config(cfg)
     console.print(f"[green]Configured[/green] {profile.id} [dim]({path})[/dim]")
+    console.print(f"[dim]Run `vibe-trading connector check {profile.id}` to verify it.[/dim]")
+    return EXIT_SUCCESS
+
+
+def _configure_okx_demo_profile(
+    profile: Any,
+    *,
+    expected_uid: str | None,
+    swap_instruments: str | None,
+    max_swap_leverage: float | None,
+    yes: bool,
+) -> int:
+    """Persist OKX Demo credentials without accepting secrets as CLI flags."""
+    from src.trading.connectors.okx.sdk import (
+        OKXConfig,
+        OKXConfigError,
+        config_path,
+        load_config,
+        save_config,
+    )
+
+    if profile.environment != "paper":
+        console.print(
+            "[red]OKX perpetual configuration is Phase-1 Demo only; "
+            "live credentials are not accepted by this command.[/red]"
+        )
+        return EXIT_USAGE_ERROR
+
+    path = config_path()
+    existing = load_config()
+    if path.exists() and not yes:
+        console.print(f"[yellow]OKX connector config already exists:[/yellow] {path}")
+        try:
+            if not Confirm.ask("Overwrite it?", default=False):
+                console.print("[dim]Aborted.[/dim]")
+                return EXIT_SUCCESS
+        except EOFError:
+            console.print("[dim]No input available; use --yes for non-interactive setup.[/dim]")
+            return EXIT_USAGE_ERROR
+
+    secret_fields = (
+        ("api_key", "OKX_API_KEY", "OKX Demo API key"),
+        ("api_secret", "OKX_API_SECRET", "OKX Demo API secret"),
+        ("passphrase", "OKX_PASSPHRASE", "OKX Demo API passphrase"),
+    )
+    credentials: dict[str, str] = {}
+    for field, env_name, label in secret_fields:
+        value = str(os.environ.get(env_name) or "").strip()
+        if not value and path.exists() and existing.profile == "paper":
+            value = str(getattr(existing, field, "") or "").strip()
+        if not value:
+            try:
+                value = Prompt.ask(label, password=True, show_default=False).strip()
+            except EOFError:
+                console.print(
+                    f"[red]No input available for {label}; set {env_name} for non-interactive setup.[/red]"
+                )
+                return EXIT_USAGE_ERROR
+        if not value:
+            console.print(f"[red]{label} must not be blank.[/red]")
+            return EXIT_USAGE_ERROR
+        credentials[field] = value
+
+    allowed_swaps: Any = existing.allowed_swap_instruments
+    if swap_instruments is not None:
+        allowed_swaps = [item.strip() for item in swap_instruments.split(",") if item.strip()]
+    leverage_ceiling = (
+        max_swap_leverage if max_swap_leverage is not None else existing.max_swap_leverage
+    )
+    uid = str(
+        expected_uid
+        if expected_uid is not None
+        else os.environ.get("OKX_EXPECTED_UID") or existing.expected_uid
+    ).strip()
+
+    try:
+        cfg = OKXConfig.from_mapping(
+            {
+                **credentials,
+                "profile": "paper",
+                "host": existing.host,
+                "expected_uid": uid,
+                "proxy": os.environ.get("OKX_PROXY") or existing.proxy,
+                "timeout": existing.timeout,
+                "readonly": profile.readonly,
+                "allowed_swap_instruments": allowed_swaps,
+                "max_swap_leverage": leverage_ceiling,
+            }
+        )
+    except OKXConfigError as exc:
+        console.print(f"[red]Invalid OKX configuration:[/red] {exc}")
+        return EXIT_USAGE_ERROR
+
+    path = save_config(cfg)
+    console.print(f"[green]Configured[/green] {profile.id} [dim]({path})[/dim]")
+    console.print(
+        "[dim]Demo only · swaps: "
+        f"{', '.join(cfg.allowed_swap_instruments)} · max leverage: {cfg.max_swap_leverage:g}x[/dim]"
+    )
+    if cfg.proxy or os.environ.get("HTTPS_PROXY") or os.environ.get("ALL_PROXY"):
+        console.print("[dim]OKX HTTP proxy: configured[/dim]")
     console.print(f"[dim]Run `vibe-trading connector check {profile.id}` to verify it.[/dim]")
     return EXIT_SUCCESS
 
@@ -4263,6 +4377,9 @@ def _dispatch_connector(args: argparse.Namespace) -> int:
             port=args.port,
             client_id=args.client_id,
             account=args.account,
+            expected_uid=args.expected_uid,
+            swap_instruments=args.swap_instruments,
+            max_swap_leverage=args.max_swap_leverage,
             yes=args.yes,
         )
     if sub == "check":
@@ -4527,12 +4644,24 @@ def _build_parser() -> argparse.ArgumentParser:
         p.add_argument("--currency", default="USD")
         p.add_argument("--sec-type", dest="sec_type", default="STK")
 
-    connector_configure = connector_subparsers.add_parser("configure", help="Configure a local connector profile")
+    connector_configure = connector_subparsers.add_parser("configure", help="Configure a connector profile")
     _add_connector_profile_arg(connector_configure, required=True)
     connector_configure.add_argument("--host", default="127.0.0.1")
     connector_configure.add_argument("--port", type=int, default=None)
     connector_configure.add_argument("--client-id", dest="client_id", type=int, default=77)
     connector_configure.add_argument("--account", default=None)
+    connector_configure.add_argument("--expected-uid", default=None, help="Pin the expected OKX account UID")
+    connector_configure.add_argument(
+        "--swap-instruments",
+        default=None,
+        help="Comma-separated OKX Demo swap allowlist (BTC/ETH USDT swaps only)",
+    )
+    connector_configure.add_argument(
+        "--max-swap-leverage",
+        type=float,
+        default=None,
+        help="OKX Demo swap leverage ceiling (1-10)",
+    )
     connector_configure.add_argument("-y", "--yes", action="store_true", help="Overwrite without prompting")
 
     connector_check = connector_subparsers.add_parser("check", help="Check selected connector readiness")

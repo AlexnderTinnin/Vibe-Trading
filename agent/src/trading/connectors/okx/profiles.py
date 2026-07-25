@@ -11,6 +11,18 @@ from __future__ import annotations
 
 from src.trading.types import READ_CAPABILITIES, TradingProfile
 
+OKX_SWAP_READ_CAPABILITIES = (
+    "derivatives.instruments.read",
+    "derivatives.account_config.read",
+    "derivatives.leverage.read",
+)
+
+OKX_SWAP_DEMO_WRITE_CAPABILITIES = (
+    "derivatives.leverage.set",
+    "derivatives.orders.place",
+    "derivatives.positions.close",
+)
+
 OKX_PROFILES: tuple[TradingProfile, ...] = (
     TradingProfile(
         id="okx-paper-sdk",
@@ -18,7 +30,7 @@ OKX_PROFILES: tuple[TradingProfile, ...] = (
         label="OKX Demo · python-okx",
         environment="paper",
         transport="broker_sdk",
-        capabilities=READ_CAPABILITIES,
+        capabilities=READ_CAPABILITIES + OKX_SWAP_READ_CAPABILITIES,
         readonly=True,
         config={"profile": "paper"},
         notes=(
@@ -33,7 +45,7 @@ OKX_PROFILES: tuple[TradingProfile, ...] = (
         label="OKX Live · python-okx Read-Only",
         environment="live",
         transport="broker_sdk",
-        capabilities=READ_CAPABILITIES,
+        capabilities=READ_CAPABILITIES + OKX_SWAP_READ_CAPABILITIES,
         readonly=True,
         config={"profile": "live-readonly"},
         notes="Reads an OKX live account only. Order placement is not exposed in this profile.",
@@ -44,7 +56,12 @@ OKX_PROFILES: tuple[TradingProfile, ...] = (
         label="OKX Demo · python-okx Trading",
         environment="paper",
         transport="broker_sdk",
-        capabilities=READ_CAPABILITIES + ("orders.place",),
+        capabilities=(
+            READ_CAPABILITIES
+            + OKX_SWAP_READ_CAPABILITIES
+            + ("orders.place",)
+            + OKX_SWAP_DEMO_WRITE_CAPABILITIES
+        ),
         readonly=False,
         config={"profile": "paper"},
         notes=(
@@ -59,12 +76,14 @@ OKX_PROFILES: tuple[TradingProfile, ...] = (
         label="OKX Live · python-okx Trading",
         environment="live",
         transport="broker_sdk",
-        capabilities=READ_CAPABILITIES + ("orders.place.requires_mandate",),
+        capabilities=READ_CAPABILITIES + OKX_SWAP_READ_CAPABILITIES + ("orders.place.requires_mandate",),
         readonly=False,
         config={"profile": "live"},
         notes=(
             "Places orders on an OKX live account via python-okx. Live order "
-            "placement is gated behind a user-defined mandate and kill switch."
+            "placement is gated behind a user-defined mandate and kill switch. "
+            "Perpetual-swap writes remain disabled until the derivative mandate "
+            "and reconciliation phases are complete."
         ),
     ),
 )

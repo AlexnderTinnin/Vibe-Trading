@@ -24,6 +24,7 @@ returned payload carries the redacted record under ``live_action``.
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any
 
@@ -81,7 +82,9 @@ def execute_live_order(
     broker = (broker or "").strip().lower()
 
     mandate = load_mandate(broker)
-    if mandate is None or mandate.schema_version != MANDATE_SCHEMA_VERSION:
+    # Schema v1 remains valid for legacy cash channels. Derivatives are never
+    # accepted through this generic gate and require the v2 swap gate.
+    if mandate is None or mandate.schema_version not in (1, MANDATE_SCHEMA_VERSION):
         return _deny(broker, session_id, "no valid mandate on file", ["mandate"], mandate, intent=None)
 
     if _is_expired(mandate):
@@ -229,10 +232,7 @@ def _normalize_notional(intent: OrderIntent, connector_module: Any, config: Any)
         return None
     explicit = intent.notional_usd if intent.notional_usd is not None else 0.0
     enforced = max(float(explicit), implied)
-    return OrderIntent(
-        symbol=intent.symbol, side=intent.side, notional_usd=enforced,
-        quantity=intent.quantity, instrument_type=intent.instrument_type, asset_class=intent.asset_class,
-    )
+    return replace(intent, notional_usd=enforced)
 
 
 def _quote_price(intent: OrderIntent, connector_module: Any, config: Any) -> float | None:

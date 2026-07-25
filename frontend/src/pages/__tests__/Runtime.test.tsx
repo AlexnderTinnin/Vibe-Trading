@@ -1,9 +1,10 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { Runtime } from "../Runtime";
-import type { LiveStatus } from "@/lib/api";
+import type { LiveStatus, OkxQuantStatus } from "@/lib/api";
 
 const apiMock = vi.hoisted(() => ({
   getLiveStatus: vi.fn(),
+  getOkxQuantStatus: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -64,6 +65,39 @@ function makeStatus(overrides: Partial<LiveStatus> = {}): LiveStatus {
   };
 }
 
+function makeQuantStatus(overrides: Partial<OkxQuantStatus> = {}): OkxQuantStatus {
+  return {
+    broker: "okx",
+    environment: "demo",
+    runner: {
+      running: false,
+      mode: "shadow",
+      tick_interval_seconds: 60,
+      latest: { outcome: "completed", tick_at: new Date().toISOString() },
+    },
+    breaker: { tripped: false },
+    promotion: {
+      broker: "okx",
+      qualified: false,
+      manually_approved: false,
+      execution_enabled: false,
+      reasons: ["requires 30 elapsed Demo days"],
+      qualification: {
+        broker: "okx",
+        eligible: false,
+        elapsed_days: 4.5,
+        active_days: 5,
+        tick_count: 240,
+        passed_drills: ["network_timeout"],
+        missing_drills: ["process_restart"],
+      },
+      approval: null,
+    },
+    live_swap_writes_compiled: false,
+    ...overrides,
+  };
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
@@ -77,6 +111,8 @@ function deferred<T>() {
 describe("Runtime page", () => {
   beforeEach(() => {
     apiMock.getLiveStatus.mockReset();
+    apiMock.getOkxQuantStatus.mockReset();
+    apiMock.getOkxQuantStatus.mockResolvedValue(makeQuantStatus());
   });
 
   it("renders broker auth, runner, mandate, and risk state from live status", async () => {
@@ -95,6 +131,9 @@ describe("Runtime page", () => {
     expect(screen.getByText("sandbox")).toBeInTheDocument();
     expect(screen.getByText("auth missing")).toBeInTheDocument();
     expect(screen.getByText("dormant")).toBeInTheDocument();
+    expect(screen.getByText("OKX BTC / ETH Perpetual")).toBeInTheDocument();
+    expect(screen.getByText("Live disabled")).toBeInTheDocument();
+    expect(screen.getByText("4.5 / 30")).toBeInTheDocument();
   });
 
   it("fails closed when live status is unavailable", async () => {
@@ -116,6 +155,7 @@ describe("Runtime page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
 
     expect(apiMock.getLiveStatus).toHaveBeenCalledTimes(2);
+    expect(apiMock.getOkxQuantStatus).toHaveBeenCalledTimes(2);
   });
 
   it("keeps the newest live status when an older request resolves later", async () => {
@@ -149,13 +189,26 @@ describe("Runtime page", () => {
 
     const { unmount } = render(<Runtime />);
     const signal = apiMock.getLiveStatus.mock.calls[0][0] as AbortSignal;
+    const quantSignal = apiMock.getOkxQuantStatus.mock.calls[0][0] as AbortSignal;
 
     expect(signal).toBeInstanceOf(AbortSignal);
     expect(signal.aborted).toBe(false);
+    expect(quantSignal).toBe(signal);
 
     unmount();
 
     expect(signal.aborted).toBe(true);
+  });
+
+  it("keeps broker status visible when the OKX quant snapshot is unavailable", async () => {
+    apiMock.getLiveStatus.mockResolvedValue(makeStatus());
+    apiMock.getOkxQuantStatus.mockRejectedValue(new Error("quant endpoint offline"));
+
+    render(<Runtime />);
+
+    expect(await screen.findByText("paper")).toBeInTheDocument();
+    expect(screen.getByText("quant endpoint offline")).toBeInTheDocument();
+    expect(screen.queryByText("Runtime status unavailable")).not.toBeInTheDocument();
   });
 
   it("renders sub-minute mandate expiry as seconds", async () => {

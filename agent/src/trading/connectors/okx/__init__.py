@@ -1,9 +1,8 @@
 """OKX trading connector.
 
-Read-only account/market access in Layer A via the optional ``python-okx`` SDK
-(``AccountAPI`` + ``TradeAPI`` + ``MarketAPI`` over REST). A ``broker_sdk``
-transport. Order placement (paper and mandate-gated live) is layered on top in
-later phases; no place/cancel method is exposed here.
+Account/market access and order execution use the optional ``python-okx`` SDK
+over the ``broker_sdk`` transport. Generic spot writes retain the existing
+paper/live behavior; explicitly typed perpetual writes are Phase-1 Demo only.
 
 Paper-vs-live separation is namespace + header based: OKX demo (paper) keys live
 in a separate key namespace and the ``x-simulated-trading`` header (driven by the

@@ -198,6 +198,192 @@ def get_history(
     return _unsupported(profile, "history.read")
 
 
+def get_okx_swap_instrument(
+    symbol: str,
+    profile_id: str | None = None,
+    **overrides: Any,
+) -> dict[str, Any]:
+    """Read validated OKX perpetual contract metadata."""
+    profile, module, config, error = _okx_swap_context(
+        profile_id,
+        overrides,
+        capability="derivatives.instruments.read",
+    )
+    if error is not None:
+        return error
+    return _with_profile(profile, module.get_swap_instrument(symbol, config=config))
+
+
+def get_okx_account_configuration(
+    profile_id: str | None = None,
+    **overrides: Any,
+) -> dict[str, Any]:
+    """Read OKX account level and net/hedge position mode."""
+    profile, module, config, error = _okx_swap_context(
+        profile_id,
+        overrides,
+        capability="derivatives.account_config.read",
+    )
+    if error is not None:
+        return error
+    return _with_profile(profile, module.get_account_configuration(config))
+
+
+def get_okx_swap_leverage(
+    symbol: str,
+    profile_id: str | None = None,
+    *,
+    margin_mode: str,
+    **overrides: Any,
+) -> dict[str, Any]:
+    """Read current OKX swap leverage."""
+    profile, module, config, error = _okx_swap_context(
+        profile_id,
+        overrides,
+        capability="derivatives.leverage.read",
+    )
+    if error is not None:
+        return error
+    return _with_profile(
+        profile,
+        module.get_swap_leverage(symbol, margin_mode=margin_mode, config=config),
+    )
+
+
+def set_okx_swap_leverage(
+    symbol: str,
+    profile_id: str | None = None,
+    *,
+    leverage: float,
+    margin_mode: str,
+    position_side: str,
+    **overrides: Any,
+) -> dict[str, Any]:
+    """Set and verify OKX Demo swap leverage."""
+    profile, module, config, error = _okx_swap_context(
+        profile_id,
+        overrides,
+        capability="derivatives.leverage.set",
+        write=True,
+    )
+    if error is not None:
+        return error
+    return _with_profile(
+        profile,
+        module.set_swap_leverage(
+            config,
+            symbol=symbol,
+            leverage=leverage,
+            margin_mode=margin_mode,
+            position_side=position_side,
+        ),
+    )
+
+
+def place_okx_swap_order(
+    symbol: str,
+    profile_id: str | None = None,
+    *,
+    side: str,
+    size: float,
+    size_unit: str,
+    margin_mode: str,
+    position_side: str,
+    leverage: float,
+    client_order_id: str,
+    order_type: str = "market",
+    limit_price: float | None = None,
+    reduce_only: bool = False,
+    take_profit: float | None = None,
+    stop_loss: float | None = None,
+    trigger_price_type: str = "mark",
+    **overrides: Any,
+) -> dict[str, Any]:
+    """Place an OKX Demo USDT perpetual order with explicit contract semantics."""
+    profile, module, config, error = _okx_swap_context(
+        profile_id,
+        overrides,
+        capability="derivatives.orders.place",
+        write=True,
+    )
+    if error is not None:
+        return error
+    return _with_profile(
+        profile,
+        module.place_swap_order(
+            config,
+            symbol=symbol,
+            side=side,
+            size=size,
+            size_unit=size_unit,
+            margin_mode=margin_mode,
+            position_side=position_side,
+            leverage=leverage,
+            client_order_id=client_order_id,
+            order_type=order_type,
+            limit_price=limit_price,
+            reduce_only=reduce_only,
+            take_profit=take_profit,
+            stop_loss=stop_loss,
+            trigger_price_type=trigger_price_type,
+        ),
+    )
+
+
+def close_okx_swap_position(
+    symbol: str,
+    profile_id: str | None = None,
+    *,
+    margin_mode: str,
+    position_side: str,
+    leverage: float,
+    client_order_id: str,
+    auto_cancel: bool = False,
+    **overrides: Any,
+) -> dict[str, Any]:
+    """Close an entire OKX Demo swap position and verify broker state."""
+    profile, module, config, error = _okx_swap_context(
+        profile_id,
+        overrides,
+        capability="derivatives.positions.close",
+        write=True,
+    )
+    if error is not None:
+        return error
+    return _with_profile(
+        profile,
+        module.close_swap_position(
+            config,
+            symbol=symbol,
+            margin_mode=margin_mode,
+            position_side=position_side,
+            leverage=leverage,
+            client_order_id=client_order_id,
+            auto_cancel=auto_cancel,
+        ),
+    )
+
+
+def _okx_swap_context(
+    profile_id: str | None,
+    overrides: dict[str, Any],
+    *,
+    capability: str,
+    write: bool = False,
+) -> tuple[TradingProfile, Any | None, Any | None, dict[str, Any] | None]:
+    """Resolve an OKX SDK profile and enforce Phase-1 capability boundaries."""
+    profile = profile_by_id(profile_id)
+    if profile.connector != "okx" or profile.transport != "broker_sdk":
+        return profile, None, None, _unsupported(profile, capability)
+    if capability not in profile.capabilities:
+        return profile, None, None, _unsupported(profile, capability)
+    if write and (profile.readonly or profile.environment != "paper"):
+        return profile, None, None, _unsupported(profile, capability)
+    module = _sdk_module("okx")
+    config = module.build_config(profile.config, overrides)
+    return profile, module, config, None
+
+
 #: Connector → (instrument type, fixed asset class | None). ``None`` asset class
 #: means "infer from the symbol's market" (multi-market equity connectors).
 _CONNECTOR_INSTRUMENT = {

@@ -205,6 +205,8 @@ export const api = {
   // Read the persistent runtime status across all authorized brokers (SPEC §7.5).
   // Polled by the RunnerStatus panel; a plain authenticated GET, never a chat message.
   getLiveStatus: (signal?: AbortSignal) => request<LiveStatus>("/live/status", { signal }),
+  getOkxQuantStatus: (signal?: AbortSignal) =>
+    request<OkxQuantStatus>("/quant/okx/status", { signal }),
   authorizeLive: (broker: string) =>
     request<LiveAuthorizeResponse>("/live/authorize", {
       method: "POST",
@@ -809,6 +811,8 @@ export interface MandateProposalAccount {
   broker: string;
   type: string;
   funded_by: string;
+  /** Optional dedicated broker account identifier; never an API credential. */
+  account_ref?: string;
 }
 
 /** Payload of the `mandate.proposal` SSE event (SPEC Consent §1). */
@@ -952,6 +956,56 @@ export interface LiveBrokerStatus {
 export interface LiveStatus {
   brokers: LiveBrokerStatus[];
   global_halted: boolean;
+}
+
+export interface OkxQuantQualification {
+  eligible: boolean;
+  broker: string;
+  window_started_at?: string | null;
+  elapsed_days?: number;
+  active_days?: number;
+  tick_count?: number;
+  last_tick_at?: string | null;
+  passed_drills?: string[];
+  missing_drills?: string[];
+  disqualifying_events?: string[];
+  reasons?: string[];
+  ledger_head?: string | null;
+}
+
+export interface OkxQuantPromotion {
+  broker: string;
+  qualified: boolean;
+  manually_approved: boolean;
+  execution_enabled: boolean;
+  reasons: string[];
+  qualification: OkxQuantQualification;
+  approval?: Record<string, unknown> | null;
+}
+
+export interface OkxQuantStatus {
+  broker: "okx";
+  environment: "demo";
+  runner: {
+    running: boolean;
+    mode?: "shadow" | "demo" | null;
+    tick_interval_seconds?: number | null;
+    latest: {
+      outcome?: string;
+      tick_at?: string;
+      reason?: string;
+      [key: string]: unknown;
+    };
+  };
+  breaker: {
+    tripped: boolean;
+    reason?: string;
+    tripped_at?: string;
+    manual_clear_required?: boolean;
+    [key: string]: unknown;
+  };
+  promotion: OkxQuantPromotion;
+  live_swap_writes_compiled: boolean;
 }
 
 /** Response of `POST /live/runner/start|stop`. */

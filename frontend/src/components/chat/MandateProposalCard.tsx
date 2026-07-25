@@ -40,6 +40,10 @@ function formatUniverse(universe: MandateProfile["universe"]): string {
   return universe.replace(/_/g, " ");
 }
 
+function requiresDedicatedAccountRef(profile: MandateProfile | null): boolean {
+  return profile?.instruments.some((instrument) => instrument.trim().toLowerCase() === "perpetual_swap") ?? false;
+}
+
 function ProfileTile({
   profile,
   active,
@@ -191,13 +195,20 @@ export const MandateProposalCard = memo(function MandateProposalCard({ proposal,
   const [busyOrdinal, setBusyOrdinal] = useState<number | null>(null);
   const [adjustingOrdinal, setAdjustingOrdinal] = useState<number | null>(null);
   const [pendingOrdinal, setPendingOrdinal] = useState<number | null>(null);
+  const [accountRef, setAccountRef] = useState("");
 
   const handleCommit = useCallback(
-    async (ordinal: number) => {
+    async (ordinal: number, rawAccountRef: string) => {
       if (busyOrdinal != null) return;
       const broker = proposal.account?.broker?.trim().toLowerCase();
       if (!broker) {
         toast.error(i18n.t("mandate.noBroker"));
+        return;
+      }
+      const profile = proposal.profiles.find((candidate) => candidate.ordinal === ordinal) ?? null;
+      const normalizedAccountRef = rawAccountRef.trim();
+      if (requiresDedicatedAccountRef(profile) && !normalizedAccountRef) {
+        toast.error(i18n.t("mandate.accountRefRequired"));
         return;
       }
       setBusyOrdinal(ordinal);
@@ -209,6 +220,7 @@ export const MandateProposalCard = memo(function MandateProposalCard({ proposal,
           adjustments: null,
           consent_ack: true,
           session_id: proposal.session_id,
+          account_ref: normalizedAccountRef || undefined,
         });
         // Card collapses to the active-mandate badge when the mandate.committed
         // SSE event arrives; no optimistic state-write here.
@@ -217,10 +229,11 @@ export const MandateProposalCard = memo(function MandateProposalCard({ proposal,
         toast.error(error instanceof Error ? error.message : i18n.t("mandate.failedToCommit"));
       }
     },
-    [busyOrdinal, proposal.account?.broker, proposal.proposal_id, proposal.session_id],
+    [busyOrdinal, proposal.account?.broker, proposal.profiles, proposal.proposal_id, proposal.session_id],
   );
 
   const pendingProfile = proposal.profiles.find((p) => p.ordinal === pendingOrdinal) ?? null;
+  const accountRefRequired = requiresDedicatedAccountRef(pendingProfile);
 
   // Collapsed state: a compact active-mandate badge (same visual family as the goal badge).
   if (committed) {
@@ -288,7 +301,10 @@ export const MandateProposalCard = memo(function MandateProposalCard({ proposal,
               busy={busyOrdinal === profile.ordinal}
               disabled={busyOrdinal != null}
               adjusting={adjustingOrdinal === profile.ordinal}
-              onCommit={() => setPendingOrdinal(profile.ordinal)}
+              onCommit={() => {
+                setAccountRef(proposal.account?.account_ref?.trim() ?? "");
+                setPendingOrdinal(profile.ordinal);
+              }}
               onAdjustToggle={() =>
                 setAdjustingOrdinal((cur) => (cur === profile.ordinal ? null : profile.ordinal))
               }
@@ -324,34 +340,66 @@ export const MandateProposalCard = memo(function MandateProposalCard({ proposal,
         confirmLabel={i18n.t("mandate.confirmButton")}
         cancelLabel={i18n.t("mandate.cancel")}
         tone="destructive"
-        onCancel={() => setPendingOrdinal(null)}
+        confirmDisabled={accountRefRequired && !accountRef.trim()}
+        onCancel={() => {
+          setPendingOrdinal(null);
+          setAccountRef("");
+        }}
         onConfirm={() => {
           const ordinal = pendingOrdinal;
+          const selectedAccountRef = accountRef;
           setPendingOrdinal(null);
-          if (ordinal != null) handleCommit(ordinal);
+          setAccountRef("");
+          if (ordinal != null) handleCommit(ordinal, selectedAccountRef);
         }}
       >
         {pendingProfile && (
-          <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-lg border bg-muted/20 p-2.5 text-[11px]">
-            <div className="col-span-2">
-              <dt className="text-muted-foreground">{i18n.t("mandate.universe")}</dt>
-              <dd className="font-medium text-foreground">{formatUniverse(pendingProfile.universe)}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">{i18n.t("mandate.maxOrder")}</dt>
-              <dd className="font-mono font-medium text-foreground">{formatUsd(pendingProfile.max_order_usd)}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">{i18n.t("mandate.dailyCap")}</dt>
-              <dd className="font-mono font-medium text-foreground">
-                {i18n.t("mandate.tradesPerDay", { count: pendingProfile.daily_trade_cap })}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">{i18n.t("mandate.leverage")}</dt>
-              <dd className="font-medium text-foreground">{formatLeverage(pendingProfile.leverage)}</dd>
-            </div>
-          </dl>
+          <div className="space-y-3">
+            {accountRefRequired && (
+              <div>
+                <label htmlFor="mandate-account-ref" className="text-xs font-medium text-foreground">
+                  {i18n.t("mandate.accountRefLabel")}
+                </label>
+                <input
+                  id="mandate-account-ref"
+                  type="text"
+                  value={accountRef}
+                  autoFocus
+                  autoComplete="off"
+                  spellCheck={false}
+                  required
+                  maxLength={128}
+                  aria-describedby="mandate-account-ref-hint"
+                  onChange={(event) => setAccountRef(event.target.value)}
+                  placeholder={i18n.t("mandate.accountRefPlaceholder")}
+                  className="mt-1 w-full rounded-md border bg-background px-3 py-2 font-mono text-xs text-foreground outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <p id="mandate-account-ref-hint" className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                  {i18n.t("mandate.accountRefHint")}
+                </p>
+              </div>
+            )}
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-lg border bg-muted/20 p-2.5 text-[11px]">
+              <div className="col-span-2">
+                <dt className="text-muted-foreground">{i18n.t("mandate.universe")}</dt>
+                <dd className="font-medium text-foreground">{formatUniverse(pendingProfile.universe)}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">{i18n.t("mandate.maxOrder")}</dt>
+                <dd className="font-mono font-medium text-foreground">{formatUsd(pendingProfile.max_order_usd)}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">{i18n.t("mandate.dailyCap")}</dt>
+                <dd className="font-mono font-medium text-foreground">
+                  {i18n.t("mandate.tradesPerDay", { count: pendingProfile.daily_trade_cap })}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">{i18n.t("mandate.leverage")}</dt>
+                <dd className="font-medium text-foreground">{formatLeverage(pendingProfile.leverage)}</dd>
+              </div>
+            </dl>
+          </div>
         )}
       </ConfirmDialog>
     </div>

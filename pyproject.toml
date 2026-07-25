@@ -97,6 +97,9 @@ include = ["src*", "backtest*", "cli*"]
 ibkr = [
     "ib_async>=2.0",
 ]
+okx = [
+    "python-okx>=0.4.3,<0.5",
+]
 deepseek = [
     "langchain-deepseek>=1.0.0,<2",
 ]

@@ -36,7 +36,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-from src.live.mandate.model import MANDATE_SCHEMA_VERSION
+from src.live.mandate.model import MANDATE_SCHEMA_VERSION, InstrumentType
 from src.live.paths import broker_dir
 
 logger = logging.getLogger(__name__)
@@ -63,6 +63,8 @@ _CEILING_ALIASES: dict[str, str] = {
     # order notional
     "max_order_usd": "max_order_notional_usd",
     "max_order_notional_usd": "max_order_notional_usd",
+    "max_total_exposure_usd": "max_total_exposure_usd",
+    "account_funding_usd": "account_funding_usd",
     # daily trade cap
     "daily_trade_cap": "max_trades_per_day",
     "max_trades_per_day": "max_trades_per_day",
@@ -72,6 +74,19 @@ _CEILING_ALIASES: dict[str, str] = {
     # instrument whitelist
     "instruments": "allowed_instruments",
     "allowed_instruments": "allowed_instruments",
+    # derivative maximums
+    "max_position_notional_usd": "max_position_notional_usd",
+    "max_correlated_exposure_usd": "max_correlated_exposure_usd",
+    "max_daily_loss_usd": "max_daily_loss_usd",
+    "max_drawdown_pct": "max_drawdown_pct",
+    "max_margin_utilization_pct": "max_margin_utilization_pct",
+    "max_consecutive_losses": "max_consecutive_losses",
+    # derivative minimum / structural requirements
+    "min_liquidation_buffer_pct": "min_liquidation_buffer_pct",
+    "require_stop_loss": "require_stop_loss",
+    "include_symbols": "include_symbols",
+    "allowed_symbols": "include_symbols",
+    "asset_classes": "asset_classes",
 }
 
 
@@ -143,7 +158,10 @@ def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
     """
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     tmp = path.with_name(f".{path.name}.tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    tmp.write_text(
+        json.dumps(payload, ensure_ascii=False, allow_nan=False),
+        encoding="utf-8",
+    )
     try:
         os.chmod(tmp, 0o600)
     except OSError:
@@ -262,12 +280,21 @@ def _resolve_profile(
             if key not in resolved:
                 raise CommitError(f"adjustment {key!r} is not a field of the selected profile")
             current = resolved[key]
-            if isinstance(current, (int, float)) and isinstance(value, (int, float)):
-                if value > current:
+            if isinstance(current, (int, float)) and not isinstance(current, bool) and isinstance(value, (int, float)):
+                widens = value > current
+                if key == "min_liquidation_buffer_pct":
+                    widens = value < current
+                if widens:
                     raise CommitError(
                         f"adjustment {key!r}={value} widens the rendered limit {current}; "
                         "widening must go through a fresh proposal"
                     )
+            elif isinstance(current, bool):
+                if current is True and value is not True:
+                    raise CommitError(f"adjustment {key!r} removes a required safety control")
+            elif isinstance(current, (list, tuple)):
+                if not isinstance(value, (list, tuple)) or not set(map(str, value)).issubset(set(map(str, current))):
+                    raise CommitError(f"adjustment {key!r} widens a rendered allowlist")
             resolved[key] = value
     return resolved
 
@@ -299,13 +326,23 @@ def _profile_fits_ceilings(profile: Mapping[str, Any], ceilings: Mapping[str, An
         if key not in prof:
             continue
         prof_value = prof[key]
-        if isinstance(ceiling_value, (int, float)) and isinstance(prof_value, (int, float)):
-            if prof_value > ceiling_value:
+        if isinstance(ceiling_value, (int, float)) and not isinstance(ceiling_value, bool) and isinstance(prof_value, (int, float)):
+            outside = prof_value > ceiling_value
+            if key == "min_liquidation_buffer_pct":
+                outside = prof_value < ceiling_value
+            if outside:
                 return False
         elif key == "leverage":
             # Cash-only ceiling forbids any leverage other than "none".
             if ceiling_value == "none" and prof_value not in ("none", None, 1, 1.0):
                 return False
+        elif key in ("allowed_instruments", "include_symbols", "asset_classes"):
+            if not isinstance(prof_value, (list, tuple)) or not set(map(str, prof_value)).issubset(
+                set(map(str, ceiling_value if isinstance(ceiling_value, (list, tuple)) else []))
+            ):
+                return False
+        elif key == "require_stop_loss" and bool(ceiling_value) and not bool(prof_value):
+            return False
     return True
 
 
@@ -372,6 +409,12 @@ def commit_mandate(
         raise CommitError(f"proposal {proposal_id!r} is not live (already committed, expired, or unknown)")
 
     resolved = _resolve_profile(proposal, ordinal, adjustments)
+    account_ref = str(account_ref or "").strip()
+    instruments = _normalize_limits(resolved).get("allowed_instruments") or ()
+    if isinstance(instruments, str):
+        instruments = (instruments,)
+    if InstrumentType.PERPETUAL_SWAP.value in {str(item) for item in instruments} and not account_ref:
+        raise CommitError("perpetual mandate commit requires a dedicated account reference")
 
     ceilings = dict(ceilings_ref) if ceilings_ref is not None else dict(proposal.get("ceilings") or {})
     if ceilings and not _profile_fits_ceilings(resolved, ceilings):
@@ -479,6 +522,24 @@ def _profile_to_hard_caps(profile: Mapping[str, Any]) -> dict[str, Any]:
         "max_leverage": max_leverage,
         "allowed_instruments": instruments,
         "max_trades_per_day": int(profile.get("daily_trade_cap", 0) or 0),
+        "max_position_notional_usd": float(
+            profile.get("max_position_notional_usd", max_exposure) or max_exposure
+        ),
+        "max_correlated_exposure_usd": float(
+            profile.get("max_correlated_exposure_usd", max_exposure) or max_exposure
+        ),
+        "max_daily_loss_usd": float(
+            profile.get("max_daily_loss_usd", max(funding * 0.02, 0.0)) or 0.0
+        ),
+        "max_drawdown_pct": float(profile.get("max_drawdown_pct", 0.10) or 0.0),
+        "min_liquidation_buffer_pct": float(
+            profile.get("min_liquidation_buffer_pct", 0.15) or 0.0
+        ),
+        "max_margin_utilization_pct": float(
+            profile.get("max_margin_utilization_pct", 0.50) or 0.0
+        ),
+        "max_consecutive_losses": int(profile.get("max_consecutive_losses", 3) or 0),
+        "require_stop_loss": bool(profile.get("require_stop_loss", False)),
     }
 
 
@@ -496,4 +557,5 @@ def _profile_to_universe(profile: Mapping[str, Any]) -> dict[str, Any]:
         "min_market_cap_usd": profile.get("min_market_cap_usd"),
         "min_avg_daily_volume_usd": profile.get("min_avg_daily_volume_usd"),
         "exclude_symbols": list(profile.get("exclude_symbols") or []),
+        "include_symbols": list(profile.get("include_symbols") or []),
     }

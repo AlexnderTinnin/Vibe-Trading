@@ -37,6 +37,7 @@ BEFORE the report is returned, so the preemptive sweep is fully reconstructable.
 from __future__ import annotations
 
 import logging
+import hashlib
 from typing import Any, Callable
 
 from src.live.audit import LiveActionEvent, write_live_action
@@ -125,6 +126,172 @@ def flatten_and_cancel(
 
     _flatten_open_positions(broker, submit, read_positions, report)
     return report
+
+
+def flatten_okx_swaps(
+    broker: str,
+    cancel: SubmitFn,
+    close_position: SubmitFn,
+    read_positions: ReadPositionsFn,
+    read_open_orders: ReadOpenOrdersFn,
+    *,
+    allow_flatten: bool | None = None,
+    read_algo_orders: ReadOpenOrdersFn | None = None,
+    cancel_algo: SubmitFn | None = None,
+) -> dict[str, Any]:
+    """Cancel SWAP orders, then close exact ``posSide``/``mgnMode`` positions.
+
+    This is intentionally separate from the signed-share implementation above:
+    OKX hedge positions cannot be safely flattened from ``qty`` alone. Every
+    write is attempted at most once and an error response is treated as a
+    failure, never as an instruction to cancel another order or retry.
+    """
+    report: dict[str, Any] = {
+        "broker": broker,
+        "cancelled_order_ids": [],
+        "flatten_orders_submitted": [],
+        "flatten_skipped_reason": None,
+        "errors": [],
+    }
+    try:
+        open_orders = read_open_orders()
+    except Exception as exc:  # noqa: BLE001
+        report["errors"].append({"phase": "read_open_orders", "error": str(exc)})
+        open_orders = []
+
+    for order in open_orders:
+        symbol = str(order.get("symbol") or order.get("instId") or "").upper()
+        order_id = str(order.get("order_id") or order.get("ordId") or "")
+        if not symbol.endswith("-SWAP") or not order_id:
+            report["errors"].append(
+                {"phase": "cancel", "order_id": order_id or None, "error": "invalid SWAP order identity"}
+            )
+            continue
+        request = {"action": "cancel", "symbol": symbol, "order_id": order_id}
+        try:
+            response = cancel(request)
+            if not isinstance(response, dict) or str(response.get("status") or "").lower() != "ok":
+                raise RuntimeError(_response_error(response))
+        except Exception as exc:  # noqa: BLE001
+            report["errors"].append({"phase": "cancel", "order_id": order_id, "error": str(exc)})
+            _audit(broker, "cancel_swap_order", f"cancel swap order {order_id}", request, None, "error", str(exc))
+            continue
+        report["cancelled_order_ids"].append(order_id)
+        _audit(broker, "cancel_swap_order", f"cancel swap order {order_id}", request, response, "accepted", None)
+
+    if read_algo_orders is not None:
+        try:
+            algo_orders = read_algo_orders()
+        except Exception as exc:  # noqa: BLE001
+            report["errors"].append({"phase": "read_algo_orders", "error": str(exc)})
+            algo_orders = []
+        for algo in algo_orders:
+            symbol = str(algo.get("symbol") or algo.get("instId") or "").upper()
+            algo_id = str(algo.get("algo_id") or algo.get("algoId") or "")
+            if cancel_algo is None or not symbol.endswith("-SWAP") or not algo_id:
+                report["errors"].append(
+                    {"phase": "cancel_algo", "algo_id": algo_id or None, "error": "invalid or unavailable algo cancel surface"}
+                )
+                continue
+            request = {"action": "cancel_swap_algo_order", "symbol": symbol, "algo_id": algo_id}
+            try:
+                response = cancel_algo(request)
+                if not isinstance(response, dict) or str(response.get("status") or "").lower() != "ok":
+                    raise RuntimeError(_response_error(response))
+            except Exception as exc:  # noqa: BLE001
+                report["errors"].append({"phase": "cancel_algo", "algo_id": algo_id, "error": str(exc)})
+                _audit(broker, "cancel_swap_algo_order", f"cancel swap algo {algo_id}", request, None, "error", str(exc))
+                continue
+            report["cancelled_order_ids"].append(algo_id)
+            _audit(broker, "cancel_swap_algo_order", f"cancel swap algo {algo_id}", request, response, "accepted", None)
+
+    if any(item.get("phase") in {"cancel", "cancel_algo", "read_open_orders", "read_algo_orders"} for item in report["errors"]):
+        report["flatten_skipped_reason"] = "order cancellation incomplete; manual reconciliation required"
+        return report
+
+    if not _resolve_allow_flatten(broker, allow_flatten):
+        report["flatten_skipped_reason"] = "mandate forbids flatten (cancel-only)"
+        return report
+
+    try:
+        positions = read_positions()
+    except Exception as exc:  # noqa: BLE001
+        report["errors"].append({"phase": "read_positions", "error": str(exc)})
+        return report
+
+    for position in positions:
+        symbol = str(position.get("symbol") or position.get("instId") or "").upper()
+        raw_qty = position.get("quantity", position.get("pos", position.get("qty", 0)))
+        try:
+            qty = abs(float(raw_qty or 0))
+        except (TypeError, ValueError):
+            qty = 0.0
+        if qty == 0:
+            continue
+        position_side = str(
+            position.get("position_side") or position.get("side") or position.get("posSide") or "net"
+        ).lower()
+        margin_mode = str(position.get("margin_mode") or position.get("mgnMode") or "").lower()
+        leverage = position.get("leverage", position.get("lever"))
+        if (
+            not symbol.endswith("-SWAP")
+            or position_side not in ("net", "long", "short")
+            or margin_mode not in ("cross", "isolated")
+            or leverage in (None, "")
+        ):
+            report["errors"].append(
+                {"phase": "flatten", "symbol": symbol or None, "error": "incomplete SWAP position identity"}
+            )
+            continue
+        client_id = _flatten_client_order_id(symbol, position_side, margin_mode)
+        request = {
+            "action": "close_swap_position",
+            "symbol": symbol,
+            "margin_mode": margin_mode,
+            "position_side": position_side,
+            "leverage": leverage,
+            "client_order_id": client_id,
+            "auto_cancel": False,
+        }
+        try:
+            response = close_position(request)
+            if not isinstance(response, dict) or str(response.get("status") or "").lower() != "ok":
+                raise RuntimeError(_response_error(response))
+        except Exception as exc:  # noqa: BLE001
+            report["errors"].append({"phase": "flatten", "symbol": symbol, "error": str(exc)})
+            _audit(broker, "close_swap_position", f"flatten {symbol} {position_side}", request, None, "error", str(exc))
+            continue
+        report["flatten_orders_submitted"].append(
+            {
+                "symbol": symbol,
+                "position_side": position_side,
+                "margin_mode": margin_mode,
+                "contracts": qty,
+                "client_order_id": client_id,
+                "response": response,
+            }
+        )
+        _audit(
+            broker,
+            "close_swap_position",
+            f"flatten {symbol} {position_side} ({margin_mode})",
+            request,
+            response,
+            "accepted",
+            None,
+        )
+    return report
+
+
+def _flatten_client_order_id(symbol: str, position_side: str, margin_mode: str) -> str:
+    material = f"halt|{symbol}|{position_side}|{margin_mode}"
+    return f"vh-{hashlib.sha256(material.encode('ascii')).hexdigest()[:24]}"
+
+
+def _response_error(response: object) -> str:
+    if isinstance(response, dict):
+        return str(response.get("error") or response.get("message") or "broker write failed")
+    return "broker write returned a malformed response"
 
 
 def _resolve_allow_flatten(broker: str, allow_flatten: bool | None) -> bool:

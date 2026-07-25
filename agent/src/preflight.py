@@ -131,6 +131,12 @@ def _check_llm_provider() -> CheckResult:
 
 def _check_okx() -> CheckResult:
     """Check OKX public API reachability."""
+    proxy = os.getenv("OKX_PROXY", "").strip()
+    request_options = (
+        {"proxies": {"http": proxy, "https": proxy}}
+        if proxy
+        else {}
+    )
     try:
         import requests
 
@@ -138,6 +144,7 @@ def _check_okx() -> CheckResult:
             "https://www.okx.com/api/v5/market/candles",
             params={"instId": "BTC-USDT", "bar": "1D", "limit": "1"},
             timeout=10,
+            **request_options,
         )
         data = resp.json()
         if data.get("code") == "0":
@@ -149,10 +156,13 @@ def _check_okx() -> CheckResult:
             impact="crypto backtest unavailable",
         )
     except Exception as exc:
+        message = f"{type(exc).__name__}: {exc}"
+        if proxy:
+            message = message.replace(proxy, "<configured proxy>")
         return CheckResult(
             name="OKX API",
             status="error",
-            message=f"{type(exc).__name__}: {exc}",
+            message=message,
             impact="crypto backtest unavailable",
         )
 

@@ -9,7 +9,6 @@ infrastructure lives in ``src.api.{security,models,helpers,state}``.
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from typing import Any, Dict
 
@@ -163,6 +162,7 @@ async def _run_startup_preflight() -> None:
 @app.on_event("shutdown")
 async def _stop_scheduled_research_on_shutdown() -> None:
     """Stop the scheduled research executor on server shutdown."""
+    await _stop_quant_runners()
     await _stop_channel_runtime()
     await _stop_scheduled_research_executor()
 
@@ -244,6 +244,10 @@ from src.api.live_routes import (  # noqa: F401, E402
     LiveHaltRequest,
     LiveAuthorizeRequest,
     LiveRunnerControlRequest,
+    QuantRunnerControlRequest,
+    SwapBreakerClearRequest,
+    ResilienceDrillRequest,
+    LivePromotionApprovalRequest,
     BrokerAuthState,
     MandateLimits,
     ActiveMandateState,
@@ -253,6 +257,8 @@ from src.api.live_routes import (  # noqa: F401, E402
     LiveRunnerUnavailable,
     _runner_tasks,
     _runner_factory,
+    _quant_runners,
+    _quant_runner_factory,
     _emit_live_event,
     _fetch_broker_ceilings,
     _known_live_brokers,
@@ -261,7 +267,11 @@ from src.api.live_routes import (  # noqa: F401, E402
     _runner_liveness_state,
     _live_broker_adapter,
     _build_live_runner,
+    _build_quant_runner,
+    _run_quant_reconcile,
+    _quant_status_snapshot,
     _drive_runner,
+    _stop_quant_runners,
 )
 
 # --- Alpha Zoo ---

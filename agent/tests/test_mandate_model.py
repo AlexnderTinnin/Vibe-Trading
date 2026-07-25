@@ -166,6 +166,47 @@ def test_load_mandate_missing_field_returns_none(live_runtime: Path) -> None:
     assert load_mandate("robinhood") is None
 
 
+def test_load_mandate_rejects_non_finite_caps(live_runtime: Path) -> None:
+    """NaN must not bypass quantitative comparisons in the order gate."""
+    from src.live.paths import broker_dir
+
+    bdir = broker_dir("robinhood")
+    _write_mandate(bdir, _sample_mandate("2026-06-28T14:00:00Z"))
+    path = bdir / "mandate.json"
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    doc["hard_caps"]["max_order_notional_usd"] = float("nan")
+    path.write_text(json.dumps(doc), encoding="utf-8")
+
+    assert load_mandate("robinhood") is None
+
+
+def test_perpetual_v2_requires_explicit_derivative_caps(live_runtime: Path) -> None:
+    """A handcrafted swap mandate cannot inherit permissive legacy defaults."""
+    from src.live.paths import broker_dir
+
+    bdir = broker_dir("okx")
+    _write_mandate(bdir, _sample_mandate("2026-06-28T14:00:00Z"))
+    path = bdir / "mandate.json"
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    doc["hard_caps"]["allowed_instruments"] = ["perpetual_swap"]
+    doc["universe"]["asset_classes"] = ["crypto"]
+    doc["universe"]["include_symbols"] = ["BTC-USDT-SWAP"]
+    doc["consent"]["broker"] = "okx"
+    doc["consent"]["account_ref"] = "dedicated-demo"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+
+    assert load_mandate("okx") is None
+
+
+def test_mandate_consent_broker_must_match_store(live_runtime: Path) -> None:
+    from src.live.paths import broker_dir
+
+    bdir = broker_dir("okx")
+    _write_mandate(bdir, _sample_mandate("2026-06-28T14:00:00Z"))
+
+    assert load_mandate("okx") is None
+
+
 def test_expires_at_parses_as_utc_datetime(live_runtime: Path) -> None:
     """expires_at round-trips as an ISO-8601 UTC timestamp the gate can parse."""
     created = datetime(2026, 5, 29, 14, 0, 0, tzinfo=timezone.utc)

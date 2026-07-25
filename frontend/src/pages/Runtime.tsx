@@ -5,9 +5,11 @@ import type { TFunction } from "i18next";
 import {
   Activity,
   AlertTriangle,
+  BarChart3,
   CheckCircle2,
   Clock3,
   Loader2,
+  LockKeyhole,
   OctagonX,
   RefreshCw,
   ShieldCheck,
@@ -15,7 +17,13 @@ import {
   Wifi,
   WifiOff,
 } from "lucide-react";
-import { api, type LiveBrokerStatus, type LiveMandateLimits, type LiveStatus } from "@/lib/api";
+import {
+  api,
+  type LiveBrokerStatus,
+  type LiveMandateLimits,
+  type LiveStatus,
+  type OkxQuantStatus,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const RUNTIME_POLL_INTERVAL_MS = 15_000;
@@ -24,9 +32,11 @@ const RUNTIME_CLOCK_INTERVAL_MS = 1_000;
 export function Runtime() {
   const { t } = useTranslation();
   const [status, setStatus] = useState<LiveStatus | null>(null);
+  const [quantStatus, setQuantStatus] = useState<OkxQuantStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [quantError, setQuantError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const activeRequestRef = useRef<{ id: number; controller: AbortController } | null>(null);
   const requestSeqRef = useRef(0);
@@ -47,10 +57,26 @@ export function Runtime() {
     if (mode === "initial") setLoading(true);
     else setRefreshing(true);
     setError(null);
+    setQuantError(null);
     try {
-      const next = await api.getLiveStatus(controller.signal);
+      const [liveResult, quantResult] = await Promise.allSettled([
+        api.getLiveStatus(controller.signal),
+        api.getOkxQuantStatus(controller.signal),
+      ]);
       if (!mountedRef.current || !isCurrentStatusRequest(activeRequestRef.current, requestId, controller)) return;
-      setStatus(next);
+      if (controller.signal.aborted) return;
+      if (quantResult.status === "fulfilled") {
+        setQuantStatus(quantResult.value);
+      } else {
+        setQuantStatus(null);
+        setQuantError(
+          quantResult.reason instanceof Error
+            ? quantResult.reason.message
+            : tRef.current("runtime.quantUnavailable"),
+        );
+      }
+      if (liveResult.status === "rejected") throw liveResult.reason;
+      setStatus(liveResult.value);
     } catch (err) {
       if (controller.signal.aborted) return;
       if (!mountedRef.current || !isCurrentStatusRequest(activeRequestRef.current, requestId, controller)) return;
@@ -153,6 +179,8 @@ export function Runtime() {
               />
             </section>
 
+            <OkxQuantRuntime status={quantStatus} error={quantError} t={t} nowMs={nowMs} />
+
             {status.brokers.length === 0 ? (
               <section className="rounded-md border border-dashed p-8 text-center">
                 <ShieldOff className="mx-auto h-8 w-8 text-muted-foreground" />
@@ -211,6 +239,170 @@ function SummaryTile({ label, value, tone, icon: Icon }: SummaryTileProps) {
       >
         {value}
       </div>
+    </div>
+  );
+}
+
+function OkxQuantRuntime({
+  status,
+  error,
+  t,
+  nowMs,
+}: {
+  status: OkxQuantStatus | null;
+  error: string | null;
+  t: TFunction;
+  nowMs: number;
+}) {
+  if (!status) {
+    return (
+      <section className="border-y py-5">
+        <div className="flex items-start gap-3 text-amber-700 dark:text-amber-300">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+          <div>
+            <h2 className="font-semibold">{t("runtime.quantTitle")}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {error || t("runtime.quantUnavailable")}
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const qualification = status.promotion.qualification;
+  const passedDrills = qualification.passed_drills?.length ?? 0;
+  const promotionReason = status.promotion.reasons?.[0];
+
+  return (
+    <section className="border-y py-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-muted-foreground" />
+            <h2 className="font-semibold">{t("runtime.quantTitle")}</h2>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">{t("runtime.quantSubtitle")}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <StatusPill label={t("runtime.demoEnvironment")} tone="neutral" />
+          <StatusPill
+            label={status.breaker.tripped ? t("runtime.breakerTripped") : t("runtime.breakerClear")}
+            tone={status.breaker.tripped ? "danger" : "success"}
+          />
+          <StatusPill
+            label={
+              status.live_swap_writes_compiled
+                ? t("runtime.liveCompiled")
+                : t("runtime.liveDisabled")
+            }
+            tone={status.live_swap_writes_compiled ? "warning" : "neutral"}
+          />
+        </div>
+      </div>
+
+      <div className="mt-4 grid border-l border-t sm:grid-cols-2 xl:grid-cols-4">
+        <QuantCell title={t("runtime.quantRunner")} icon={Activity}>
+          <KeyValue
+            label={t("runtime.state")}
+            value={status.runner.running ? t("runtime.runnerAlive") : t("runtime.runnerStopped")}
+          />
+          <KeyValue
+            label={t("runtime.mode")}
+            value={status.runner.mode || t("runtime.notStarted")}
+          />
+          <KeyValue
+            label={t("runtime.tickInterval")}
+            value={
+              typeof status.runner.tick_interval_seconds === "number"
+                ? `${status.runner.tick_interval_seconds}s`
+                : t("runtime.unknown")
+            }
+          />
+          <KeyValue
+            label={t("runtime.latestOutcome")}
+            value={formatStatusValue(status.runner.latest.outcome, t)}
+          />
+          <KeyValue
+            label={t("runtime.lastTick")}
+            value={formatLastTick(status.runner.latest.tick_at, undefined, t, nowMs)}
+          />
+        </QuantCell>
+
+        <QuantCell title={t("runtime.breaker")} icon={status.breaker.tripped ? OctagonX : ShieldCheck}>
+          <KeyValue
+            label={t("runtime.state")}
+            value={status.breaker.tripped ? t("runtime.breakerTripped") : t("runtime.breakerClear")}
+          />
+          <KeyValue
+            label={t("runtime.manualClear")}
+            value={status.breaker.manual_clear_required ? t("runtime.required") : t("runtime.notRequired")}
+          />
+          <p className="text-xs leading-5 text-muted-foreground">
+            {status.breaker.reason || t("runtime.noSafetyEvents")}
+          </p>
+        </QuantCell>
+
+        <QuantCell title={t("runtime.demoQualification")} icon={Clock3}>
+          <div className="flex items-center justify-between gap-2">
+            <StatusPill
+              label={qualification.eligible ? t("runtime.eligible") : t("runtime.notEligible")}
+              tone={qualification.eligible ? "success" : "warning"}
+            />
+          </div>
+          <KeyValue
+            label={t("runtime.elapsedDays")}
+            value={`${formatCount(qualification.elapsed_days, 1)} / 30`}
+          />
+          <KeyValue
+            label={t("runtime.activeDays")}
+            value={`${formatCount(qualification.active_days)} / 30`}
+          />
+          <KeyValue
+            label={t("runtime.demoTicks")}
+            value={`${formatCount(qualification.tick_count)} / 1,000`}
+          />
+          <KeyValue label={t("runtime.resilienceDrills")} value={`${passedDrills} / 5`} />
+        </QuantCell>
+
+        <QuantCell title={t("runtime.livePromotion")} icon={LockKeyhole}>
+          <KeyValue
+            label={t("runtime.qualification")}
+            value={status.promotion.qualified ? t("runtime.eligible") : t("runtime.notEligible")}
+          />
+          <KeyValue
+            label={t("runtime.manualApproval")}
+            value={status.promotion.manually_approved ? t("runtime.approved") : t("runtime.notApproved")}
+          />
+          <KeyValue
+            label={t("runtime.execution")}
+            value={status.promotion.execution_enabled ? t("runtime.enabled") : t("runtime.disabled")}
+          />
+          <p className="text-xs leading-5 text-muted-foreground">
+            {promotionReason || t("runtime.noSafetyEvents")}
+          </p>
+        </QuantCell>
+      </div>
+    </section>
+  );
+}
+
+function QuantCell({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  icon: typeof Activity;
+  children: ReactNode;
+}) {
+  return (
+    <div className="min-w-0 border-b border-r p-4">
+      <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        {title}
+      </div>
+      <div className="space-y-2">{children}</div>
     </div>
   );
 }
@@ -380,6 +572,16 @@ function summarizeLimits(limits: LiveMandateLimits | undefined, t: TFunction): s
 
 function formatUsd(value: number): string {
   return `$${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+}
+
+function formatCount(value: number | undefined, maximumFractionDigits = 0): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "0";
+  return value.toLocaleString("en-US", { maximumFractionDigits });
+}
+
+function formatStatusValue(value: string | undefined, t: TFunction): string {
+  if (!value) return t("runtime.notStarted");
+  return value.replace(/_/g, " ");
 }
 
 function formatCountdown(iso: string | undefined, t: TFunction, nowMs: number): string {

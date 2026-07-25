@@ -19,12 +19,18 @@ from src.trading.profiles import (
 from src.trading.service import (
     cancel_order,
     check_connection,
+    close_okx_swap_position,
     get_account,
     get_history,
+    get_okx_account_configuration,
+    get_okx_swap_instrument,
+    get_okx_swap_leverage,
     get_open_orders,
     get_positions,
     get_quote,
+    place_okx_swap_order,
     place_order,
+    set_okx_swap_leverage,
 )
 
 
@@ -301,6 +307,259 @@ class TradingHistoryTool(BaseTool):
                     period=str(kwargs.get("period") or "1d"),
                     limit=int(kwargs.get("limit") or 90),
                     **_overrides(kwargs),
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            return _json_result({"status": "error", "error": str(exc)})
+
+
+_OKX_CONNECTION_PARAMETER = {
+    "connection": {
+        "type": "string",
+        "description": "OKX connector profile id. Swap writes require okx-paper-trade in Phase 1.",
+    }
+}
+
+_OKX_SWAP_SYMBOL_PARAMETER = {
+    "symbol": {
+        "type": "string",
+        "enum": ["BTC-USDT-SWAP", "ETH-USDT-SWAP"],
+        "description": "Allowed OKX USDT perpetual instrument id.",
+    }
+}
+
+
+class OKXSwapInstrumentTool(BaseTool):
+    """Read validated contract metadata used for derivative sizing."""
+
+    name = "okx_swap_instrument"
+    description = "Read OKX contract value, lot size, minimum size, tick size, and product state. Read-only."
+    parameters = {
+        "type": "object",
+        "properties": {**_OKX_CONNECTION_PARAMETER, **_OKX_SWAP_SYMBOL_PARAMETER},
+        "required": ["symbol"],
+    }
+    repeatable = True
+    is_readonly = True
+
+    def execute(self, **kwargs: Any) -> str:
+        try:
+            return _json_result(
+                get_okx_swap_instrument(
+                    str(kwargs["symbol"]),
+                    _connection(kwargs.get("connection")),
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            return _json_result({"status": "error", "error": str(exc)})
+
+
+class OKXSwapAccountConfigTool(BaseTool):
+    """Read account level and net/hedge position mode."""
+
+    name = "okx_swap_account_config"
+    description = "Read the selected OKX account level and position mode. Read-only."
+    parameters = {
+        "type": "object",
+        "properties": _OKX_CONNECTION_PARAMETER,
+        "required": [],
+    }
+    repeatable = True
+    is_readonly = True
+
+    def execute(self, **kwargs: Any) -> str:
+        try:
+            return _json_result(
+                get_okx_account_configuration(_connection(kwargs.get("connection")))
+            )
+        except Exception as exc:  # noqa: BLE001
+            return _json_result({"status": "error", "error": str(exc)})
+
+
+class OKXSwapLeverageTool(BaseTool):
+    """Read current leverage for one swap and margin mode."""
+
+    name = "okx_swap_leverage"
+    description = "Read current OKX perpetual leverage for a margin mode. Read-only."
+    parameters = {
+        "type": "object",
+        "properties": {
+            **_OKX_CONNECTION_PARAMETER,
+            **_OKX_SWAP_SYMBOL_PARAMETER,
+            "margin_mode": {"type": "string", "enum": ["cross", "isolated"]},
+        },
+        "required": ["symbol", "margin_mode"],
+    }
+    repeatable = True
+    is_readonly = True
+
+    def execute(self, **kwargs: Any) -> str:
+        try:
+            return _json_result(
+                get_okx_swap_leverage(
+                    str(kwargs["symbol"]),
+                    _connection(kwargs.get("connection")),
+                    margin_mode=str(kwargs["margin_mode"]),
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            return _json_result({"status": "error", "error": str(exc)})
+
+
+class OKXSwapSetLeverageTool(BaseTool):
+    """Set and verify Demo swap leverage."""
+
+    name = "okx_swap_set_leverage"
+    description = (
+        "Set OKX Demo perpetual leverage and verify it by reading the account back. "
+        "For hedge cross margin use position_side=both."
+    )
+    parameters = {
+        "type": "object",
+        "properties": {
+            **_OKX_CONNECTION_PARAMETER,
+            **_OKX_SWAP_SYMBOL_PARAMETER,
+            "leverage": {"type": "number", "minimum": 1, "maximum": 10},
+            "margin_mode": {"type": "string", "enum": ["cross", "isolated"]},
+            "position_side": {"type": "string", "enum": ["net", "long", "short", "both"]},
+        },
+        "required": ["symbol", "leverage", "margin_mode", "position_side"],
+    }
+    repeatable = False
+    is_readonly = False
+
+    def execute(self, **kwargs: Any) -> str:
+        try:
+            return _json_result(
+                set_okx_swap_leverage(
+                    str(kwargs["symbol"]),
+                    _connection(kwargs.get("connection")),
+                    leverage=float(kwargs["leverage"]),
+                    margin_mode=str(kwargs["margin_mode"]),
+                    position_side=str(kwargs["position_side"]),
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            return _json_result({"status": "error", "error": str(exc)})
+
+
+class OKXSwapPlaceOrderTool(BaseTool):
+    """Place a fully explicit OKX Demo perpetual order."""
+
+    name = "okx_swap_place_order"
+    description = (
+        "Place a BTC/ETH USDT perpetual order in OKX Demo. All derivative semantics are explicit: "
+        "size unit, margin mode, position side, leverage, reduce-only flag, and stable client order id."
+    )
+    parameters = {
+        "type": "object",
+        "properties": {
+            **_OKX_CONNECTION_PARAMETER,
+            **_OKX_SWAP_SYMBOL_PARAMETER,
+            "side": {"type": "string", "enum": ["buy", "sell"]},
+            "size": {"type": "number", "exclusiveMinimum": 0},
+            "size_unit": {
+                "type": "string",
+                "enum": ["contracts", "quote_ccy", "margin"],
+                "description": "contracts, USDT notional, or USDT margin cost.",
+            },
+            "order_type": {"type": "string", "enum": ["market", "limit"], "default": "market"},
+            "limit_price": {"type": "number", "exclusiveMinimum": 0},
+            "margin_mode": {"type": "string", "enum": ["cross", "isolated"]},
+            "position_side": {"type": "string", "enum": ["net", "long", "short"]},
+            "leverage": {"type": "number", "minimum": 1, "maximum": 10},
+            "client_order_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32,
+                "description": "Stable idempotency key using letters, digits, '-' or '_'.",
+            },
+            "reduce_only": {"type": "boolean", "default": False},
+            "take_profit": {"type": "number", "exclusiveMinimum": 0},
+            "stop_loss": {"type": "number", "exclusiveMinimum": 0},
+            "trigger_price_type": {
+                "type": "string",
+                "enum": ["last", "index", "mark"],
+                "default": "mark",
+            },
+        },
+        "required": [
+            "symbol",
+            "side",
+            "size",
+            "size_unit",
+            "margin_mode",
+            "position_side",
+            "leverage",
+            "client_order_id",
+        ],
+    }
+    repeatable = False
+    is_readonly = False
+
+    def execute(self, **kwargs: Any) -> str:
+        try:
+            return _json_result(
+                place_okx_swap_order(
+                    str(kwargs["symbol"]),
+                    _connection(kwargs.get("connection")),
+                    side=str(kwargs["side"]),
+                    size=float(kwargs["size"]),
+                    size_unit=str(kwargs["size_unit"]),
+                    order_type=str(kwargs.get("order_type") or "market"),
+                    limit_price=_num_or_none(kwargs.get("limit_price")),
+                    margin_mode=str(kwargs["margin_mode"]),
+                    position_side=str(kwargs["position_side"]),
+                    leverage=float(kwargs["leverage"]),
+                    client_order_id=str(kwargs["client_order_id"]),
+                    reduce_only=bool(kwargs.get("reduce_only", False)),
+                    take_profit=_num_or_none(kwargs.get("take_profit")),
+                    stop_loss=_num_or_none(kwargs.get("stop_loss")),
+                    trigger_price_type=str(kwargs.get("trigger_price_type") or "mark"),
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            return _json_result({"status": "error", "error": str(exc)})
+
+
+class OKXSwapClosePositionTool(BaseTool):
+    """Close an entire OKX Demo perpetual position."""
+
+    name = "okx_swap_close_position"
+    description = (
+        "Close an entire BTC/ETH USDT perpetual position in OKX Demo and verify remaining position size."
+    )
+    parameters = {
+        "type": "object",
+        "properties": {
+            **_OKX_CONNECTION_PARAMETER,
+            **_OKX_SWAP_SYMBOL_PARAMETER,
+            "margin_mode": {"type": "string", "enum": ["cross", "isolated"]},
+            "position_side": {"type": "string", "enum": ["net", "long", "short"]},
+            "leverage": {"type": "number", "minimum": 1, "maximum": 10},
+            "client_order_id": {"type": "string", "minLength": 1, "maxLength": 32},
+            "auto_cancel": {
+                "type": "boolean",
+                "default": False,
+                "description": "Explicitly cancel pending orders before the full close.",
+            },
+        },
+        "required": ["symbol", "margin_mode", "position_side", "leverage", "client_order_id"],
+    }
+    repeatable = False
+    is_readonly = False
+
+    def execute(self, **kwargs: Any) -> str:
+        try:
+            return _json_result(
+                close_okx_swap_position(
+                    str(kwargs["symbol"]),
+                    _connection(kwargs.get("connection")),
+                    margin_mode=str(kwargs["margin_mode"]),
+                    position_side=str(kwargs["position_side"]),
+                    leverage=float(kwargs["leverage"]),
+                    client_order_id=str(kwargs["client_order_id"]),
+                    auto_cancel=bool(kwargs.get("auto_cancel", False)),
                 )
             )
         except Exception as exc:  # noqa: BLE001

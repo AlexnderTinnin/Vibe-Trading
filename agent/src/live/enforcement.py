@@ -82,6 +82,7 @@ _INSTRUMENT_ASSET_CLASS: dict[InstrumentType, AssetClass] = {
     InstrumentType.EQUITY: AssetClass.US_EQUITY,
     InstrumentType.ETF: AssetClass.US_ETF,
     InstrumentType.CRYPTO: AssetClass.CRYPTO,
+    InstrumentType.PERPETUAL_SWAP: AssetClass.CRYPTO,
 }
 
 
@@ -126,6 +127,29 @@ class OrderIntent:
     quantity: float | None
     instrument_type: InstrumentType
     asset_class: AssetClass | None = None
+    # Derivative fields are explicit because ``quantity`` is a contract count,
+    # never an underlying-coin amount. They remain optional for cash orders.
+    contract_value: float | None = None
+    reference_price: float | None = None
+    leverage: float | None = None
+    reduce_only: bool = False
+    position_side: str | None = None
+    margin_mode: str | None = None
+    stop_loss_price: float | None = None
+    liquidation_price: float | None = None
+    client_order_id: str | None = None
+
+
+@dataclass(frozen=True)
+class DerivativeRiskSnapshot:
+    """Account/strategy risk figures required for a perpetual opening order."""
+
+    equity_usd: float
+    peak_equity_usd: float
+    daily_realized_pnl_usd: float = 0.0
+    correlated_exposure_usd: float = 0.0
+    margin_used_usd: float = 0.0
+    consecutive_losses: int = 0
 
 
 @dataclass(frozen=True)
@@ -222,6 +246,20 @@ def _resolve_order_notional(intent: OrderIntent) -> float | None:
         (→ fail-closed DENY upstream).
     """
     notional = intent.notional_usd
+    if intent.instrument_type is InstrumentType.PERPETUAL_SWAP:
+        values = (intent.quantity, intent.contract_value, intent.reference_price)
+        parsed = tuple(_as_float(value) for value in values)
+        if any(value is None for value in parsed):
+            return None
+        contracts, contract_value, reference_price = parsed
+        assert contracts is not None and contract_value is not None and reference_price is not None
+        if contracts <= 0 or contract_value <= 0 or reference_price <= 0:
+            return None
+        implied = contracts * contract_value * reference_price
+        explicit = _as_float(notional) if notional is not None else 0.0
+        if explicit is None or explicit < 0:
+            return None
+        return max(implied, explicit)
     if notional is None:
         return None
     try:
@@ -336,23 +374,76 @@ def _position_market_value(row: dict) -> float | None:
     ``quantity`` × (``price`` | ``last_price`` | ``mark_price``). Returns
     ``None`` if neither is parseable.
     """
-    for key in ("market_value", "marketValue", "value_usd", "value"):
+    for key in (
+        "market_value", "marketValue", "value_usd", "value", "notional_usd",
+        "notionalUsd", "notional",
+    ):
         if key in row:
             parsed = _as_float(row[key])
             return parsed  # may be None → fail-closed upstream
     qty = None
-    for key in ("quantity", "qty", "shares"):
+    for key in ("quantity", "qty", "shares", "pos"):
         if key in row:
             qty = _as_float(row[key])
             break
     price = None
-    for key in ("price", "last_price", "mark_price", "market_price"):
+    for key in ("price", "last_price", "mark_price", "market_price", "markPx"):
         if key in row:
             price = _as_float(row[key])
             break
     if qty is None or price is None:
         return None
-    return abs(qty) * price
+    contract_value = 1.0
+    for key in ("contract_value", "ct_val", "ctVal"):
+        if key in row:
+            parsed = _as_float(row[key])
+            if parsed is None or parsed <= 0:
+                return None
+            contract_value = parsed
+            break
+    return abs(qty) * contract_value * price
+
+
+def _position_symbol(row: dict) -> str:
+    return str(row.get("symbol") or row.get("instId") or "").strip().upper()
+
+
+def _matching_swap_position_notional(positions: object, intent: OrderIntent) -> float | None:
+    """Return gross notional for the exact symbol/side/margin position."""
+    rows = _coerce_position_rows(positions)
+    if rows is None:
+        return None
+    matches: list[float] = []
+    wanted_side = str(intent.position_side or "").strip().lower()
+    wanted_margin = str(intent.margin_mode or "").strip().lower()
+    for row in rows:
+        if _position_symbol(row) != intent.symbol.strip().upper():
+            continue
+        row_side = str(row.get("position_side") or row.get("side") or row.get("posSide") or "net").lower()
+        row_margin = str(row.get("margin_mode") or row.get("mgnMode") or "").lower()
+        if wanted_side and row_side not in (wanted_side, "" if wanted_side == "net" else "__never__"):
+            continue
+        if wanted_margin and row_margin and row_margin != wanted_margin:
+            continue
+        value = _position_market_value(row)
+        if value is None:
+            return None
+        if value > 0:
+            matches.append(value)
+    if len(matches) > 1:
+        return None
+    return matches[0] if matches else 0.0
+
+
+def _liquidation_buffer_pct(intent: OrderIntent) -> float | None:
+    reference = _as_float(intent.reference_price)
+    liquidation = _as_float(intent.liquidation_price)
+    if reference is None or liquidation is None or reference <= 0 or liquidation <= 0:
+        return None
+    side = str(intent.position_side or "").lower()
+    is_long = side == "long" or (side == "net" and intent.side == "buy")
+    buffer = (reference - liquidation) / reference if is_long else (liquidation - reference) / reference
+    return buffer if buffer == buffer else None
 
 
 def _account_balance_market_value(balance: object) -> float | None:
@@ -390,6 +481,7 @@ def check_mandate(
     broker: str,
     remote_tool: str,
     daily_count: int,
+    derivative_risk: DerivativeRiskSnapshot | None = None,
 ) -> BreachEvent | None:
     """Evaluate one order intent against the mandate (fail-closed).
 
@@ -436,6 +528,15 @@ def check_mandate(
             detail=f"{symbol} is on the mandate exclude list",
         )
 
+    include_symbols = {s.strip().upper() for s in universe.include_symbols if s.strip()}
+    if include_symbols and symbol not in include_symbols:
+        return _breach(
+            broker=broker, remote_tool=remote_tool, intent=intent,
+            kind=BREACH_KIND_UNIVERSE, limit="include_symbols",
+            limit_value=0.0, attempted_value=0.0,
+            detail=f"{symbol} is not in the mandate symbol allowlist",
+        )
+
     # 2. Instrument-type allowance (empty == deny all, fail-closed).
     if intent.instrument_type not in caps.allowed_instruments:
         return _breach(
@@ -467,7 +568,32 @@ def check_mandate(
             limit_value=0.0, attempted_value=0.0,
             detail="order notional could not be resolved",
         )
-    if notional > caps.max_order_notional_usd:
+    is_swap = intent.instrument_type is InstrumentType.PERPETUAL_SWAP
+    if is_swap:
+        if intent.position_side not in ("net", "long", "short"):
+            return _breach(
+                broker=broker, remote_tool=remote_tool, intent=intent,
+                kind=BREACH_KIND_INSTRUMENT, limit="position_side",
+                limit_value=0.0, attempted_value=0.0,
+                detail="perpetual order requires position_side=net|long|short",
+            )
+        if intent.margin_mode not in ("cross", "isolated"):
+            return _breach(
+                broker=broker, remote_tool=remote_tool, intent=intent,
+                kind=BREACH_KIND_INSTRUMENT, limit="margin_mode",
+                limit_value=0.0, attempted_value=0.0,
+                detail="perpetual order requires margin_mode=cross|isolated",
+            )
+        requested_leverage = _as_float(intent.leverage)
+        if requested_leverage is None or requested_leverage < 1 or requested_leverage > caps.max_leverage:
+            return _breach(
+                broker=broker, remote_tool=remote_tool, intent=intent,
+                kind=BREACH_KIND_QUANTITATIVE, limit="max_leverage",
+                limit_value=caps.max_leverage,
+                attempted_value=requested_leverage if requested_leverage is not None else float("inf"),
+                detail="requested perpetual leverage is missing or outside the mandate",
+            )
+    if not intent.reduce_only and notional > caps.max_order_notional_usd:
         return _breach(
             broker=broker, remote_tool=remote_tool, intent=intent,
             kind=BREACH_KIND_QUANTITATIVE, limit="max_order_notional_usd",
@@ -484,9 +610,34 @@ def check_mandate(
             limit_value=caps.max_total_exposure_usd, attempted_value=0.0,
             detail="current positions could not be read (fail-closed)",
         )
-    signed = notional if intent.side == "buy" else -notional
-    post_exposure = current_exposure + signed
-    if post_exposure > caps.max_total_exposure_usd:
+    if is_swap:
+        matching_notional = _matching_swap_position_notional(positions, intent)
+        if matching_notional is None:
+            return _breach(
+                broker=broker, remote_tool=remote_tool, intent=intent,
+                kind=BREACH_KIND_QUANTITATIVE, limit="max_position_notional_usd",
+                limit_value=caps.max_position_notional_usd, attempted_value=0.0,
+                detail="matching perpetual position could not be resolved (fail-closed)",
+            )
+        if intent.reduce_only and (matching_notional <= 0 or notional > matching_notional):
+            return _breach(
+                broker=broker, remote_tool=remote_tool, intent=intent,
+                kind=BREACH_KIND_INSTRUMENT, limit="reduce_only",
+                limit_value=matching_notional, attempted_value=notional,
+                detail="reduce-only size exceeds the exact matching position",
+            )
+        post_position = max(0.0, matching_notional - notional) if intent.reduce_only else matching_notional + notional
+        post_exposure = max(0.0, current_exposure - notional) if intent.reduce_only else current_exposure + notional
+        if not intent.reduce_only and post_position > caps.max_position_notional_usd:
+            return _breach(
+                broker=broker, remote_tool=remote_tool, intent=intent,
+                kind=BREACH_KIND_QUANTITATIVE, limit="max_position_notional_usd",
+                limit_value=caps.max_position_notional_usd, attempted_value=post_position,
+            )
+    else:
+        signed = notional if intent.side == "buy" else -notional
+        post_exposure = current_exposure + signed
+    if not intent.reduce_only and post_exposure > caps.max_total_exposure_usd:
         return _breach(
             broker=broker, remote_tool=remote_tool, intent=intent,
             kind=BREACH_KIND_QUANTITATIVE, limit="max_total_exposure_usd",
@@ -502,7 +653,7 @@ def check_mandate(
             detail="account_funding_usd is non-positive (fail-closed)",
         )
     post_leverage = abs(post_exposure) / caps.account_funding_usd
-    if post_leverage > caps.max_leverage:
+    if not intent.reduce_only and post_leverage > caps.max_leverage:
         return _breach(
             broker=broker, remote_tool=remote_tool, intent=intent,
             kind=BREACH_KIND_QUANTITATIVE, limit="max_leverage",
@@ -511,7 +662,7 @@ def check_mandate(
 
     # 7. Daily order count (count over UTC calendar days).
     attempted_count = daily_count + 1
-    if attempted_count > caps.max_trades_per_day:
+    if not intent.reduce_only and attempted_count > caps.max_trades_per_day:
         return _breach(
             broker=broker, remote_tool=remote_tool, intent=intent,
             kind=BREACH_KIND_QUANTITATIVE, limit="max_trades_per_day",
@@ -521,13 +672,78 @@ def check_mandate(
 
     # 8. Funding (defense-in-depth; broker is the real ceiling). Only a buy can
     #    push us past funding — never block a sell on this.
-    if intent.side == "buy" and post_exposure > caps.account_funding_usd:
+    if not is_swap and intent.side == "buy" and post_exposure > caps.account_funding_usd:
         return _breach(
             broker=broker, remote_tool=remote_tool, intent=intent,
             kind=BREACH_KIND_QUANTITATIVE, limit="account_funding_usd",
             limit_value=caps.account_funding_usd, attempted_value=post_exposure,
             detail="post-trade exposure exceeds mirrored funding ceiling",
         )
+
+    if is_swap and not intent.reduce_only:
+        if caps.require_stop_loss and intent.stop_loss_price is None:
+            return _breach(
+                broker=broker, remote_tool=remote_tool, intent=intent,
+                kind=BREACH_KIND_QUANTITATIVE, limit="require_stop_loss",
+                limit_value=1.0, attempted_value=0.0,
+                detail="perpetual opening order requires a stop loss",
+            )
+        if derivative_risk is None:
+            return _breach(
+                broker=broker, remote_tool=remote_tool, intent=intent,
+                kind=BREACH_KIND_QUANTITATIVE, limit="derivative_risk_snapshot",
+                limit_value=1.0, attempted_value=0.0,
+                detail="derivative risk snapshot is unavailable (fail-closed)",
+            )
+        daily_loss = max(0.0, -float(derivative_risk.daily_realized_pnl_usd))
+        if daily_loss >= caps.max_daily_loss_usd:
+            return _breach(
+                broker=broker, remote_tool=remote_tool, intent=intent,
+                kind=BREACH_KIND_QUANTITATIVE, limit="max_daily_loss_usd",
+                limit_value=caps.max_daily_loss_usd, attempted_value=daily_loss,
+            )
+        peak = float(derivative_risk.peak_equity_usd)
+        equity = float(derivative_risk.equity_usd)
+        drawdown = (peak - equity) / peak if peak > 0 else float("inf")
+        if drawdown >= caps.max_drawdown_pct:
+            return _breach(
+                broker=broker, remote_tool=remote_tool, intent=intent,
+                kind=BREACH_KIND_QUANTITATIVE, limit="max_drawdown_pct",
+                limit_value=caps.max_drawdown_pct, attempted_value=drawdown,
+            )
+        correlated = float(derivative_risk.correlated_exposure_usd) + notional
+        if correlated > caps.max_correlated_exposure_usd:
+            return _breach(
+                broker=broker, remote_tool=remote_tool, intent=intent,
+                kind=BREACH_KIND_QUANTITATIVE, limit="max_correlated_exposure_usd",
+                limit_value=caps.max_correlated_exposure_usd, attempted_value=correlated,
+            )
+        if derivative_risk.consecutive_losses >= caps.max_consecutive_losses:
+            return _breach(
+                broker=broker, remote_tool=remote_tool, intent=intent,
+                kind=BREACH_KIND_QUANTITATIVE, limit="max_consecutive_losses",
+                limit_value=float(caps.max_consecutive_losses),
+                attempted_value=float(derivative_risk.consecutive_losses),
+            )
+        leverage = float(intent.leverage or 0.0)
+        margin_after = float(derivative_risk.margin_used_usd) + notional / leverage
+        margin_utilization = margin_after / equity if equity > 0 else float("inf")
+        if margin_utilization > caps.max_margin_utilization_pct:
+            return _breach(
+                broker=broker, remote_tool=remote_tool, intent=intent,
+                kind=BREACH_KIND_QUANTITATIVE, limit="max_margin_utilization_pct",
+                limit_value=caps.max_margin_utilization_pct,
+                attempted_value=margin_utilization,
+            )
+        liquidation_buffer = _liquidation_buffer_pct(intent)
+        if liquidation_buffer is None or liquidation_buffer < caps.min_liquidation_buffer_pct:
+            return _breach(
+                broker=broker, remote_tool=remote_tool, intent=intent,
+                kind=BREACH_KIND_QUANTITATIVE, limit="min_liquidation_buffer_pct",
+                limit_value=caps.min_liquidation_buffer_pct,
+                attempted_value=liquidation_buffer if liquidation_buffer is not None else 0.0,
+                detail="planned liquidation buffer is missing or below the mandate minimum",
+            )
 
     # 9. Expensive universe rules (market-cap / liquidity floors). Fail-closed
     #    on missing data per SPEC §5. Skipped for instruments with no equity

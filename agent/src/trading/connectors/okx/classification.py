@@ -22,8 +22,15 @@ OKX_TOOL_CLASS: dict[str, ToolClass] = {
     "get_fills": ToolClass.READ,
     "get_ticker": ToolClass.READ,
     "get_candlesticks": ToolClass.READ,
+    "get_swap_instrument": ToolClass.READ,
+    "get_account_configuration": ToolClass.READ,
+    "get_swap_leverage": ToolClass.READ,
+    "get_order": ToolClass.READ,
     # WRITE
     "place_order": ToolClass.WRITE,
     "cancel_order": ToolClass.WRITE,
     "amend_order": ToolClass.WRITE,
+    "set_swap_leverage": ToolClass.WRITE,
+    "place_swap_order": ToolClass.WRITE,
+    "close_swap_position": ToolClass.WRITE,
 }

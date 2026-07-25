@@ -25,7 +25,7 @@ import logging
 import sys as _sys
 import time
 from datetime import datetime
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Literal, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -92,6 +92,42 @@ class LiveRunnerControlRequest(BaseModel):
     session_id: Optional[str] = None
 
 
+class QuantRunnerControlRequest(BaseModel):
+    """Start the deterministic OKX runner in shadow or Demo mode only."""
+
+    mode: Literal["shadow", "demo"] = "shadow"
+    tick_interval_seconds: int = Field(60, ge=15, le=3600)
+
+
+class SwapBreakerClearRequest(BaseModel):
+    """Human-only breaker clear after a fresh safe reconciliation."""
+
+    authorized_by: str = Field(..., min_length=1, max_length=128)
+    note: str = Field(..., min_length=1, max_length=500)
+
+
+class ResilienceDrillRequest(BaseModel):
+    drill: Literal[
+        "network_timeout",
+        "process_restart",
+        "api_rate_limit",
+        "partial_fill",
+        "websocket_disconnect",
+    ]
+    passed: bool
+    evidence_ref: str = Field(..., min_length=1, max_length=500)
+    operator: str = Field(..., min_length=1, max_length=128)
+
+
+class LivePromotionApprovalRequest(BaseModel):
+    approver: str = Field(..., min_length=1, max_length=128)
+    dedicated_subaccount: bool
+    ip_whitelist_enabled: bool
+    withdraw_permission_disabled: bool
+    expected_uid: str = Field(..., min_length=1, max_length=128)
+    max_live_notional_usdt: float = Field(..., gt=0, allow_inf_nan=False)
+
+
 class BrokerAuthState(BaseModel):
     """Per-broker authorization snapshot for ``GET /live/status``."""
 
@@ -109,6 +145,14 @@ class MandateLimits(BaseModel):
     max_trades_per_day: int
     allowed_instruments: List[str]
     account_funding_usd: float
+    max_position_notional_usd: float = 0.0
+    max_correlated_exposure_usd: float = 0.0
+    max_daily_loss_usd: float = 0.0
+    max_drawdown_pct: float = 0.0
+    min_liquidation_buffer_pct: float = 0.0
+    max_margin_utilization_pct: float = 0.0
+    max_consecutive_losses: int = 0
+    require_stop_loss: bool = False
 
 
 class ActiveMandateState(BaseModel):
@@ -156,6 +200,8 @@ class LiveStatusResponse(BaseModel):
 
 _runner_tasks: Dict[str, "asyncio.Task[Any]"] = {}
 _runner_factory: Optional[Any] = None
+_quant_runners: Dict[str, Any] = {}
+_quant_runner_factory: Optional[Any] = None
 
 
 # ============================================================================
@@ -329,6 +375,14 @@ def _active_mandate_state(broker: str) -> Optional[ActiveMandateState]:
             max_trades_per_day=caps.max_trades_per_day,
             allowed_instruments=[str(getattr(i, "value", i)) for i in caps.allowed_instruments],
             account_funding_usd=caps.account_funding_usd,
+            max_position_notional_usd=caps.max_position_notional_usd,
+            max_correlated_exposure_usd=caps.max_correlated_exposure_usd,
+            max_daily_loss_usd=caps.max_daily_loss_usd,
+            max_drawdown_pct=caps.max_drawdown_pct,
+            min_liquidation_buffer_pct=caps.min_liquidation_buffer_pct,
+            max_margin_utilization_pct=caps.max_margin_utilization_pct,
+            max_consecutive_losses=caps.max_consecutive_losses,
+            require_stop_loss=caps.require_stop_loss,
         ),
     )
 
@@ -442,6 +496,164 @@ def _build_live_runner(broker: str) -> Any:
     return runner
 
 
+def _build_quant_runner(mode: str, tick_interval_seconds: int) -> Any:
+    """Build the deterministic OKX BTC/ETH runner using the saved Demo profile."""
+    h = _host()
+    factory = getattr(h, "_quant_runner_factory", None)
+    if factory is not None:
+        return factory(mode, tick_interval_seconds)
+
+    from src.trading.connectors.okx import sdk
+    from src.trading.profiles import profile_by_id
+    from src.trading.quant.models import ExecutionMode
+    from src.trading.quant.runner import CryptoRunnerConfig, CryptoStrategyRunner
+
+    profile = profile_by_id("okx-paper-trade")
+    config = sdk.build_config(profile.config, {})
+    if not config.is_demo:
+        raise LiveRunnerUnavailable("OKX quant runner resolved a non-Demo profile")
+    runner_mode = ExecutionMode.DEMO if mode == "demo" else ExecutionMode.SHADOW
+    return CryptoStrategyRunner(
+        sdk_module=sdk,
+        sdk_config=config,
+        config=CryptoRunnerConfig(
+            mode=runner_mode,
+            tick_interval_seconds=tick_interval_seconds,
+        ),
+    )
+
+
+def _run_quant_reconcile(runner: Any) -> Any:
+    """Run a fresh read-only six-surface reconcile for manual breaker clear."""
+    from src.live.runtime.swap_state import reconcile_swap
+
+    return reconcile_swap(
+        runner.config.broker,
+        read_account_configuration=lambda: runner.sdk.get_account_configuration(runner.sdk_config),
+        read_balance=lambda: runner.sdk.get_account_snapshot(runner.sdk_config),
+        read_positions=lambda: runner.sdk.get_swap_positions(runner.sdk_config),
+        read_open_orders=lambda: runner.sdk.get_swap_open_orders(runner.sdk_config),
+        read_fills=lambda: runner.sdk.get_swap_fills(runner.sdk_config),
+        read_algo_orders=lambda: runner.sdk.get_swap_algo_orders(runner.sdk_config),
+        environment="demo",
+    )
+
+
+def _swap_report_dict(report: Any) -> Dict[str, Any]:
+    """Return a JSON-safe swap reconciliation report for the control plane."""
+    return {
+        "broker": report.broker,
+        "ts": report.ts,
+        "is_safe": bool(report.is_safe),
+        "requires_halt": bool(report.requires_halt),
+        "state_persisted": bool(report.state_persisted),
+        "had_prior_state": bool(report.had_prior_state),
+        "issues": [
+            {
+                "kind": issue.kind,
+                "subject": issue.subject,
+                "identity": issue.identity,
+                "detail": issue.detail,
+            }
+            for issue in report.issues
+        ],
+    }
+
+
+def _quant_status_snapshot() -> Dict[str, Any]:
+    """Build a fail-closed, read-only OKX quant control-plane snapshot."""
+    from src.live.mandate.store import load_mandate
+    from src.live.promotion import (
+        LIVE_SWAP_WRITES_COMPILED,
+        LivePromotionGate,
+        evaluate_demo_qualification,
+    )
+    from src.live.runtime.swap_state import swap_breaker_status
+    from src.trading.quant.runner import quant_status
+
+    h = _host()
+    runner = h._quant_runners.get("okx")
+    runner_mode = getattr(getattr(runner, "config", None), "mode", None)
+    runner_mode = getattr(runner_mode, "value", runner_mode)
+    interval = getattr(getattr(runner, "config", None), "tick_interval_seconds", None)
+
+    try:
+        latest = quant_status("okx")
+    except Exception as exc:
+        latest = {"broker": "okx", "outcome": "status_error", "error": str(exc)}
+    try:
+        breaker = swap_breaker_status("okx")
+    except Exception as exc:
+        breaker = {
+            "broker": "okx",
+            "tripped": True,
+            "manual_clear_required": True,
+            "reason": f"breaker state is untrusted: {exc}",
+        }
+    try:
+        qualification = evaluate_demo_qualification("okx")
+        qualification_payload = qualification.to_dict()
+    except Exception as exc:
+        qualification_payload = {
+            "eligible": False,
+            "broker": "okx",
+            "reasons": [f"qualification state is untrusted: {exc}"],
+        }
+
+    try:
+        mandate = load_mandate("okx")
+    except Exception as exc:
+        mandate = None
+        mandate_error = str(exc)
+    else:
+        mandate_error = None
+
+    if mandate is None:
+        reasons = list(qualification_payload.get("reasons") or [])
+        reasons.append(
+            f"active mandate is unavailable: {mandate_error}"
+            if mandate_error
+            else "active OKX perpetual mandate is missing"
+        )
+        reasons.append("this build keeps real perpetual SDK writes disabled")
+        promotion = {
+            "broker": "okx",
+            "qualified": bool(qualification_payload.get("eligible")),
+            "manually_approved": False,
+            "execution_enabled": False,
+            "reasons": list(dict.fromkeys(reasons)),
+            "qualification": qualification_payload,
+            "approval": None,
+        }
+    else:
+        try:
+            promotion = LivePromotionGate().evaluate(broker="okx", mandate=mandate).to_dict()
+        except Exception as exc:
+            promotion = {
+                "broker": "okx",
+                "qualified": False,
+                "manually_approved": False,
+                "execution_enabled": False,
+                "reasons": [f"promotion state is untrusted: {exc}"],
+                "qualification": qualification_payload,
+                "approval": None,
+            }
+
+    return {
+        "broker": "okx",
+        "environment": "demo",
+        "runner": {
+            "running": runner is not None,
+            "mode": runner_mode,
+            "tick_interval_seconds": interval,
+            "latest": latest,
+        },
+        "breaker": breaker,
+        "promotion": promotion,
+        "live_swap_writes_compiled": LIVE_SWAP_WRITES_COMPILED,
+    }
+
+
 async def _drive_runner(runner: Any) -> None:
     """Run a runner's ``run_loop`` to completion, sync or async."""
     result = runner.run_loop()
@@ -449,6 +661,20 @@ async def _drive_runner(runner: Any) -> None:
         await result
     else:
         await asyncio.get_running_loop().run_in_executor(None, lambda: result)
+
+
+async def _stop_quant_runners() -> None:
+    """Stop every in-process quant scheduler during API shutdown."""
+    h = _host()
+    runners = list(h._quant_runners.values())
+    h._quant_runners.clear()
+    for runner in runners:
+        try:
+            result = runner.stop()
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception:  # pragma: no cover - shutdown remains best effort
+            logger.exception("could not stop OKX quant runner during shutdown")
 
 
 # ============================================================================
@@ -689,3 +915,192 @@ def register_live_routes(
             {"kind": "runner_stopped", "broker": broker},
         )
         return {"broker": broker, "stopped": True, "was_running": True}
+
+    @app.get("/quant/okx/status", dependencies=[Depends(require_auth)])
+    async def okx_quant_status_endpoint():
+        """Return runner, breaker, Demo qualification, and Live-gate state."""
+        return _host()._quant_status_snapshot()
+
+    @app.post("/quant/okx/runner/start", dependencies=[Depends(require_auth)])
+    async def start_okx_quant_runner_endpoint(payload: QuantRunnerControlRequest):
+        """Start the deterministic BTC/ETH runner in Shadow or OKX Demo mode."""
+        from src.live.halt import halt_flag_set
+        from src.live.mandate.model import AssetClass, MANDATE_SCHEMA_VERSION, InstrumentType
+        from src.live.mandate.store import load_mandate
+        from src.live.runtime.swap_state import SwapStateError, swap_breaker_status
+
+        h = _host()
+        existing = h._quant_runners.get("okx")
+        if existing is not None:
+            current_mode = getattr(getattr(existing, "config", None), "mode", payload.mode)
+            return {
+                "broker": "okx",
+                "started": False,
+                "already_running": True,
+                "mode": getattr(current_mode, "value", current_mode),
+            }
+        try:
+            mandate = load_mandate("okx")
+        except Exception as exc:
+            raise HTTPException(status_code=409, detail=f"OKX mandate is unreadable: {exc}") from exc
+        if mandate is None or mandate.schema_version != MANDATE_SCHEMA_VERSION:
+            raise HTTPException(status_code=409, detail="an active OKX mandate schema v2 is required")
+        if InstrumentType.PERPETUAL_SWAP not in mandate.hard_caps.allowed_instruments:
+            raise HTTPException(status_code=409, detail="the OKX mandate does not permit perpetual swaps")
+        if AssetClass.CRYPTO not in mandate.universe.asset_classes:
+            raise HTTPException(status_code=409, detail="the OKX mandate does not permit crypto assets")
+        active = h._active_mandate_state("okx")
+        if active is None or active.expired:
+            raise HTTPException(status_code=409, detail="the OKX mandate is missing or expired")
+        if halt_flag_set("okx") or halt_flag_set(None):
+            raise HTTPException(status_code=409, detail="trading halt is active")
+        try:
+            if swap_breaker_status("okx").get("tripped") is True:
+                raise HTTPException(
+                    status_code=409,
+                    detail="swap circuit breaker is tripped; reconcile and clear it first",
+                )
+        except SwapStateError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+        try:
+            runner = h._build_quant_runner(payload.mode, payload.tick_interval_seconds)
+        except LiveRunnerUnavailable as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"could not construct OKX quant runner: {exc}") from exc
+        runner_instruments = set(getattr(getattr(runner, "config", None), "instruments", ()))
+        if runner_instruments - set(mandate.universe.include_symbols):
+            raise HTTPException(
+                status_code=409,
+                detail="runner instruments are outside the OKX mandate symbol allowlist",
+            )
+        try:
+            runner.start()
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"could not start OKX quant runner: {exc}") from exc
+        h._quant_runners["okx"] = runner
+        return {
+            "broker": "okx",
+            "started": True,
+            "already_running": False,
+            "mode": payload.mode,
+            "tick_interval_seconds": payload.tick_interval_seconds,
+        }
+
+    @app.post("/quant/okx/runner/stop", dependencies=[Depends(require_auth)])
+    async def stop_okx_quant_runner_endpoint():
+        """Stop the in-process OKX quant scheduler without touching broker state."""
+        h = _host()
+        runner = h._quant_runners.pop("okx", None)
+        if runner is None:
+            return {"broker": "okx", "stopped": False, "was_running": False}
+        try:
+            result = runner.stop()
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception as exc:
+            h._quant_runners["okx"] = runner
+            raise HTTPException(status_code=500, detail=f"could not stop OKX quant runner: {exc}") from exc
+        return {"broker": "okx", "stopped": True, "was_running": True}
+
+    @app.post("/quant/okx/breaker/clear", dependencies=[Depends(require_auth)])
+    async def clear_okx_swap_breaker_endpoint(payload: SwapBreakerClearRequest):
+        """Clear the breaker only after a fresh safe Demo reconciliation."""
+        from src.live.runtime.swap_state import (
+            SwapStateError,
+            clear_swap_breaker,
+            swap_breaker_status,
+        )
+
+        h = _host()
+        if h._quant_runners.get("okx") is not None:
+            raise HTTPException(status_code=409, detail="stop the OKX quant runner before breaker clear")
+        try:
+            current = swap_breaker_status("okx")
+        except SwapStateError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if current.get("tripped") is not True:
+            return {
+                "broker": "okx",
+                "cleared": False,
+                "was_tripped": False,
+                "reconciled": False,
+            }
+        try:
+            runner = h._build_quant_runner("shadow", 60)
+            report = await asyncio.to_thread(h._run_quant_reconcile, runner)
+        except Exception as exc:
+            raise HTTPException(status_code=409, detail=f"fresh swap reconciliation failed: {exc}") from exc
+        report_payload = _swap_report_dict(report)
+        if not report.is_safe:
+            raise HTTPException(
+                status_code=409,
+                detail={"message": "swap reconciliation is unsafe", "reconcile": report_payload},
+            )
+        cleared = clear_swap_breaker(
+            "okx",
+            authorized_by=payload.authorized_by,
+            note=payload.note,
+        )
+        return {
+            "broker": "okx",
+            "cleared": cleared,
+            "was_tripped": True,
+            "reconciled": True,
+            "reconcile": report_payload,
+        }
+
+    @app.post("/quant/okx/drills", dependencies=[Depends(require_auth)])
+    async def record_okx_resilience_drill_endpoint(payload: ResilienceDrillRequest):
+        """Record human-reviewed Demo fault-injection evidence."""
+        from src.live.promotion import evaluate_demo_qualification, record_resilience_drill
+
+        try:
+            event = record_resilience_drill(
+                "okx",
+                payload.drill,
+                passed=payload.passed,
+                evidence_ref=payload.evidence_ref,
+                operator=payload.operator,
+            )
+            qualification = evaluate_demo_qualification("okx")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"broker": "okx", "recorded": True, "event": event, "qualification": qualification.to_dict()}
+
+    @app.post("/quant/okx/promotion/approve", dependencies=[Depends(require_auth)])
+    async def approve_okx_live_promotion_endpoint(payload: LivePromotionApprovalRequest):
+        """Record manual approval; this build still cannot execute Live swaps."""
+        from src.live.mandate.store import load_mandate
+        from src.live.promotion import (
+            LivePromotionGate,
+            QualificationError,
+            approve_live_promotion,
+        )
+
+        try:
+            mandate = load_mandate("okx")
+        except Exception as exc:
+            raise HTTPException(status_code=409, detail=f"OKX mandate is unreadable: {exc}") from exc
+        if mandate is None:
+            raise HTTPException(status_code=409, detail="an active OKX perpetual mandate is required")
+        try:
+            approval = approve_live_promotion(
+                "okx",
+                mandate=mandate,
+                approver=payload.approver,
+                dedicated_subaccount=payload.dedicated_subaccount,
+                ip_whitelist_enabled=payload.ip_whitelist_enabled,
+                withdraw_permission_disabled=payload.withdraw_permission_disabled,
+                expected_uid=payload.expected_uid,
+                max_live_notional_usdt=payload.max_live_notional_usdt,
+            )
+            promotion = LivePromotionGate().evaluate(broker="okx", mandate=mandate)
+        except QualificationError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"broker": "okx", "approval": approval, "promotion": promotion.to_dict()}
