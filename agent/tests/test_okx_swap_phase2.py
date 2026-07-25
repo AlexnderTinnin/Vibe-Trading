@@ -209,6 +209,19 @@ def test_swap_reconcile_halts_on_unknown_broker_order(runtime: Path) -> None:
     assert swap_breaker_status("okx")["tripped"] is True
 
 
+def test_swap_reconcile_records_the_failed_read_surface(runtime: Path) -> None:
+    reads = _empty_reads()
+    reads["read_positions"] = lambda: {"status": "error", "error": "transient EOF"}
+
+    with pytest.raises(Exception, match="transient EOF"):
+        reconcile_swap("okx", **reads)
+
+    breaker = swap_breaker_status("okx")
+    assert breaker["reason"] == "swap reconciliation read/state failure"
+    assert breaker["context"]["surface"] == "positions"
+    assert breaker["context"]["error"] == "transient EOF"
+
+
 def test_contract_flatten_uses_position_side_and_margin_mode(runtime: Path) -> None:
     cancellations: list[dict] = []
     closes: list[dict] = []

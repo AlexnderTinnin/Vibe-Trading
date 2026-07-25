@@ -32,6 +32,17 @@ from src.trading.quant.strategy import BtcEthTrendStrategy
 
 STATUS_SCHEMA_VERSION = 1
 _STATUS_FILENAME = "quant_runner_status.json"
+_BAR_PERIOD_SECONDS = {
+    "1m": 60,
+    "5m": 5 * 60,
+    "15m": 15 * 60,
+    "30m": 30 * 60,
+    "1h": 60 * 60,
+    "4h": 4 * 60 * 60,
+    "1d": 24 * 60 * 60,
+    "1w": 7 * 24 * 60 * 60,
+    "1M": 30 * 24 * 60 * 60,
+}
 
 
 @dataclass(frozen=True)
@@ -54,6 +65,8 @@ class CryptoRunnerConfig:
             raise ValueError("runner supports only BTC/ETH USDT perpetuals")
         if not self.instruments or self.bar_limit < 60:
             raise ValueError("runner instrument set/bar_limit is invalid")
+        if self.bar_period not in _BAR_PERIOD_SECONDS:
+            raise ValueError("runner bar period is unsupported")
         if min(
             self.max_data_age_seconds,
             self.max_quote_age_seconds,
@@ -157,7 +170,12 @@ class CryptoStrategyRunner:
                     position=position,
                 )
                 plans.append(plan.to_dict())
-                if (now - _parse_time(plan.data_as_of)).total_seconds() > self.config.max_data_age_seconds:
+                # OKX candle timestamps identify the bar's opening time. Measure
+                # freshness from the close of the confirmed bar, not its open.
+                bar_closed_at = _parse_time(plan.data_as_of) + timedelta(
+                    seconds=_BAR_PERIOD_SECONDS[self.config.bar_period]
+                )
+                if (now - bar_closed_at).total_seconds() > self.config.max_data_age_seconds:
                     raise ValueError(f"{symbol} confirmed market data is stale")
                 if plan.action is TradeAction.HOLD:
                     continue

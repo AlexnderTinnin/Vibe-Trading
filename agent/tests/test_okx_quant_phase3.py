@@ -353,3 +353,54 @@ def test_shadow_runner_reconciles_and_emits_plan_without_writes(runtime: Path) -
     assert float(result["executions"][0]["sizing"]["notional_usdt"]) > 0
     assert sdk.write_calls == 0
     assert quant_status("okx")["run_id"] == result["run_id"]
+
+
+def test_shadow_runner_measures_freshness_from_confirmed_bar_close(runtime: Path) -> None:
+    now = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
+    sdk = _ShadowSDK(_bullish_bars(now - timedelta(minutes=22)))
+    runner = CryptoStrategyRunner(
+        sdk_module=sdk,
+        sdk_config=_DemoConfig(),
+        strategy=_strategy(),
+        config=CryptoRunnerConfig(
+            mode=ExecutionMode.SHADOW,
+            instruments=("BTC-USDT-SWAP",),
+            bar_limit=90,
+            max_data_age_seconds=10 * 60,
+            max_quote_age_seconds=30 * 60,
+        ),
+        mandate_loader=lambda broker: _mandate(),
+        clock=lambda: now,
+        system_status_reader=lambda: {"status": "ok", "incidents": []},
+    )
+
+    result = runner.run_once()
+
+    assert result["outcome"] == "completed"
+    assert result["plans"][0]["data_as_of"] == (now - timedelta(minutes=22)).isoformat()
+    assert sdk.write_calls == 0
+
+
+def test_shadow_runner_rejects_bar_stale_after_its_close(runtime: Path) -> None:
+    now = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
+    sdk = _ShadowSDK(_bullish_bars(now - timedelta(minutes=26)))
+    runner = CryptoStrategyRunner(
+        sdk_module=sdk,
+        sdk_config=_DemoConfig(),
+        strategy=_strategy(),
+        config=CryptoRunnerConfig(
+            mode=ExecutionMode.SHADOW,
+            instruments=("BTC-USDT-SWAP",),
+            bar_limit=90,
+            max_data_age_seconds=10 * 60,
+        ),
+        mandate_loader=lambda broker: _mandate(),
+        clock=lambda: now,
+        system_status_reader=lambda: {"status": "ok", "incidents": []},
+    )
+
+    result = runner.run_once()
+
+    assert result["outcome"] == "instrument_error"
+    assert result["reason"] == "BTC-USDT-SWAP: BTC-USDT-SWAP confirmed market data is stale"
+    assert sdk.write_calls == 0

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from decimal import Decimal
 
+import httpx
 import pytest
 
 from src.trading import service
@@ -274,6 +275,66 @@ def test_instrument_metadata_is_validated_and_exact(monkeypatch) -> None:
     assert out["instrument"]["contract_value"] == "0.01"
     assert out["instrument"]["lot_size"] == "0.01"
     assert public.calls == [{"instType": "SWAP", "instId": "BTC-USDT-SWAP"}]
+
+
+def test_idempotent_read_retries_transient_transport_errors(monkeypatch) -> None:
+    account = _FakeAccount()
+    original = account.get_positions
+    attempts = 0
+
+    def flaky_positions(**kwargs):  # noqa: ANN003
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise httpx.ReadError("transient EOF")
+        return original(**kwargs)
+
+    account.get_positions = flaky_positions  # type: ignore[method-assign]
+    _patch_clients(monkeypatch, account=account)
+    monkeypatch.setattr(ox.time, "sleep", lambda _delay: None)
+
+    result = ox.get_swap_positions(config=_config())
+
+    assert result["status"] == "ok"
+    assert attempts == 3
+
+
+def test_idempotent_read_does_not_retry_non_transport_errors(monkeypatch) -> None:
+    account = _FakeAccount()
+    attempts = 0
+
+    def invalid_positions(**kwargs):  # noqa: ANN003
+        nonlocal attempts
+        attempts += 1
+        raise ValueError("invalid response")
+
+    account.get_positions = invalid_positions  # type: ignore[method-assign]
+    _patch_clients(monkeypatch, account=account)
+    monkeypatch.setattr(ox.time, "sleep", lambda _delay: None)
+
+    result = ox.get_swap_positions(config=_config())
+
+    assert result["status"] == "error"
+    assert attempts == 1
+
+
+def test_idempotent_read_stops_after_transport_retry_limit(monkeypatch) -> None:
+    account = _FakeAccount()
+    attempts = 0
+
+    def unavailable_positions(**kwargs):  # noqa: ANN003
+        nonlocal attempts
+        attempts += 1
+        raise httpx.ConnectError("proxy connection reset")
+
+    account.get_positions = unavailable_positions  # type: ignore[method-assign]
+    _patch_clients(monkeypatch, account=account)
+    monkeypatch.setattr(ox.time, "sleep", lambda _delay: None)
+
+    result = ox.get_swap_positions(config=_config())
+
+    assert result["status"] == "error"
+    assert attempts == ox.READ_MAX_ATTEMPTS
 
 
 def test_quote_and_margin_units_resolve_to_contracts() -> None:

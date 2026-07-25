@@ -347,6 +347,20 @@ def _account(payload: object) -> dict[str, Any]:
     return dict(payload)
 
 
+def _reconcile_surface(broker: str, surface: str, operation: Callable[[], Any]) -> Any:
+    """Run one reconciliation read and durably identify its failing surface."""
+    try:
+        return operation()
+    except Exception as exc:
+        trip_swap_breaker(
+            broker,
+            "swap reconciliation read/state failure",
+            surface=surface,
+            error=str(exc),
+        )
+        raise
+
+
 def _identity(row: Mapping[str, Any], *keys: str) -> str:
     for key in keys:
         value = row.get(key)
@@ -467,17 +481,33 @@ def reconcile_swap(
 ) -> SwapReconcileReport:
     """Diff account, orders, fills, exact hedge positions, and TP/SL state."""
     store = SwapRuntimeStore(broker, environment=environment)
-    try:
-        prior = store.load()
-        account_configuration = _account(read_account_configuration())
-        balance = _account(read_balance())
-        positions = _rows(read_positions(), "positions")
-        open_orders = _rows(read_open_orders(), "open_orders", "orders")
-        fills = _rows(read_fills(), "fills", "executions")
-        algo_orders = _rows(read_algo_orders(), "algo_orders", "orders")
-    except Exception as exc:
-        trip_swap_breaker(broker, "swap reconciliation read/state failure", error=str(exc))
-        raise
+    prior = _reconcile_surface(broker, "local_state", store.load)
+    account_configuration = _reconcile_surface(
+        broker,
+        "account_configuration",
+        lambda: _account(read_account_configuration()),
+    )
+    balance = _reconcile_surface(broker, "balance", lambda: _account(read_balance()))
+    positions = _reconcile_surface(
+        broker,
+        "positions",
+        lambda: _rows(read_positions(), "positions"),
+    )
+    open_orders = _reconcile_surface(
+        broker,
+        "open_orders",
+        lambda: _rows(read_open_orders(), "open_orders", "orders"),
+    )
+    fills = _reconcile_surface(
+        broker,
+        "fills",
+        lambda: _rows(read_fills(), "fills", "executions"),
+    )
+    algo_orders = _reconcile_surface(
+        broker,
+        "algo_orders",
+        lambda: _rows(read_algo_orders(), "algo_orders", "orders"),
+    )
 
     issues: list[SwapReconcileIssue] = []
     had_prior = prior is not None

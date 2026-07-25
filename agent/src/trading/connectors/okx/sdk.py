@@ -19,8 +19,11 @@ payload and never flipped implicitly.
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
+import ssl
+import time
 from dataclasses import asdict, dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -44,6 +47,10 @@ from src.trading.connectors.okx.swap import (
 
 CONFIG_FILENAME = "okx.json"
 LIVE_CONFIG_FILENAME = "okx-live.json"
+READ_MAX_ATTEMPTS = 3
+READ_RETRY_BACKOFF_SECONDS = (0.25, 0.75)
+
+logger = logging.getLogger(__name__)
 
 #: Profiles this connector understands and their default account environment.
 PROFILE_ENVIRONMENTS = {
@@ -310,7 +317,7 @@ def check_status(config: OKXConfig | None = None) -> dict[str, Any]:
     if cfg.expected_uid:
         try:
             account = _account_client(cfg)
-            resp = _safe_call(account, "get_account_config")
+            resp = _safe_read_call(account, "get_account_config")
             rows = _checked_read_rows(resp, "account configuration")
             if not rows:
                 raise OKXConfigError("OKX returned no account configuration")
@@ -341,7 +348,7 @@ def get_system_status(*, config: OKXConfig | None = None) -> dict[str, Any]:
     """Read OKX maintenance incidents used by the 24x7 runner pause gate."""
     cfg = config or load_config()
     try:
-        rows = _checked_read_rows(_safe_call(_status_client(cfg), "status"), "system status")
+        rows = _checked_read_rows(_safe_read_call(_status_client(cfg), "status"), "system status")
     except Exception as exc:  # noqa: BLE001
         return _order_error(cfg, str(exc), operation="get_system_status")
     return {
@@ -357,7 +364,7 @@ def get_account_snapshot(config: OKXConfig | None = None) -> dict[str, Any]:
     """Fetch account balance for the configured account."""
     cfg = config or load_config()
     account = _account_client(cfg)
-    resp = _safe_call(account, "get_account_balance")
+    resp = _safe_read_call(account, "get_account_balance")
     rows = _checked_read_rows(resp, "account balance")
     summary = rows[0] if rows else {}
     return {
@@ -376,7 +383,7 @@ def get_positions(config: OKXConfig | None = None) -> dict[str, Any]:
     """Fetch current positions for the configured account."""
     cfg = config or load_config()
     account = _account_client(cfg)
-    resp = _safe_call(account, "get_positions")
+    resp = _safe_read_call(account, "get_positions")
     rows = [_position_to_dict(item) for item in _checked_read_rows(resp, "positions")]
     return {
         "status": "ok",
@@ -391,7 +398,7 @@ def get_open_orders(config: OKXConfig | None = None, *, include_executions: bool
     """Fetch open orders and, optionally, recent fills."""
     cfg = config or load_config()
     trade = _trade_client(cfg)
-    resp = _safe_call(trade, "get_order_list")
+    resp = _safe_read_call(trade, "get_order_list")
     result: dict[str, Any] = {
         "status": "ok",
         "profile": cfg.profile,
@@ -400,7 +407,7 @@ def get_open_orders(config: OKXConfig | None = None, *, include_executions: bool
         "open_orders": [_order_to_dict(item) for item in _checked_read_rows(resp, "open orders")],
     }
     if include_executions:
-        fills = _safe_call(trade, "get_fills")
+        fills = _safe_read_call(trade, "get_fills")
         result["executions"] = [
             _fill_to_dict(item) for item in _checked_read_rows(fills, "fills")
         ]
@@ -412,7 +419,7 @@ def get_quote(symbol: str, *, config: OKXConfig | None = None, **_: Any) -> dict
     cfg = config or load_config()
     market = _market_client(cfg)
     clean = symbol.strip().upper()
-    resp = _safe_call(market, "get_ticker", instId=clean)
+    resp = _safe_read_call(market, "get_ticker", instId=clean)
     rows = _extract_data(resp)
     payload = _quote_to_dict(rows[0]) if rows else {}
     return {
@@ -445,7 +452,7 @@ def get_historical_bars(
     market = _market_client(cfg)
     clean = symbol.strip().upper()
     bar = _BAR_MAP.get(period.strip(), "1D")
-    resp = _safe_call(market, "get_candlesticks", instId=clean, bar=bar, limit=str(int(limit)))
+    resp = _safe_read_call(market, "get_candlesticks", instId=clean, bar=bar, limit=str(int(limit)))
     return {
         "status": "ok",
         "profile": cfg.profile,
@@ -487,7 +494,7 @@ def get_account_configuration(config: OKXConfig | None = None) -> dict[str, Any]
     if missing:
         return _order_error(cfg, f"OKX connector not configured: missing {', '.join(missing)}.")
     try:
-        resp = _safe_call(_account_client(cfg), "get_account_config")
+        resp = _safe_read_call(_account_client(cfg), "get_account_config")
         rows = _checked_read_rows(resp, "account configuration")
         if not rows:
             raise OKXConfigError(_resp_message(resp) or "OKX returned no account configuration")
@@ -584,7 +591,7 @@ def get_swap_positions(config: OKXConfig | None = None) -> dict[str, Any]:
     cfg = config or load_config()
     try:
         rows = _checked_read_rows(
-            _safe_call(_account_client(cfg), "get_positions", instType="SWAP"),
+            _safe_read_call(_account_client(cfg), "get_positions", instType="SWAP"),
             "swap positions",
         )
     except Exception as exc:  # noqa: BLE001
@@ -603,7 +610,7 @@ def get_swap_open_orders(config: OKXConfig | None = None) -> dict[str, Any]:
     cfg = config or load_config()
     try:
         rows = _checked_read_rows(
-            _safe_call(_trade_client(cfg), "get_order_list", instType="SWAP"),
+            _safe_read_call(_trade_client(cfg), "get_order_list", instType="SWAP"),
             "swap open orders",
         )
     except Exception as exc:  # noqa: BLE001
@@ -622,7 +629,7 @@ def get_swap_fills(config: OKXConfig | None = None) -> dict[str, Any]:
     cfg = config or load_config()
     try:
         rows = _checked_read_rows(
-            _safe_call(_trade_client(cfg), "get_fills", instType="SWAP", limit="100"),
+            _safe_read_call(_trade_client(cfg), "get_fills", instType="SWAP", limit="100"),
             "swap fills",
         )
     except Exception as exc:  # noqa: BLE001
@@ -643,7 +650,7 @@ def get_swap_algo_orders(config: OKXConfig | None = None) -> dict[str, Any]:
     try:
         trade = _trade_client(cfg)
         for order_type in ("conditional", "oco"):
-            response = _safe_call(
+            response = _safe_read_call(
                 trade,
                 "order_algos_list",
                 ordType=order_type,
@@ -776,7 +783,7 @@ def place_order(
 
     try:
         trade = _trade_client(cfg)
-        # Call the SDK directly (NOT via _safe_call): a write must fail closed on
+        # Call the SDK directly (NOT via _safe_read_call): a write must fail closed on
         # any signature drift, never silently re-invoke with stripped arguments.
         resp = trade.place_order(**params)
     except OKXDependencyError as exc:
@@ -831,7 +838,7 @@ def cancel_order(
 
     try:
         trade = _trade_client(cfg)
-        # Direct SDK call (not _safe_call): writes must fail closed, not retry stripped.
+        # Direct SDK call (not _safe_read_call): writes must fail closed, not retry stripped.
         resp = trade.cancel_order(instId=clean_symbol, ordId=clean_id)
     except OKXDependencyError as exc:
         return _order_error(cfg, str(exc), symbol=clean_symbol, order_id=clean_id)
@@ -1405,7 +1412,7 @@ def _validate_margin_mode(value: Any) -> str:
 def _load_swap_instrument(cfg: OKXConfig, symbol: str) -> SwapInstrument:
     clean_symbol = str(symbol or "").strip().upper()
     public = _public_client(cfg)
-    resp = _safe_call(public, "get_instruments", instType="SWAP", instId=clean_symbol)
+    resp = _safe_read_call(public, "get_instruments", instType="SWAP", instId=clean_symbol)
     rows = _extract_data(resp)
     if not rows:
         raise SwapValidationError(
@@ -1423,7 +1430,7 @@ def _load_swap_instrument(cfg: OKXConfig, symbol: str) -> SwapInstrument:
 
 def _load_account_configuration(cfg: OKXConfig) -> dict[str, str | None]:
     account = _account_client(cfg)
-    resp = _safe_call(account, "get_account_config")
+    resp = _safe_read_call(account, "get_account_config")
     rows = _checked_read_rows(resp, "account configuration")
     if not rows:
         raise OKXConfigError(_resp_message(resp) or "OKX returned no account configuration")
@@ -1631,7 +1638,7 @@ def _validate_reduce_size(resolution: ContractSizeResolution, position: Any | No
 
 def _read_last_price(cfg: OKXConfig, symbol: str) -> Any:
     market = _market_client(cfg)
-    resp = _safe_call(market, "get_ticker", instId=symbol)
+    resp = _safe_read_call(market, "get_ticker", instId=symbol)
     rows = _extract_data(resp)
     if not rows:
         raise OKXConfigError(_resp_message(resp) or f"OKX returned no ticker for {symbol}")
@@ -2089,21 +2096,50 @@ def _candle_to_dict(item: Any) -> dict[str, Any]:
     }
 
 
-def _safe_call(obj: Any, name: str, *args: Any, **kwargs: Any) -> Any:
-    """Call ``obj.name(*args, **kwargs)`` if it exists, retrying without kwargs.
+def _safe_read_call(obj: Any, name: str, *args: Any, **kwargs: Any) -> Any:
+    """Call one idempotent SDK read with bounded transport retries.
 
     python-okx signatures vary across versions (some read methods accept extra
     keyword filters, some do not). We try the richer call first and fall back to
-    the no-arg form so a signature drift degrades to a usable call instead of an
-    error.
+    the no-arg form. Only transport failures are retried; broker/business errors
+    and every write path remain single-attempt.
     """
     fn = getattr(obj, name, None)
     if fn is None:
         return None
-    try:
-        return fn(*args, **kwargs)
-    except TypeError:
+
+    def invoke() -> Any:
         try:
-            return fn(*args)
+            return fn(*args, **kwargs)
         except TypeError:
-            return fn()
+            try:
+                return fn(*args)
+            except TypeError:
+                return fn()
+
+    for attempt in range(READ_MAX_ATTEMPTS):
+        try:
+            return invoke()
+        except Exception as exc:
+            if not _retryable_read_error(exc) or attempt + 1 >= READ_MAX_ATTEMPTS:
+                raise
+            logger.warning(
+                "transient OKX read failure in %s (%s); retrying attempt %s/%s",
+                name,
+                type(exc).__name__,
+                attempt + 2,
+                READ_MAX_ATTEMPTS,
+            )
+            time.sleep(READ_RETRY_BACKOFF_SECONDS[attempt])
+
+    raise RuntimeError("unreachable OKX read retry state")
+
+
+def _retryable_read_error(exc: Exception) -> bool:
+    """Return whether retrying an idempotent read is safe for this exception."""
+    import httpx
+
+    return isinstance(
+        exc,
+        (httpx.TransportError, ssl.SSLError, ConnectionError, TimeoutError),
+    )
