@@ -43,6 +43,7 @@ from src.trading.connectors.okx.swap import (
 )
 
 CONFIG_FILENAME = "okx.json"
+LIVE_CONFIG_FILENAME = "okx-live.json"
 
 #: Profiles this connector understands and their default account environment.
 PROFILE_ENVIRONMENTS = {
@@ -201,20 +202,42 @@ def config_path() -> Path:
     return get_runtime_root() / CONFIG_FILENAME
 
 
-def load_config() -> OKXConfig:
-    """Load OKX settings from ``~/.vibe-trading/okx.json``."""
-    path = config_path()
+def live_config_path() -> Path:
+    """Return the isolated user-level OKX live read-only config path."""
+    return get_runtime_root() / LIVE_CONFIG_FILENAME
+
+
+def _load_config_file(path: Path, *, default_profile: str) -> OKXConfig:
     if not path.exists():
-        return OKXConfig()
+        return OKXConfig(profile=default_profile)
     try:
         return OKXConfig.from_mapping(json.loads(path.read_text(encoding="utf-8")))
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         raise OKXConfigError(f"invalid OKX config at {path}: {exc}") from exc
 
 
-def save_config(config: OKXConfig) -> Path:
-    """Persist OKX settings with owner-only permissions."""
-    path = config_path()
+def load_config() -> OKXConfig:
+    """Load OKX settings from ``~/.vibe-trading/okx.json``."""
+    return _load_config_file(config_path(), default_profile="paper")
+
+
+def _validate_live_readonly_config(config: OKXConfig) -> None:
+    if config.profile != "live-readonly" or config.is_demo:
+        raise OKXConfigError("stored OKX live configuration must use the live-readonly profile")
+    if not config.readonly:
+        raise OKXConfigError("stored OKX live configuration must remain read-only")
+    if config.host != DEFAULT_HOST:
+        raise OKXConfigError("stored OKX live configuration must use the official OKX host")
+
+
+def load_live_config() -> OKXConfig:
+    """Load the isolated live read-only settings from ``okx-live.json``."""
+    config = _load_config_file(live_config_path(), default_profile="live-readonly")
+    _validate_live_readonly_config(config)
+    return config
+
+
+def _save_config_file(config: OKXConfig, path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(asdict(config), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     try:
@@ -222,6 +245,17 @@ def save_config(config: OKXConfig) -> Path:
     except OSError:
         pass
     return path
+
+
+def save_config(config: OKXConfig) -> Path:
+    """Persist OKX settings with owner-only permissions."""
+    return _save_config_file(config, config_path())
+
+
+def save_live_config(config: OKXConfig) -> Path:
+    """Persist an isolated live read-only config with owner-only permissions."""
+    _validate_live_readonly_config(config)
+    return _save_config_file(config, live_config_path())
 
 
 def okx_available() -> bool:

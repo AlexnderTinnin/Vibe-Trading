@@ -1,4 +1,4 @@
-"""Security and behavior tests for the OKX Demo Settings API."""
+"""Security and behavior tests for the OKX credential Settings API."""
 
 from __future__ import annotations
 
@@ -16,7 +16,9 @@ from src.trading.connectors.okx import sdk as okx_sdk
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     path = tmp_path / "okx.json"
+    live_path = tmp_path / "okx-live.json"
     monkeypatch.setattr(okx_sdk, "config_path", lambda: path)
+    monkeypatch.setattr(okx_sdk, "live_config_path", lambda: live_path)
     monkeypatch.setattr(okx_settings_routes, "okx_available", lambda: True)
     monkeypatch.delenv("API_AUTH_KEY", raising=False)
     existing_runners = dict(api_server._quant_runners)
@@ -35,6 +37,17 @@ def _payload(**overrides: object) -> dict[str, object]:
         "expected_uid": "demo-uid",
         "allowed_swap_instruments": ["BTC-USDT-SWAP", "ETH-USDT-SWAP"],
         "max_swap_leverage": 8,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _live_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "api_key": "live-api-key",
+        "api_secret": "live-api-secret",
+        "passphrase": "live-passphrase",
+        "expected_uid": "live-uid",
     }
     payload.update(overrides)
     return payload
@@ -335,22 +348,180 @@ def test_live_profile_is_visible_but_cannot_pass_demo_connection_check(
     assert (tmp_path / "okx.json").exists()
 
 
+def test_get_live_status_is_side_effect_free_and_never_returns_secrets(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    response = client.get("/quant/okx/live/config/status")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "broker": "okx",
+        "profile": "live-readonly",
+        "environment": "live",
+        "is_demo": False,
+        "configured": False,
+        "credentials_configured": False,
+        "api_key_configured": False,
+        "api_secret_configured": False,
+        "passphrase_configured": False,
+        "expected_uid": "",
+        "proxy_configured": False,
+        "sdk_installed": True,
+        "live_swap_writes_compiled": False,
+        "missing_fields": ["api_key", "api_secret", "passphrase", "expected_uid"],
+    }
+    assert not (tmp_path / "okx-live.json").exists()
+
+
+def test_put_live_config_is_isolated_and_forced_readonly(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    response = client.put(
+        "/quant/okx/live/config",
+        json=_live_payload(proxy="http://127.0.0.1:7890"),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["configured"] is True
+    assert body["profile"] == "live-readonly"
+    assert body["is_demo"] is False
+    assert body["live_swap_writes_compiled"] is False
+    assert not (tmp_path / "okx.json").exists()
+    saved = json.loads((tmp_path / "okx-live.json").read_text(encoding="utf-8"))
+    assert saved["api_key"] == "live-api-key"
+    assert saved["api_secret"] == "live-api-secret"
+    assert saved["passphrase"] == "live-passphrase"
+    assert saved["profile"] == "live-readonly"
+    assert saved["host"] == okx_sdk.DEFAULT_HOST
+    assert saved["readonly"] is True
+    for secret in ("live-api-key", "live-api-secret", "live-passphrase"):
+        assert secret not in response.text
+
+
+def test_put_live_config_preserves_saved_credentials_when_fields_are_blank(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    assert client.put("/quant/okx/live/config", json=_live_payload()).status_code == 200
+
+    response = client.put(
+        "/quant/okx/live/config",
+        json={"expected_uid": "updated-live-uid"},
+    )
+
+    assert response.status_code == 200
+    saved = json.loads((tmp_path / "okx-live.json").read_text(encoding="utf-8"))
+    assert saved["api_key"] == "live-api-key"
+    assert saved["api_secret"] == "live-api-secret"
+    assert saved["passphrase"] == "live-passphrase"
+    assert saved["expected_uid"] == "updated-live-uid"
+
+
+def test_put_live_config_rejects_partial_or_environment_override(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    partial = client.put(
+        "/quant/okx/live/config",
+        json={"api_key": "partial-live-key", "expected_uid": "live-uid"},
+    )
+    override = client.put(
+        "/quant/okx/live/config",
+        json=_live_payload(profile="live", readonly=False, host="https://attacker.invalid"),
+    )
+
+    assert partial.status_code == 400
+    assert "provided together" in partial.json()["detail"]
+    assert override.status_code == 422
+    assert "partial-live-key" not in partial.text
+    assert "live-api-secret" not in override.text
+    assert not (tmp_path / "okx-live.json").exists()
+
+
+def test_live_connection_check_is_read_only_and_uid_pinned(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert client.put("/quant/okx/live/config", json=_live_payload()).status_code == 200
+    before = (tmp_path / "okx-live.json").read_bytes()
+    monkeypatch.setattr(
+        okx_settings_routes,
+        "check_status",
+        lambda config: {
+            "status": "ok",
+            "account": {
+                "is_demo": False,
+                "uid": config.expected_uid,
+                "total_equity": "9876.54",
+            },
+        },
+    )
+
+    response = client.post("/quant/okx/live/config/check")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert body["is_demo"] is False
+    assert body["uid_verified"] is True
+    assert body["total_equity"] == "9876.54"
+    assert body["message"] == "OKX live connection and UID verified"
+    assert (tmp_path / "okx-live.json").read_bytes() == before
+
+
+def test_live_status_rejects_a_non_readonly_stored_profile(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "okx-live.json").write_text(
+        json.dumps({**_live_payload(), "profile": "live", "readonly": False}),
+        encoding="utf-8",
+    )
+
+    response = client.get("/quant/okx/live/config/status")
+    replacement = client.put("/quant/okx/live/config", json=_live_payload())
+
+    assert response.status_code == 409
+    assert "replace it from the Settings page" in response.json()["detail"]
+    assert "live-api-secret" not in response.text
+    assert replacement.status_code == 200
+    saved = json.loads((tmp_path / "okx-live.json").read_text(encoding="utf-8"))
+    assert saved["profile"] == "live-readonly"
+    assert saved["readonly"] is True
+
+
 def test_config_routes_reject_remote_clients_without_api_auth(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     path = tmp_path / "okx.json"
+    live_path = tmp_path / "okx-live.json"
     monkeypatch.setattr(okx_sdk, "config_path", lambda: path)
+    monkeypatch.setattr(okx_sdk, "live_config_path", lambda: live_path)
     monkeypatch.delenv("API_AUTH_KEY", raising=False)
     remote_client = TestClient(api_server.app, client=("203.0.113.10", 50000))
 
     read_response = remote_client.get("/quant/okx/config/status")
     write_response = remote_client.put("/quant/okx/config", json=_payload())
     check_response = remote_client.post("/quant/okx/config/check")
+    live_read_response = remote_client.get("/quant/okx/live/config/status")
+    live_write_response = remote_client.put(
+        "/quant/okx/live/config",
+        json=_live_payload(),
+    )
+    live_check_response = remote_client.post("/quant/okx/live/config/check")
 
     assert read_response.status_code == 403
     assert write_response.status_code == 403
     assert check_response.status_code == 403
+    assert live_read_response.status_code == 403
+    assert live_write_response.status_code == 403
+    assert live_check_response.status_code == 403
     assert "demo-api-key" not in write_response.text
     assert "demo-api-secret" not in write_response.text
     assert not path.exists()
+    assert not live_path.exists()

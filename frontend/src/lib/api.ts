@@ -163,6 +163,15 @@ export const api = {
     }),
   checkOkxPaperConnection: () =>
     request<OKXConnectionCheck>("/quant/okx/config/check", { method: "POST" }),
+  getOkxLiveConfig: () =>
+    request<OKXLiveConfigStatus>("/quant/okx/live/config/status"),
+  updateOkxLiveConfig: (settings: UpdateOKXLiveConfigRequest) =>
+    request<OKXLiveConfigStatus>("/quant/okx/live/config", {
+      method: "PUT",
+      body: JSON.stringify(settings),
+    }),
+  checkOkxLiveConnection: () =>
+    request<OKXConnectionCheck>("/quant/okx/live/config/check", { method: "POST" }),
   getChannelStatus: () => request<ChannelRuntimeStatus>("/channels/status"),
   startChannels: () => request<ChannelRuntimeActionResponse>("/channels/start", { method: "POST" }),
   stopChannels: () => request<ChannelRuntimeActionResponse>("/channels/stop", { method: "POST" }),
@@ -336,6 +345,32 @@ export interface UpdateOKXPaperConfigRequest {
   expected_uid: string;
   allowed_swap_instruments: OKXSwapInstrument[];
   max_swap_leverage: number;
+  proxy?: string;
+  clear_proxy?: boolean;
+}
+
+export interface OKXLiveConfigStatus {
+  broker: "okx";
+  profile: "live-readonly";
+  environment: "live";
+  is_demo: false;
+  configured: boolean;
+  credentials_configured: boolean;
+  api_key_configured: boolean;
+  api_secret_configured: boolean;
+  passphrase_configured: boolean;
+  expected_uid: string;
+  proxy_configured: boolean;
+  sdk_installed: boolean;
+  live_swap_writes_compiled: boolean;
+  missing_fields: string[];
+}
+
+export interface UpdateOKXLiveConfigRequest {
+  api_key?: string;
+  api_secret?: string;
+  passphrase?: string;
+  expected_uid: string;
   proxy?: string;
   clear_proxy?: boolean;
 }

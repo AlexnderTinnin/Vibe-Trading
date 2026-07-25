@@ -20,6 +20,12 @@ import {
   type OKXSwapInstrument,
   type UpdateOKXPaperConfigRequest,
 } from "@/lib/api";
+import {
+  OKXSecretInput,
+  okxFieldClass as fieldClass,
+  okxHintClass as hintClass,
+  okxLabelClass as labelClass,
+} from "./OKXSecretInput";
 
 interface OKXPaperForm {
   apiKey: string;
@@ -38,11 +44,6 @@ const DEFAULT_INSTRUMENTS: OKXSwapInstrument[] = [
   "BTC-USDT-SWAP",
   "ETH-USDT-SWAP",
 ];
-const fieldClass =
-  "w-full rounded-md border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60";
-const labelClass = "text-sm font-medium";
-const hintClass = "text-xs text-muted-foreground";
-
 function formFromStatus(status: OKXPaperConfigStatus): OKXPaperForm {
   return {
     apiKey: "",
@@ -66,65 +67,6 @@ function hasNonCredentialChanges(form: OKXPaperForm, status: OKXPaperConfigStatu
     || form.maxLeverage !== status.max_swap_leverage
     || Boolean(form.proxy.trim())
     || form.clearProxy;
-}
-
-interface SecretInputProps {
-  id: string;
-  label: string;
-  value: string;
-  visible: boolean;
-  configured: boolean;
-  disabled: boolean;
-  required?: boolean;
-  onChange: (value: string) => void;
-  onToggleVisibility: () => void;
-}
-
-function SecretInput({
-  id,
-  label,
-  value,
-  visible,
-  configured,
-  disabled,
-  required = false,
-  onChange,
-  onToggleVisibility,
-}: SecretInputProps) {
-  const placeholder = configured
-    ? "Configured"
-    : `Enter OKX Demo ${label}`;
-
-  return (
-    <label className="grid gap-2" htmlFor={id}>
-      <span className={labelClass}>{label}</span>
-      <div className="relative">
-        <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-        <input
-          id={id}
-          type={visible ? "text" : "password"}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className={`${fieldClass} px-10`}
-          placeholder={placeholder}
-          autoComplete="new-password"
-          disabled={disabled}
-          required={required}
-          spellCheck={false}
-        />
-        <button
-          type="button"
-          onClick={onToggleVisibility}
-          disabled={disabled}
-          className="absolute right-1 top-1 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-          aria-label={`${visible ? "Hide" : "Show"} ${label}`}
-          title={`${visible ? "Hide" : "Show"} ${label}`}
-        >
-          {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </button>
-      </div>
-    </label>
-  );
 }
 
 export function OKXPaperSettings() {
@@ -400,9 +342,10 @@ export function OKXPaperSettings() {
               ) : null}
             </div>
 
-            <SecretInput
+            <OKXSecretInput
               id={`${idPrefix}-api-key`}
               label="API Key"
+              environment="Demo"
               value={form.apiKey}
               visible={visible.apiKey}
               configured={Boolean(credentialsLocked && config?.api_key_configured)}
@@ -411,9 +354,10 @@ export function OKXPaperSettings() {
               onChange={(apiKey) => updateForm({ apiKey })}
               onToggleVisibility={() => setVisible((current) => ({ ...current, apiKey: !current.apiKey }))}
             />
-            <SecretInput
+            <OKXSecretInput
               id={`${idPrefix}-api-secret`}
               label="Secret"
+              environment="Demo"
               value={form.apiSecret}
               visible={visible.apiSecret}
               configured={Boolean(credentialsLocked && config?.api_secret_configured)}
@@ -422,9 +366,10 @@ export function OKXPaperSettings() {
               onChange={(apiSecret) => updateForm({ apiSecret })}
               onToggleVisibility={() => setVisible((current) => ({ ...current, apiSecret: !current.apiSecret }))}
             />
-            <SecretInput
+            <OKXSecretInput
               id={`${idPrefix}-passphrase`}
               label="Passphrase"
+              environment="Demo"
               value={form.passphrase}
               visible={visible.passphrase}
               configured={Boolean(credentialsLocked && config?.passphrase_configured)}

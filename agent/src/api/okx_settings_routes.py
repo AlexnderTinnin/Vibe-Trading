@@ -1,4 +1,4 @@
-"""Authenticated OKX Demo credential settings routes for the Web UI."""
+"""Authenticated OKX Demo and live credential settings routes for the Web UI."""
 
 from __future__ import annotations
 
@@ -11,14 +11,17 @@ from urllib.parse import urlsplit
 from fastapi import Depends, FastAPI, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
+from src.live.promotion import LIVE_SWAP_WRITES_COMPILED
 from src.trading.connectors.okx.sdk import (
     DEFAULT_HOST,
     OKXConfig,
     OKXConfigError,
     check_status,
     load_config,
+    load_live_config,
     okx_available,
     save_config,
+    save_live_config,
 )
 
 
@@ -65,8 +68,40 @@ class UpdateOKXPaperConfigRequest(BaseModel):
     clear_proxy: bool = False
 
 
+class OKXLiveConfigStatus(BaseModel):
+    """Public isolated OKX live read-only configuration state."""
+
+    broker: Literal["okx"] = "okx"
+    profile: Literal["live-readonly"] = "live-readonly"
+    environment: Literal["live"] = "live"
+    is_demo: Literal[False] = False
+    configured: bool
+    credentials_configured: bool
+    api_key_configured: bool
+    api_secret_configured: bool
+    passphrase_configured: bool
+    expected_uid: str
+    proxy_configured: bool
+    sdk_installed: bool
+    live_swap_writes_compiled: bool
+    missing_fields: List[str]
+
+
+class UpdateOKXLiveConfigRequest(BaseModel):
+    """Replace or retain isolated project-local OKX live credentials."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    api_key: Optional[SecretStr] = None
+    api_secret: Optional[SecretStr] = None
+    passphrase: Optional[SecretStr] = None
+    expected_uid: str = ""
+    proxy: Optional[SecretStr] = None
+    clear_proxy: bool = False
+
+
 class OKXConnectionCheckResponse(BaseModel):
-    """Sanitized result of a read-only OKX Demo connection check."""
+    """Sanitized result of a read-only OKX connection check."""
 
     broker: Literal["okx"] = "okx"
     ok: bool
@@ -98,6 +133,16 @@ def _load_config_or_http_error() -> OKXConfig:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Stored OKX configuration is invalid; replace it from the Settings page.",
+        ) from exc
+
+
+def _load_live_config_or_http_error() -> OKXConfig:
+    try:
+        return load_live_config()
+    except OKXConfigError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Stored OKX live configuration is invalid; replace it from the Settings page.",
         ) from exc
 
 
@@ -139,8 +184,65 @@ def _build_config_status(config: OKXConfig) -> OKXPaperConfigStatus:
     )
 
 
+def _build_live_config_status(config: OKXConfig) -> OKXLiveConfigStatus:
+    api_key_configured = bool(config.api_key)
+    api_secret_configured = bool(config.api_secret)
+    passphrase_configured = bool(config.passphrase)
+    credentials_configured = all(
+        (api_key_configured, api_secret_configured, passphrase_configured)
+    )
+    missing_fields: list[str] = []
+    if not api_key_configured:
+        missing_fields.append("api_key")
+    if not api_secret_configured:
+        missing_fields.append("api_secret")
+    if not passphrase_configured:
+        missing_fields.append("passphrase")
+    if not config.expected_uid:
+        missing_fields.append("expected_uid")
+    if config.profile != "live-readonly" or config.is_demo or not config.readonly:
+        missing_fields.append("live_readonly_profile")
+
+    return OKXLiveConfigStatus(
+        configured=credentials_configured
+        and bool(config.expected_uid)
+        and config.profile == "live-readonly"
+        and not config.is_demo
+        and config.readonly,
+        credentials_configured=credentials_configured,
+        api_key_configured=api_key_configured,
+        api_secret_configured=api_secret_configured,
+        passphrase_configured=passphrase_configured,
+        expected_uid=config.expected_uid,
+        proxy_configured=bool(config.proxy),
+        sdk_installed=okx_available(),
+        live_swap_writes_compiled=LIVE_SWAP_WRITES_COMPILED,
+        missing_fields=missing_fields,
+    )
+
+
 def _secret_value(value: Optional[SecretStr]) -> str:
     return value.get_secret_value().strip() if value is not None else ""
+
+
+def _load_live_config_for_update(payload: UpdateOKXLiveConfigRequest) -> OKXConfig:
+    try:
+        return load_live_config()
+    except OKXConfigError as exc:
+        supplied = (
+            _secret_value(payload.api_key),
+            _secret_value(payload.api_secret),
+            _secret_value(payload.passphrase),
+        )
+        if all(supplied):
+            return OKXConfig(profile="live-readonly")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Stored OKX live configuration is invalid; enter API Key, Secret, "
+                "and Passphrase together to replace it"
+            ),
+        ) from exc
 
 
 def _validate_plain_value(value: str, *, label: str, max_length: int) -> str:
@@ -153,8 +255,10 @@ def _validate_plain_value(value: str, *, label: str, max_length: int) -> str:
 
 
 def _resolve_credentials(
-    payload: UpdateOKXPaperConfigRequest,
+    payload: UpdateOKXPaperConfigRequest | UpdateOKXLiveConfigRequest,
     current: OKXConfig,
+    *,
+    expected_profile: str,
 ) -> tuple[str, str, str]:
     supplied = (
         _secret_value(payload.api_key),
@@ -170,7 +274,7 @@ def _resolve_credentials(
 
     if supplied_count == 0:
         existing = (current.api_key, current.api_secret, current.passphrase)
-        if not current.is_demo or not all(existing):
+        if current.profile != expected_profile or not all(existing):
             raise HTTPException(
                 status_code=400,
                 detail="API Key, Secret, and Passphrase are required for initial setup",
@@ -185,7 +289,10 @@ def _resolve_credentials(
     )  # type: ignore[return-value]
 
 
-def _resolve_proxy(payload: UpdateOKXPaperConfigRequest, current: OKXConfig) -> str:
+def _resolve_proxy(
+    payload: UpdateOKXPaperConfigRequest | UpdateOKXLiveConfigRequest,
+    current: OKXConfig,
+) -> str:
     if payload.clear_proxy:
         return ""
     value = _secret_value(payload.proxy)
@@ -221,12 +328,76 @@ def _redact_message(message: object, config: OKXConfig) -> str:
     return clean[:1000]
 
 
+def _check_connection(
+    config: OKXConfig,
+    *,
+    expected_demo: bool,
+    environment_label: str,
+) -> OKXConnectionCheckResponse:
+    checked_at = datetime.now(timezone.utc).isoformat()
+    try:
+        report = check_status(config)
+    except Exception as exc:  # noqa: BLE001 - sanitized below
+        return OKXConnectionCheckResponse(
+            ok=False,
+            status="error",
+            message=_redact_message(exc, config),
+            is_demo=config.is_demo,
+            uid_verified=False,
+            checked_at=checked_at,
+        )
+
+    if report.get("status") != "ok":
+        return OKXConnectionCheckResponse(
+            ok=False,
+            status="error",
+            message=_redact_message(report.get("error"), config),
+            is_demo=config.is_demo,
+            uid_verified=False,
+            checked_at=checked_at,
+        )
+
+    account = report.get("account") if isinstance(report.get("account"), dict) else {}
+    broker_uid = str(account.get("uid") or "")
+    uid_verified = bool(broker_uid) and broker_uid == config.expected_uid
+    environment_verified = account.get("is_demo") is expected_demo and config.is_demo is expected_demo
+    if not uid_verified:
+        return OKXConnectionCheckResponse(
+            ok=False,
+            status="error",
+            message=f"Connected, but the OKX {environment_label} UID could not be verified",
+            is_demo=config.is_demo,
+            uid_verified=False,
+            checked_at=checked_at,
+        )
+    if not environment_verified:
+        return OKXConnectionCheckResponse(
+            ok=False,
+            status="error",
+            message=f"The connector did not pass the OKX {environment_label} environment guard",
+            is_demo=config.is_demo,
+            uid_verified=True,
+            checked_at=checked_at,
+        )
+
+    total_equity = account.get("total_equity")
+    return OKXConnectionCheckResponse(
+        ok=True,
+        status="ok",
+        message=f"OKX {environment_label} connection and UID verified",
+        is_demo=config.is_demo,
+        uid_verified=True,
+        total_equity=str(total_equity) if total_equity is not None else None,
+        checked_at=checked_at,
+    )
+
+
 def register_okx_settings_routes(
     app: FastAPI,
     require_local_or_auth: AuthDep | None = None,
     require_settings_write_auth: AuthDep | None = None,
 ) -> None:
-    """Mount the Demo-only OKX credential settings routes."""
+    """Mount isolated Demo and live OKX credential settings routes."""
     host = _host()
     if host is None:
         raise RuntimeError(
@@ -260,7 +431,11 @@ def register_okx_settings_routes(
             )
 
         current = _load_config_or_http_error()
-        api_key, api_secret, passphrase = _resolve_credentials(payload, current)
+        api_key, api_secret, passphrase = _resolve_credentials(
+            payload,
+            current,
+            expected_profile="paper",
+        )
         expected_uid = _validate_plain_value(
             payload.expected_uid,
             label="OKX Demo UID",
@@ -309,59 +484,81 @@ def register_okx_settings_routes(
                 detail="Complete the OKX Demo configuration before testing the connection",
             )
 
-        checked_at = datetime.now(timezone.utc).isoformat()
+        return _check_connection(
+            config,
+            expected_demo=True,
+            environment_label="Demo",
+        )
+
+    @app.get(
+        "/quant/okx/live/config/status",
+        response_model=OKXLiveConfigStatus,
+        dependencies=[Depends(require_local_or_auth)],
+    )
+    async def get_okx_live_config_status():
+        """Return isolated live configuration state without credential values."""
+        return _build_live_config_status(_load_live_config_or_http_error())
+
+    @app.put(
+        "/quant/okx/live/config",
+        response_model=OKXLiveConfigStatus,
+        dependencies=[Depends(require_settings_write_auth)],
+    )
+    async def update_okx_live_config(payload: UpdateOKXLiveConfigRequest):
+        """Persist an isolated live read-only OKX connector configuration."""
+        current = _load_live_config_for_update(payload)
+        api_key, api_secret, passphrase = _resolve_credentials(
+            payload,
+            current,
+            expected_profile="live-readonly",
+        )
+        expected_uid = _validate_plain_value(
+            payload.expected_uid,
+            label="OKX Live UID",
+            max_length=128,
+        )
+        proxy = _resolve_proxy(payload, current)
+
         try:
-            report = check_status(config)
-        except Exception as exc:  # noqa: BLE001 - sanitized below
-            return OKXConnectionCheckResponse(
-                ok=False,
-                status="error",
-                message=_redact_message(exc, config),
-                is_demo=config.is_demo,
-                uid_verified=False,
-                checked_at=checked_at,
+            config = OKXConfig.from_mapping(
+                {
+                    **asdict(current),
+                    "api_key": api_key,
+                    "api_secret": api_secret,
+                    "passphrase": passphrase,
+                    "profile": "live-readonly",
+                    "host": DEFAULT_HOST,
+                    "expected_uid": expected_uid,
+                    "proxy": proxy,
+                    "readonly": True,
+                }
             )
+            save_live_config(config)
+        except OKXConfigError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except OSError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail="Could not save the OKX live configuration",
+            ) from exc
+        return _build_live_config_status(config)
 
-        if report.get("status") != "ok":
-            return OKXConnectionCheckResponse(
-                ok=False,
-                status="error",
-                message=_redact_message(report.get("error"), config),
-                is_demo=config.is_demo,
-                uid_verified=False,
-                checked_at=checked_at,
+    @app.post(
+        "/quant/okx/live/config/check",
+        response_model=OKXConnectionCheckResponse,
+        dependencies=[Depends(require_settings_write_auth)],
+    )
+    async def check_okx_live_connection():
+        """Verify live credentials and UID using read-only account endpoints."""
+        config = _load_live_config_or_http_error()
+        public_status = _build_live_config_status(config)
+        if not public_status.configured:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Complete the OKX live configuration before testing the connection",
             )
-
-        account = report.get("account") if isinstance(report.get("account"), dict) else {}
-        broker_uid = str(account.get("uid") or "")
-        uid_verified = bool(broker_uid) and broker_uid == config.expected_uid
-        is_demo = account.get("is_demo") is True and config.is_demo
-        if not uid_verified:
-            return OKXConnectionCheckResponse(
-                ok=False,
-                status="error",
-                message="Connected, but the OKX Demo UID could not be verified",
-                is_demo=is_demo,
-                uid_verified=False,
-                checked_at=checked_at,
-            )
-        if not is_demo:
-            return OKXConnectionCheckResponse(
-                ok=False,
-                status="error",
-                message="The connector did not pass the OKX Demo environment guard",
-                is_demo=False,
-                uid_verified=True,
-                checked_at=checked_at,
-            )
-
-        total_equity = account.get("total_equity")
-        return OKXConnectionCheckResponse(
-            ok=True,
-            status="ok",
-            message="OKX Demo connection and UID verified",
-            is_demo=True,
-            uid_verified=True,
-            total_equity=str(total_equity) if total_equity is not None else None,
-            checked_at=checked_at,
+        return _check_connection(
+            config,
+            expected_demo=False,
+            environment_label="live",
         )

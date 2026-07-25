@@ -4,6 +4,7 @@ import { Database, KeyRound, Loader2, MessageSquareMore, Play, RefreshCw, Rotate
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { OKXPaperSettings } from "@/components/settings/OKXPaperSettings";
+import { OKXLiveSettings } from "@/components/settings/OKXLiveSettings";
 import { QVerisSettings } from "@/components/settings/QVerisSettings"; // QVERIS-INTEGRATION
 import { api, isAuthRequiredError, type ChannelRuntimeStatus, type DataSourceSettings, type LLMProviderOption, type LLMSettings } from "@/lib/api";
 import { getApiAuthKey, setApiAuthKey } from "@/lib/apiAuth";
@@ -250,6 +251,7 @@ export function Settings() {
         {/* QVERIS-INTEGRATION */}
         <QVerisSettings />
         <OKXPaperSettings />
+        <OKXLiveSettings />
         <div className="flex min-h-32 items-center justify-center rounded-lg border bg-card p-5 text-sm text-muted-foreground">
           {settingsLoadError ? (
             <div className="text-center">
@@ -407,6 +409,8 @@ export function Settings() {
       <QVerisSettings />
 
       <OKXPaperSettings />
+
+      <OKXLiveSettings />
 
       {channelsSection}
 

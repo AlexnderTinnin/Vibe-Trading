@@ -12,6 +12,9 @@ const apiMock = vi.hoisted(() => ({
   getOkxPaperConfig: vi.fn(),
   updateOkxPaperConfig: vi.fn(),
   checkOkxPaperConnection: vi.fn(),
+  getOkxLiveConfig: vi.fn(),
+  updateOkxLiveConfig: vi.fn(),
+  checkOkxLiveConnection: vi.fn(),
 }));
 
 vi.mock("@/lib/api", async () => {
@@ -122,12 +125,32 @@ function okxPaperStatus() {
   };
 }
 
+function okxLiveStatus() {
+  return {
+    broker: "okx",
+    profile: "live-readonly",
+    environment: "live",
+    is_demo: false,
+    configured: false,
+    credentials_configured: false,
+    api_key_configured: false,
+    api_secret_configured: false,
+    passphrase_configured: false,
+    expected_uid: "",
+    proxy_configured: false,
+    sdk_installed: true,
+    live_swap_writes_compiled: false,
+    missing_fields: ["api_key", "api_secret", "passphrase", "expected_uid"],
+  };
+}
+
 describe("Settings IM channels panel", () => {
   beforeEach(() => {
     apiMock.getLLMSettings.mockResolvedValue(llmSettings());
     apiMock.getDataSourceSettings.mockResolvedValue(dataSourceSettings());
     apiMock.getChannelStatus.mockResolvedValue(channelStatus());
     apiMock.getOkxPaperConfig.mockResolvedValue(okxPaperStatus());
+    apiMock.getOkxLiveConfig.mockResolvedValue(okxLiveStatus());
     apiMock.startChannels.mockResolvedValue(channelStatus({ running: true }));
     apiMock.stopChannels.mockResolvedValue(channelStatus());
   });
