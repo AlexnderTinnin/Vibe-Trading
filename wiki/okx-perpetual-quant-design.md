@@ -614,3 +614,22 @@ execution_enabled = false
 ```
 
 因此 Phase 4 的完成含义是“资格和人工控制面可审计”，不是“已开放实盘”。
+
+## 17. Web 页面配置 OKX Demo
+
+Settings 页面提供独立的 `OKX Demo Trading` 配置区，可填写 API Key、Secret、Passphrase、Demo UID、BTC/ETH 永续白名单、最大杠杆和可选 HTTP(S) 代理。配置接口为：
+
+```text
+GET  /quant/okx/config/status
+PUT  /quant/okx/config
+POST /quant/okx/config/check
+```
+
+安全约束：
+
+- 状态和连接测试响应不返回 API Key、Secret、Passphrase 或代理地址，只返回布尔状态和脱敏后的错误。
+- 三项凭据必须一起替换；三项全部留空时只允许保留已有 Demo 凭据，不能把 Live 凭据转换成 Demo 配置。
+- 服务端固定写入 `profile=paper`、OKX 官方 REST host、BTC/ETH USDT 永续白名单和 `1-10x` 杠杆范围，客户端不能覆盖环境或 host。
+- Demo UID 必填，连接测试必须同时通过模拟盘环境保护和 UID 校验。
+- quant runner 运行期间拒绝修改配置；保存和测试连接均不会启动 runner，也不会发送、修改或撤销订单。
+- 凭据继续写入用户运行目录的 `okx.json`，沿用连接器的仅所有者权限存储；浏览器中的秘密输入在保存成功后立即清空。

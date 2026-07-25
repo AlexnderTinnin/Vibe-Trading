@@ -13,5 +13,6 @@ describe("Vite API proxy config", () => {
   it("proxies settings endpoints", () => {
     expect(config).toContain('"/settings/llm"');
     expect(config).toContain('"/settings/data-sources"');
+    expect(config).toContain('"/quant"');
   });
 });

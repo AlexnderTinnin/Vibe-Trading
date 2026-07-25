@@ -207,6 +207,9 @@ from src.api.settings_routes import (  # noqa: F401, E402
     _load_llm_providers,
 )
 
+from src.api.okx_settings_routes import register_okx_settings_routes  # noqa: E402
+register_okx_settings_routes(app)
+
 # --- Uploads ---
 from src.api.uploads_routes import register_uploads_routes  # noqa: E402
 register_uploads_routes(app)

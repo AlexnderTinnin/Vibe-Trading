@@ -11,6 +11,9 @@ const apiMock = vi.hoisted(() => ({
   stopChannels: vi.fn(),
   updateLLMSettings: vi.fn(),
   updateDataSourceSettings: vi.fn(),
+  getOkxPaperConfig: vi.fn(),
+  updateOkxPaperConfig: vi.fn(),
+  checkOkxPaperConnection: vi.fn(),
 }));
 
 vi.mock("@/lib/api", async () => {
@@ -84,6 +87,27 @@ function channelStatus() {
   };
 }
 
+function okxPaperStatus() {
+  return {
+    broker: "okx",
+    profile: "paper",
+    environment: "demo",
+    is_demo: true,
+    configured: false,
+    credentials_configured: false,
+    api_key_configured: false,
+    api_secret_configured: false,
+    passphrase_configured: false,
+    expected_uid: "",
+    allowed_swap_instruments: ["BTC-USDT-SWAP", "ETH-USDT-SWAP"],
+    max_swap_leverage: 10,
+    proxy_configured: false,
+    sdk_installed: true,
+    runner_running: false,
+    missing_fields: ["api_key", "api_secret", "passphrase", "expected_uid"],
+  };
+}
+
 function qverisConfig(overrides = {}) {
   return {
     enabled: true,
@@ -147,6 +171,7 @@ describe("Settings QVeris card", () => {
     apiMock.getLLMSettings.mockResolvedValue(llmSettings());
     apiMock.getDataSourceSettings.mockResolvedValue(dataSourceSettings());
     apiMock.getChannelStatus.mockResolvedValue(channelStatus());
+    apiMock.getOkxPaperConfig.mockResolvedValue(okxPaperStatus());
     apiMock.startChannels.mockResolvedValue(channelStatus());
     apiMock.stopChannels.mockResolvedValue(channelStatus());
   });

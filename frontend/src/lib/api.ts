@@ -154,6 +154,15 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(settings),
     }),
+  getOkxPaperConfig: () =>
+    request<OKXPaperConfigStatus>("/quant/okx/config/status"),
+  updateOkxPaperConfig: (settings: UpdateOKXPaperConfigRequest) =>
+    request<OKXPaperConfigStatus>("/quant/okx/config", {
+      method: "PUT",
+      body: JSON.stringify(settings),
+    }),
+  checkOkxPaperConnection: () =>
+    request<OKXConnectionCheck>("/quant/okx/config/check", { method: "POST" }),
   getChannelStatus: () => request<ChannelRuntimeStatus>("/channels/status"),
   startChannels: () => request<ChannelRuntimeActionResponse>("/channels/start", { method: "POST" }),
   stopChannels: () => request<ChannelRuntimeActionResponse>("/channels/stop", { method: "POST" }),
@@ -297,6 +306,49 @@ export interface DataSourceSettings {
 export interface UpdateDataSourceSettingsRequest {
   tushare_token?: string;
   clear_tushare_token?: boolean;
+}
+
+export type OKXSwapInstrument = "BTC-USDT-SWAP" | "ETH-USDT-SWAP";
+
+export interface OKXPaperConfigStatus {
+  broker: "okx";
+  profile: string;
+  environment: "demo" | "live";
+  is_demo: boolean;
+  configured: boolean;
+  credentials_configured: boolean;
+  api_key_configured: boolean;
+  api_secret_configured: boolean;
+  passphrase_configured: boolean;
+  expected_uid: string;
+  allowed_swap_instruments: OKXSwapInstrument[];
+  max_swap_leverage: number;
+  proxy_configured: boolean;
+  sdk_installed: boolean;
+  runner_running: boolean;
+  missing_fields: string[];
+}
+
+export interface UpdateOKXPaperConfigRequest {
+  api_key?: string;
+  api_secret?: string;
+  passphrase?: string;
+  expected_uid: string;
+  allowed_swap_instruments: OKXSwapInstrument[];
+  max_swap_leverage: number;
+  proxy?: string;
+  clear_proxy?: boolean;
+}
+
+export interface OKXConnectionCheck {
+  broker: "okx";
+  ok: boolean;
+  status: "ok" | "error";
+  message: string;
+  is_demo: boolean;
+  uid_verified: boolean;
+  total_equity?: string | null;
+  checked_at: string;
 }
 
 export interface ChannelAdapterStatus {
