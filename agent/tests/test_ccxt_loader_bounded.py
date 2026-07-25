@@ -74,11 +74,46 @@ def test_non_network_error_is_not_retried():
     assert ex.calls == 1
 
 
-def test_happy_path_single_call_unchanged():
+def test_short_page_is_followed_until_provider_is_exhausted():
     ex = _FakeEx([_bars(), []])
     df = DataLoader._fetch_one(ex, "BTC/USDT", "1d", SINCE, END)
-    assert ex.calls == 1  # short page (< limit) -> exactly one call, as before
+    assert ex.calls == 2
     assert list(df.columns) == ["open", "high", "low", "close", "volume"]
+
+
+def test_exchange_page_cap_smaller_than_requested_limit_still_paginates():
+    start = int(pd.Timestamp("2026-05-01T00:00:00Z").timestamp() * 1000)
+    step = 15 * 60 * 1000
+    first = [[start + i * step, 100, 101, 99, 100, 10] for i in range(300)]
+    second_start = first[-1][0] + step
+    second = [[second_start + i * step, 101, 102, 100, 101, 11] for i in range(2)]
+    end = second[-1][0] + step
+    ex = _FakeEx([first, second, []])
+
+    df = DataLoader._fetch_one(ex, "BTC/USDT:USDT", "15m", start, end)
+
+    assert ex.calls == 3
+    assert df is not None
+    assert len(df) == 302
+
+
+def test_project_swap_symbol_maps_to_ccxt_linear_perpetual():
+    assert cl._ccxt_symbol("BTC-USDT-SWAP") == "BTC/USDT:USDT"
+    assert cl._ccxt_symbol("eth-usdt-swap") == "ETH/USDT:USDT"
+    assert cl._ccxt_symbol("BTC-USDT") == "BTC/USDT"
+
+
+def test_unknown_interval_keeps_daily_fallback(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def fake_cached_fetch(**kwargs):
+        captured.update(kwargs)
+        return None
+
+    monkeypatch.setattr(cl, "incremental_cached_loader_fetch", fake_cached_fetch)
+    DataLoader().fetch(["BTC-USDT"], "2026-05-01", "2026-05-02", interval="2H")
+
+    assert captured["timeframe"] == "1d"
 
 
 def test_wallclock_budget_enforced(monkeypatch):

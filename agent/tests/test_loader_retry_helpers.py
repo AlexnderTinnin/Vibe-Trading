@@ -32,10 +32,12 @@ from backtest.loaders.base import (
     LOADER_CACHE_ROOT_ENV,
     cached_loader_fetch,
     check_budget,
+    incremental_cached_loader_fetch,
     loader_cache_get,
     loader_cache_path,
     loader_cache_put,
     loader_cache_range_is_final,
+    loader_series_cache_path,
     make_loader_cache_key,
     retry_with_budget,
 )
@@ -225,6 +227,21 @@ def _cache_frame(value: float = 1.0) -> pd.DataFrame:
     return frame
 
 
+def _intraday_cache_frame(*opens: str) -> pd.DataFrame:
+    index = pd.DatetimeIndex(opens, name="trade_date")
+    values = [100.0 + i for i in range(len(index))]
+    return pd.DataFrame(
+        {
+            "open": values,
+            "high": [value + 1 for value in values],
+            "low": [value - 1 for value in values],
+            "close": [value + 0.5 for value in values],
+            "volume": [100 + i for i in range(len(index))],
+        },
+        index=index,
+    )
+
+
 def test_loader_cache_disabled_by_default_bypasses_home(tmp_path, monkeypatch):
     monkeypatch.delenv(LOADER_CACHE_ENV, raising=False)
     home = tmp_path / "home"
@@ -300,6 +317,140 @@ def test_loader_cache_happy_path_writes_then_reuses(
     pd.testing.assert_frame_equal(second, frame)
     assert loader_cache_path(**kwargs).is_file()
     assert str(loader_cache_path(**kwargs)).startswith(str(loader_cache_root))
+
+
+def test_incremental_loader_cache_reuses_history_and_fetches_only_new_tail(
+    monkeypatch,
+    fake_duckdb,
+    loader_cache_root,
+):
+    monkeypatch.setenv(LOADER_CACHE_ENV, "1")
+    start = int(pd.Timestamp("2025-01-01T00:00:00Z").timestamp() * 1000)
+    first_end = int(pd.Timestamp("2025-01-01T00:30:00Z").timestamp() * 1000)
+    second_end = int(pd.Timestamp("2025-01-01T00:45:00Z").timestamp() * 1000)
+    now = pd.Timestamp("2025-01-02T00:00:00Z")
+    provider = _intraday_cache_frame(
+        "2025-01-01T00:00:00",
+        "2025-01-01T00:15:00",
+        "2025-01-01T00:30:00",
+    )
+    calls: list[tuple[int, int]] = []
+
+    def fetch(range_start: int, range_end: int) -> pd.DataFrame:
+        calls.append((range_start, range_end))
+        index_ms = provider.index.tz_localize("UTC").asi8 // 1_000_000
+        return provider.loc[(index_ms >= range_start) & (index_ms < range_end)].copy()
+
+    kwargs = {
+        "source": "ccxt-okx",
+        "symbol": "BTC-USDT-SWAP",
+        "timeframe": "15m",
+        "start_ms": start,
+        "fields": None,
+        "fetch": fetch,
+        "now": now,
+    }
+    first = incremental_cached_loader_fetch(**kwargs, end_ms=first_end)
+    repeated = incremental_cached_loader_fetch(**kwargs, end_ms=first_end)
+    extended = incremental_cached_loader_fetch(**kwargs, end_ms=second_end)
+
+    assert calls == [(start, first_end), (first_end, second_end)]
+    assert first is not None and repeated is not None and extended is not None
+    assert len(first) == len(repeated) == 2
+    assert len(extended) == 3
+    pd.testing.assert_frame_equal(first, repeated)
+    assert loader_series_cache_path(
+        source="ccxt-okx",
+        symbol="BTC-USDT-SWAP",
+        timeframe="15m",
+        fields=None,
+    ).is_file()
+
+
+def test_incremental_loader_cache_never_returns_or_persists_open_bar(
+    monkeypatch,
+    fake_duckdb,
+    loader_cache_root,
+):
+    monkeypatch.setenv(LOADER_CACHE_ENV, "1")
+    start = int(pd.Timestamp("2025-01-01T00:00:00Z").timestamp() * 1000)
+    requested_end = int(pd.Timestamp("2025-01-01T01:00:00Z").timestamp() * 1000)
+    provider = _intraday_cache_frame(
+        "2025-01-01T00:00:00",
+        "2025-01-01T00:15:00",
+    )
+    calls: list[tuple[int, int]] = []
+
+    def fetch(range_start: int, range_end: int) -> pd.DataFrame:
+        calls.append((range_start, range_end))
+        return provider.copy()  # Deliberately ignore bounds like a loose provider.
+
+    result = incremental_cached_loader_fetch(
+        source="ccxt-okx",
+        symbol="BTC-USDT-SWAP",
+        timeframe="15m",
+        start_ms=start,
+        end_ms=requested_end,
+        fields=None,
+        fetch=fetch,
+        now=pd.Timestamp("2025-01-01T00:22:00Z"),
+    )
+
+    confirmed_end = int(pd.Timestamp("2025-01-01T00:15:00Z").timestamp() * 1000)
+    assert calls == [(start, confirmed_end)]
+    assert result is not None
+    assert list(result.index) == [pd.Timestamp("2025-01-01T00:00:00")]
+
+    cached = base._read_loader_cache_frame(
+        loader_series_cache_path(
+            source="ccxt-okx",
+            symbol="BTC-USDT-SWAP",
+            timeframe="15m",
+            fields=None,
+        )
+    )
+    assert cached is not None
+    assert list(cached.index) == [pd.Timestamp("2025-01-01T00:00:00")]
+
+
+def test_incremental_loader_cache_real_duckdb_round_trip(
+    monkeypatch,
+    loader_cache_root,
+):
+    """A persisted intraday series must be reusable without a provider call."""
+    pytest.importorskip("duckdb")
+    monkeypatch.setenv(LOADER_CACHE_ENV, "1")
+    start = int(pd.Timestamp("2025-01-01T00:00:00Z").timestamp() * 1000)
+    end = int(pd.Timestamp("2025-01-01T00:30:00Z").timestamp() * 1000)
+    expected = _intraday_cache_frame(
+        "2025-01-01T00:00:00",
+        "2025-01-01T00:15:00",
+    )
+    calls = {"count": 0}
+
+    def fetch(_range_start: int, _range_end: int) -> pd.DataFrame:
+        calls["count"] += 1
+        if calls["count"] > 1:
+            raise AssertionError("a full cache hit must not call the provider")
+        return expected.copy()
+
+    kwargs = {
+        "source": "ccxt-okx",
+        "symbol": "BTC-USDT-SWAP",
+        "timeframe": "15m",
+        "start_ms": start,
+        "end_ms": end,
+        "fields": None,
+        "fetch": fetch,
+        "now": pd.Timestamp("2025-01-02T00:00:00Z"),
+    }
+    first = incremental_cached_loader_fetch(**kwargs)
+    restored = incremental_cached_loader_fetch(**kwargs)
+
+    assert calls["count"] == 1
+    assert first is not None and restored is not None
+    pd.testing.assert_frame_equal(first, expected)
+    pd.testing.assert_frame_equal(restored, expected)
 
 
 def test_loader_cache_corrupt_entry_falls_back_to_live_fetch(

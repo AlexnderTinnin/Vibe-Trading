@@ -15,8 +15,8 @@ from typing import Dict, List, Optional
 import pandas as pd
 
 from backtest.loaders.base import (
-    cached_loader_fetch,
     check_budget,
+    incremental_cached_loader_fetch,
     positive_env_float,
     positive_env_int,
     retry_with_budget,
@@ -62,6 +62,21 @@ def _ccxt_proxy_config() -> dict[str, str]:
     return proxies
 
 
+def _configured_exchange_id() -> str:
+    from src.config.accessor import get_env_config
+
+    return get_env_config().data.ccxt_exchange.lower()
+
+
+def _ccxt_symbol(code: str) -> str:
+    """Convert project spot/swap identifiers to native CCXT symbols."""
+    clean = str(code or "").strip().upper()
+    if clean.endswith("-USDT-SWAP"):
+        base = clean.removesuffix("-USDT-SWAP")
+        return f"{base}/USDT:USDT"
+    return clean.replace("-", "/")
+
+
 @register
 class DataLoader:
     """CCXT-backed crypto OHLCV loader (100+ exchanges)."""
@@ -84,9 +99,8 @@ class DataLoader:
     def _get_exchange(self):
         """Create exchange instance."""
         import ccxt
-        from src.config.accessor import get_env_config
 
-        exchange_id = get_env_config().data.ccxt_exchange.lower()
+        exchange_id = _configured_exchange_id()
         exchange_cls = getattr(ccxt, exchange_id, None)
         if exchange_cls is None:
             logger.warning("Unknown CCXT exchange %s, falling back to binance", exchange_id)
@@ -122,8 +136,9 @@ class DataLoader:
         validate_date_range(start_date, end_date)
 
         timeframe = _INTERVAL_MAP.get(interval, "1d")
-        since_ms = int(pd.Timestamp(start_date).timestamp() * 1000)
-        end_ms = int((pd.Timestamp(end_date) + pd.Timedelta(days=1)).timestamp() * 1000)
+        since_ms = int(pd.Timestamp(start_date, tz="UTC").timestamp() * 1000)
+        end_ms = int((pd.Timestamp(end_date, tz="UTC") + pd.Timedelta(days=1)).timestamp() * 1000)
+        exchange_id = _configured_exchange_id()
 
         # Build the exchange lazily so a full cache hit never imports ccxt or
         # opens an exchange object.
@@ -137,16 +152,16 @@ class DataLoader:
         result: Dict[str, pd.DataFrame] = {}
         for code in codes:
             try:
-                ccxt_symbol = code.replace("-", "/").upper()
-                df = cached_loader_fetch(
-                    source=self.name,
+                ccxt_symbol = _ccxt_symbol(code)
+                df = incremental_cached_loader_fetch(
+                    source=f"{self.name}-{exchange_id}",
                     symbol=code,
-                    timeframe=interval,
-                    start_date=start_date,
-                    end_date=end_date,
+                    timeframe=timeframe,
+                    start_ms=since_ms,
+                    end_ms=end_ms,
                     fields=None,
-                    fetch=lambda ccxt_symbol=ccxt_symbol: self._fetch_one(
-                        get_exchange(), ccxt_symbol, timeframe, since_ms, end_ms
+                    fetch=lambda range_start_ms, range_end_ms, ccxt_symbol=ccxt_symbol: self._fetch_one(
+                        get_exchange(), ccxt_symbol, timeframe, range_start_ms, range_end_ms
                     ),
                 )
                 if df is not None and not df.empty:
@@ -182,10 +197,14 @@ class DataLoader:
             if not ohlcv:
                 break
             all_rows.extend(ohlcv)
-            last_ts = ohlcv[-1][0]
-            if last_ts >= end_ms or len(ohlcv) < limit:
+            last_ts = int(ohlcv[-1][0])
+            if last_ts >= end_ms:
                 break
-            cursor = last_ts + 1
+            next_cursor = last_ts + 1
+            if next_cursor <= cursor:
+                logger.warning("CCXT pagination made no progress for %s at %s", symbol, cursor)
+                break
+            cursor = next_cursor
 
         if not all_rows:
             return None

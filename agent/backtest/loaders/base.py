@@ -227,6 +227,16 @@ _LOADER_CACHE_TRUE_VALUES = {"1", "true", "yes", "on"}
 # Bump when the key payload or on-disk layout changes so stale entries are
 # simply never matched (old files become unreachable garbage, safe to delete).
 _LOADER_CACHE_VERSION = 2
+_LOADER_SERIES_CACHE_VERSION = 1
+_TIMEFRAME_MILLISECONDS = {
+    "1m": 60_000,
+    "5m": 5 * 60_000,
+    "15m": 15 * 60_000,
+    "30m": 30 * 60_000,
+    "1h": 60 * 60_000,
+    "4h": 4 * 60 * 60_000,
+    "1d": 24 * 60 * 60_000,
+}
 
 
 def loader_cache_enabled() -> bool:
@@ -288,6 +298,32 @@ def loader_cache_path(
     )
     source_dir = _sanitize_cache_segment(source)
     return loader_cache_root() / source_dir / f"{key}.parquet"
+
+
+def loader_series_cache_path(
+    *,
+    source: str,
+    symbol: str,
+    timeframe: str,
+    fields: list[str] | tuple[str, ...] | None = None,
+) -> Path:
+    """Return the canonical append-style OHLCV cache path for one series.
+
+    Unlike :func:`loader_cache_path`, this key deliberately excludes the
+    requested date range. One file can therefore satisfy overlapping history
+    requests and grow only when a caller asks for bars outside its coverage.
+    """
+    payload = {
+        "version": _LOADER_SERIES_CACHE_VERSION,
+        "source": str(source),
+        "symbol": str(symbol),
+        "timeframe": str(timeframe),
+        "fields": [str(field) for field in (fields or ())],
+    }
+    blob = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    key = hashlib.sha256(blob).hexdigest()
+    source_dir = _sanitize_cache_segment(source)
+    return loader_cache_root() / source_dir / "series" / f"{key}.parquet"
 
 
 def loader_cache_range_is_final(end_date: str) -> bool:
@@ -402,6 +438,169 @@ def cached_loader_fetch(
         frame=frame,
     )
     return frame
+
+
+def incremental_cached_loader_fetch(
+    *,
+    source: str,
+    symbol: str,
+    timeframe: str,
+    start_ms: int,
+    end_ms: int,
+    fields: list[str] | tuple[str, ...] | None,
+    fetch: Callable[[int, int], pd.DataFrame | None],
+    now: pd.Timestamp | dt.datetime | None = None,
+) -> pd.DataFrame | None:
+    """Load confirmed OHLCV bars through an incrementally growing cache.
+
+    ``start_ms`` is inclusive and ``end_ms`` is exclusive. The provider
+    callback receives the same bounds. Cached coverage is keyed only by data
+    source, symbol, timeframe, and fields, so extending a one-year request by
+    another day fetches only bars after the latest cached open time.
+
+    Bars whose interval has not closed yet are never returned or persisted.
+    Cache failures remain non-fatal and fall back to the provider, matching the
+    existing exact-range cache behavior.
+    """
+    interval_ms = timeframe_milliseconds(timeframe)
+    if end_ms <= start_ms:
+        return None
+    confirmed_end_ms = min(int(end_ms), _confirmed_bar_end_ms(interval_ms, now=now))
+    if confirmed_end_ms <= start_ms:
+        return None
+
+    if not loader_cache_enabled():
+        return _slice_bar_frame(fetch(int(start_ms), confirmed_end_ms), start_ms, confirmed_end_ms)
+
+    cache_path = loader_series_cache_path(
+        source=source,
+        symbol=symbol,
+        timeframe=timeframe,
+        fields=fields,
+    )
+    cached = _confirmed_bar_frame(
+        _read_loader_cache_frame(cache_path),
+        interval_ms=interval_ms,
+        confirmed_end_ms=_confirmed_bar_end_ms(interval_ms, now=now),
+    )
+
+    missing: list[tuple[int, int]] = []
+    bounds = _bar_frame_bounds_ms(cached)
+    if bounds is None:
+        missing.append((int(start_ms), confirmed_end_ms))
+    else:
+        cached_start_ms, cached_last_open_ms = bounds
+        if start_ms < cached_start_ms:
+            missing.append((int(start_ms), min(confirmed_end_ms, cached_start_ms)))
+        tail_start_ms = max(int(start_ms), cached_last_open_ms + interval_ms)
+        if tail_start_ms < confirmed_end_ms:
+            missing.append((tail_start_ms, confirmed_end_ms))
+
+    fetched: list[pd.DataFrame] = []
+    for missing_start_ms, missing_end_ms in missing:
+        if missing_end_ms <= missing_start_ms:
+            continue
+        frame = _slice_bar_frame(
+            fetch(missing_start_ms, missing_end_ms),
+            missing_start_ms,
+            missing_end_ms,
+        )
+        if isinstance(frame, pd.DataFrame) and not frame.empty:
+            fetched.append(frame)
+
+    merged = _merge_bar_frames(cached, *fetched)
+    if merged is not None and not merged.empty and (fetched or cached is None):
+        # Re-read immediately before the atomic replace to reduce lost updates
+        # when two local backtests extend the same series concurrently.
+        latest = _confirmed_bar_frame(
+            _read_loader_cache_frame(cache_path),
+            interval_ms=interval_ms,
+            confirmed_end_ms=_confirmed_bar_end_ms(interval_ms, now=now),
+        )
+        merged = _merge_bar_frames(latest, merged)
+        if merged is not None:
+            _write_loader_cache_frame(cache_path, merged)
+    return _slice_bar_frame(merged, start_ms, confirmed_end_ms)
+
+
+def timeframe_milliseconds(timeframe: str) -> int:
+    """Return a fixed bar duration in milliseconds for cacheable timeframes."""
+    token = str(timeframe or "").strip()
+    normalized = token if token in _TIMEFRAME_MILLISECONDS else token.lower()
+    try:
+        return _TIMEFRAME_MILLISECONDS[normalized]
+    except KeyError as exc:
+        raise ValueError(f"unsupported incremental-cache timeframe: {timeframe!r}") from exc
+
+
+def _confirmed_bar_end_ms(
+    interval_ms: int,
+    *,
+    now: pd.Timestamp | dt.datetime | None = None,
+) -> int:
+    current = pd.Timestamp.now(tz="UTC") if now is None else pd.Timestamp(now)
+    if current.tzinfo is None:
+        current = current.tz_localize("UTC")
+    else:
+        current = current.tz_convert("UTC")
+    current_ms = int(current.timestamp() * 1000)
+    return current_ms - current_ms % interval_ms
+
+
+def _bar_frame_index_ms(frame: pd.DataFrame | None) -> pd.Series | None:
+    if not isinstance(frame, pd.DataFrame) or frame.empty:
+        return None
+    try:
+        index = pd.DatetimeIndex(frame.index)
+        if index.tz is None:
+            index = index.tz_localize("UTC")
+        else:
+            index = index.tz_convert("UTC")
+        return pd.Series(index.asi8 // 1_000_000, index=frame.index)
+    except Exception as exc:  # noqa: BLE001 - malformed provider data should be explicit
+        raise ValueError("incremental OHLCV cache requires a DatetimeIndex") from exc
+
+
+def _bar_frame_bounds_ms(frame: pd.DataFrame | None) -> tuple[int, int] | None:
+    values = _bar_frame_index_ms(frame)
+    if values is None or values.empty:
+        return None
+    return int(values.min()), int(values.max())
+
+
+def _slice_bar_frame(
+    frame: pd.DataFrame | None,
+    start_ms: int,
+    end_ms: int,
+) -> pd.DataFrame | None:
+    values = _bar_frame_index_ms(frame)
+    if values is None:
+        return None
+    selected = frame.loc[(values >= int(start_ms)).to_numpy() & (values < int(end_ms)).to_numpy()]
+    if selected.empty:
+        return None
+    return selected.sort_index()
+
+
+def _confirmed_bar_frame(
+    frame: pd.DataFrame | None,
+    *,
+    interval_ms: int,
+    confirmed_end_ms: int,
+) -> pd.DataFrame | None:
+    values = _bar_frame_index_ms(frame)
+    if values is None:
+        return None
+    selected = frame.loc[(values + interval_ms <= confirmed_end_ms).to_numpy()]
+    return selected.sort_index() if not selected.empty else None
+
+
+def _merge_bar_frames(*frames: pd.DataFrame | None) -> pd.DataFrame | None:
+    usable = [frame for frame in frames if isinstance(frame, pd.DataFrame) and not frame.empty]
+    if not usable:
+        return None
+    merged = pd.concat(usable).sort_index()
+    return merged.loc[~merged.index.duplicated(keep="last")]
 
 
 def _loader_cache_payload(

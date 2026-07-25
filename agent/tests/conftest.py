@@ -14,9 +14,14 @@ if str(AGENT_DIR) not in sys.path:
 
 
 @pytest.fixture(autouse=True)
-def _reset_env_config():
-    """Clear the cached EnvConfig before each test so monkeypatch.setenv works."""
+def _reset_env_config(monkeypatch: pytest.MonkeyPatch):
+    """Keep developer dotenv/cache state from leaking into isolated tests."""
     from src.config.accessor import reset_env_config
+
+    # A developer may intentionally enable the persistent loader cache in
+    # agent/.env. Tests must opt in themselves or mocked provider failures can
+    # be hidden by unrelated real cache entries from the user's home directory.
+    monkeypatch.setenv("VIBE_TRADING_DATA_CACHE", "0")
     reset_env_config()
     yield
     reset_env_config()

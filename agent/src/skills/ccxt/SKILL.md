@@ -47,7 +47,7 @@ Note: not all exchanges support all timeframes. Use `exchange.timeframes` to che
 
 CCXT uses slash format: `BTC/USDT`, `ETH/BTC`, `SOL/USDT`
 
-The project's DataLoader automatically converts `BTC-USDT` (hyphen) to `BTC/USDT` (slash).
+The project's DataLoader automatically converts `BTC-USDT` (hyphen) to `BTC/USDT` (slash), and maps an OKX perpetual such as `BTC-USDT-SWAP` to the CCXT linear-contract symbol `BTC/USDT:USDT`.
 
 ## Exchange Selection
 
@@ -58,6 +58,8 @@ Popular exchanges: `binance`, `bybit`, `okx`, `coinbase`, `kraken`, `bitget`, `g
 ## Built-in Loader
 
 The project has a built-in CCXT DataLoader at `backtest/loaders/ccxt_loader.py`. It serves as a fallback when the OKX loader is unavailable.
+
+Enable `VIBE_TRADING_DATA_CACHE=1` to persist confirmed candles under `~/.vibe-trading/cache/loaders/`. Intraday CCXT series use an append-style cache: the first long-history request is stored locally, and later requests fetch only missing history and newly closed candles. The currently open candle is never returned from or written to this cache. Set `VIBE_TRADING_DATA_CACHE_ROOT` to override the location.
 
 ## Pagination
 
