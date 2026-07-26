@@ -63,6 +63,7 @@ class BacktestConfigSchema(BaseModel):
     source: str = "tushare"
     interval: str = "1D"
     engine: str = "daily"
+    signal_mode: Optional[str] = None
     fundamental_fields: Optional[Dict[str, List[str]]] = None
     event_feeds: Optional[List[Dict[str, Any]]] = None
 
@@ -96,6 +97,13 @@ class BacktestConfigSchema(BaseModel):
     def valid_engine(cls, v: str) -> str:
         if v not in _VALID_ENGINES:
             raise ValueError(f"unsupported engine {v!r}, must be one of {_VALID_ENGINES}")
+        return v
+
+    @field_validator("signal_mode")
+    @classmethod
+    def valid_signal_mode(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in {"target", "event"}:
+            raise ValueError("signal_mode must be 'target' or 'event'")
         return v
 
     @field_validator("source")

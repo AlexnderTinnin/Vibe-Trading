@@ -29,6 +29,8 @@ class SignalEngine:
         >>> signals["BTC-USDT"].value_counts()
     """
 
+    signal_mode = "event"
+
     def __init__(
         self,
         tenkan_period: int = 9,

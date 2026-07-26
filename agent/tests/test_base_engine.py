@@ -9,7 +9,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from backtest.engines.base import BaseEngine, _align, _load_optimizer
+from backtest.engines.base import (
+    BaseEngine,
+    _align,
+    _load_optimizer,
+    _resolve_signal_mode,
+)
 from backtest.engines.china_a import ChinaAEngine
 from backtest.models import Position
 
@@ -108,6 +113,41 @@ class TestAlign:
         _, _, pos_no_opt, _ = _align(data_map, signal_map, ["A", "B"])
         assert pos_df.abs().sum().sum() <= pos_no_opt.abs().sum().sum() + 1e-10
 
+    def test_event_mode_holds_until_opposite_event(self) -> None:
+        dates = pd.date_range("2025-01-01", periods=6, freq="15min")
+        df = pd.DataFrame({"close": [100.0] * 6, "open": [100.0] * 6}, index=dates)
+        signal = pd.Series([0, 1, 0, 0, -1, 0], index=dates)
+
+        _, _, pos_df, _ = _align(
+            {"X": df}, {"X": signal}, ["X"], signal_mode="event",
+        )
+
+        assert pos_df["X"].tolist() == [0.0, 0.0, 1.0, 1.0, 1.0, -1.0]
+
+    def test_target_mode_keeps_zero_as_flat(self) -> None:
+        dates = pd.date_range("2025-01-01", periods=4, freq="15min")
+        df = pd.DataFrame({"close": [100.0] * 4, "open": [100.0] * 4}, index=dates)
+        signal = pd.Series([0, 1, 0, 0], index=dates)
+
+        _, _, pos_df, _ = _align({"X": df}, {"X": signal}, ["X"])
+
+        assert pos_df["X"].tolist() == [0.0, 0.0, 1.0, 0.0]
+
+    def test_invalid_signal_mode_rejected(self) -> None:
+        data_map, signal_map, _ = _simple_data_and_signals()
+        with pytest.raises(ValueError, match="unsupported signal_mode"):
+            _align(data_map, signal_map, ["A", "B"], signal_mode="unknown")
+
+
+class TestResolveSignalMode:
+    def test_strategy_can_declare_event_mode(self) -> None:
+        strategy = type("Strategy", (), {"signal_mode": "event"})()
+        assert _resolve_signal_mode({}, strategy) == "event"
+
+    def test_config_overrides_strategy_metadata(self) -> None:
+        strategy = type("Strategy", (), {"signal_mode": "event"})()
+        assert _resolve_signal_mode({"signal_mode": "target"}, strategy) == "target"
+
 
 # ---------------------------------------------------------------------------
 # _load_optimizer
@@ -203,6 +243,65 @@ class TestCalcEquity:
         eq = engine._calc_equity(close_df, dates[0])
         # capital + margin + unrealized = 985000 + (1000×15/1) + (1×1000×(16-15)) = 985000 + 15000 + 1000 = 1001000
         assert eq == pytest.approx(1_001_000.0)
+
+
+class TestEndOfBacktest:
+    def test_forced_close_costs_are_in_final_snapshot(self) -> None:
+        from backtest.engines.crypto import CryptoEngine
+
+        engine = CryptoEngine({
+            "initial_cash": 1_000.0,
+            "leverage": 1.0,
+            "taker_rate": 0.01,
+            "maker_rate": 0.01,
+            "slippage": 0.0,
+            "funding_rate": 0.0,
+            "interval": "15m",
+        })
+        dates = pd.date_range("2025-01-01 00:00", periods=2, freq="15min")
+        frame = pd.DataFrame({"open": [100.0, 100.0], "close": [100.0, 100.0]}, index=dates)
+        targets = pd.DataFrame({"BTC-USDT": [0.0, 0.5]}, index=dates)
+
+        engine._execute_bars(
+            dates,
+            {"BTC-USDT": frame},
+            frame[["close"]].rename(columns={"close": "BTC-USDT"}),
+            targets,
+            ["BTC-USDT"],
+        )
+
+        assert not engine.positions
+        assert engine.capital == pytest.approx(990.0)
+        assert engine.equity_snapshots[-1].equity == pytest.approx(990.0)
+        assert engine.equity_snapshots[-1].positions == 0
+        assert engine.trades[-1].commission == pytest.approx(10.0)
+
+    def test_forced_close_applies_exit_slippage(self) -> None:
+        from backtest.engines.crypto import CryptoEngine
+
+        engine = CryptoEngine({
+            "initial_cash": 1_000.0,
+            "leverage": 1.0,
+            "taker_rate": 0.0,
+            "maker_rate": 0.0,
+            "slippage": 0.01,
+            "funding_rate": 0.0,
+            "interval": "15m",
+        })
+        dates = pd.date_range("2025-01-01 00:00", periods=2, freq="15min")
+        frame = pd.DataFrame({"open": [100.0, 100.0], "close": [100.0, 100.0]}, index=dates)
+        targets = pd.DataFrame({"BTC-USDT": [0.0, 0.5]}, index=dates)
+
+        engine._execute_bars(
+            dates,
+            {"BTC-USDT": frame},
+            frame[["close"]].rename(columns={"close": "BTC-USDT"}),
+            targets,
+            ["BTC-USDT"],
+        )
+
+        assert engine.trades[-1].exit_price == pytest.approx(99.0)
+        assert engine.equity_snapshots[-1].equity == pytest.approx(engine.capital)
 
 
 # ---------------------------------------------------------------------------

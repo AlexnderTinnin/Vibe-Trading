@@ -167,6 +167,7 @@ class CompositeEngine(BaseEngine):
                 symbol, bar, timestamp, self.positions,
                 crypto_sub.funding_rate,
                 self._funding_applied, self._funding_daily_done,
+                daily_fallback=crypto_sub.funding_daily_fallback,
             )
             self.capital -= fee
 

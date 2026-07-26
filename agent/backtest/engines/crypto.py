@@ -29,6 +29,8 @@ class CryptoEngine(BaseEngine):
       - slippage: default 0.0005
       - margin_mode: "isolated" (default) or "cross"
       - funding_rate: fixed rate per settlement, default 0.0001
+      - interval: daily bars use a once-per-day fallback; intraday bars settle
+        only at 00:00/08:00/16:00 UTC
     """
 
     def __init__(self, config: dict):
@@ -37,6 +39,7 @@ class CryptoEngine(BaseEngine):
         self.taker_rate: float = config.get("taker_rate", 0.0005)
         self.slippage_rate: float = config.get("slippage", 0.0005)
         self.funding_rate: float = config.get("funding_rate", 0.0001)
+        self.funding_daily_fallback: bool = config.get("interval", "1D") == "1D"
         self._funding_applied: set = set()   # (symbol, date, hour) — per-slot dedup
         self._funding_daily_done: set = set()  # (symbol, date) — daily fallback dedup
 
@@ -66,6 +69,7 @@ class CryptoEngine(BaseEngine):
         fee = calc_crypto_funding_fee(
             symbol, bar, timestamp, self.positions,
             self.funding_rate, self._funding_applied, self._funding_daily_done,
+            daily_fallback=self.funding_daily_fallback,
         )
         self.capital -= fee
 

@@ -290,6 +290,25 @@ class TestBacktestConfigSchema:
         assert c.codes == ["AAPL.US"]
         assert c.interval == "1D"
         assert c.engine == "daily"
+        assert c.signal_mode is None
+
+    def test_event_signal_mode_accepted(self) -> None:
+        c = BacktestConfigSchema(
+            codes=["BTC-USDT"],
+            start_date="2025-01-01",
+            end_date="2025-06-01",
+            signal_mode="event",
+        )
+        assert c.signal_mode == "event"
+
+    def test_invalid_signal_mode_rejected(self) -> None:
+        with pytest.raises(ValueError, match="signal_mode"):
+            BacktestConfigSchema(
+                codes=["BTC-USDT"],
+                start_date="2025-01-01",
+                end_date="2025-06-01",
+                signal_mode="position",
+            )
 
     def test_fundamental_fields_must_be_table_to_field_list_mapping(self) -> None:
         with pytest.raises(ValueError, match="fundamental_fields"):

@@ -1,6 +1,6 @@
 ---
 name: smc
-description: Smart Money Concepts (ICT) signal engine. Uses the smartmoneyconcepts library to implement institutional-trading-school analysis of BOS, ChoCH, FVG, and order blocks (OB).
+description: Smart Money Concepts (ICT) signal engine with point-in-time-safe swing confirmation for BOS, ChoCH, and FVG analysis.
 category: strategy
 ---
 # Smart Money Concepts
@@ -19,15 +19,15 @@ The modern institutional trading school (ICT / Inner Circle Trader), built aroun
 
 ## Signal Logic
 
-Direction from ChoCH + confirmation from BOS + filtering by FVG:
-- **Long**: bullish ChoCH/BOS + bullish FVG exists
-- **Short**: bearish ChoCH/BOS + bearish FVG exists
+Direction from confirmed swing breaks (BOS/ChoCH) with causal FVG filtering:
+- **Long**: bullish ChoCH/BOS with no conflicting bearish FVG
+- **Short**: bearish ChoCH/BOS with no conflicting bullish FVG
 - **Stand aside**: no structural signal or conflicting directions
 
 ## Dependencies
 
 ```bash
-pip install smartmoneyconcepts pandas numpy requests
+pip install pandas numpy requests
 ```
 
 ## Parameters
@@ -36,6 +36,10 @@ pip install smartmoneyconcepts pandas numpy requests
 |------|--------|------|
 | swing_length | 10 | Window for swing high/low detection |
 | close_break | True | Whether BOS/ChoCH requires a closing-price break |
+
+Swing points are confirmed only after `swing_length` later bars have closed.
+The signal is emitted on the confirmation/break bar and is never written back
+to the earlier pivot bar, preventing lookahead bias in backtests.
 
 ## Signal Convention
 

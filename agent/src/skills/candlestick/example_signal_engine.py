@@ -88,6 +88,8 @@ class SignalEngine:
         shadow_ratio: 影线与实体的长度比阈值。
     """
 
+    signal_mode = "event"
+
     def __init__(self, body_pct: float = 0.1, shadow_ratio: float = 2.0):
         """初始化K线形态信号引擎。
 

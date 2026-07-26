@@ -40,6 +40,8 @@ from backtest.models import EquitySnapshot, Position, TradeRecord
 
 logger = logging.getLogger(__name__)
 
+SIGNAL_MODES = frozenset({"target", "event"})
+
 
 def _run_card_data_sources(config: Dict[str, Any], loader: Any) -> List[str]:
     """Return source names for run-card evidence."""
@@ -80,6 +82,7 @@ def _align(
     signal_map: Dict[str, pd.Series],
     codes: List[str],
     optimizer: Optional[Callable] = None,
+    signal_mode: str = "target",
 ) -> tuple:
     """Build aligned date index, close matrix, target-position matrix, return matrix.
 
@@ -91,10 +94,18 @@ def _align(
         signal_map: code -> signal Series.
         codes: Valid instrument codes.
         optimizer: Optional weight optimiser ``(ret, pos, dates) -> pos``.
+        signal_mode: ``target`` treats every value as the desired position;
+            ``event`` holds the latest non-zero directional event until an
+            opposite event arrives.
 
     Returns:
         (dates, close_df, positions_df, returns_df)
     """
+    if signal_mode not in SIGNAL_MODES:
+        raise ValueError(
+            f"unsupported signal_mode {signal_mode!r}; expected one of {sorted(SIGNAL_MODES)}"
+        )
+
     all_dates: set = set()
     for c in codes:
         all_dates.update(data_map[c].index)
@@ -123,6 +134,8 @@ def _align(
         # Shift on each symbol's OWN trading calendar, then ffill to unified
         own_dates = data_map[c].index
         raw = signal_map[c].reindex(own_dates).fillna(0.0).clip(-1.0, 1.0)
+        if signal_mode == "event":
+            raw = raw.replace(0.0, np.nan).ffill().fillna(0.0)
         shifted = raw.shift(1).fillna(0.0)
         pos[c] = shifted.reindex(dates).ffill(limit=ffill_limit).fillna(0.0)
 
@@ -135,6 +148,19 @@ def _align(
     pos = pos.div(scale, axis=0)
 
     return dates, close, pos, ret
+
+
+def _resolve_signal_mode(config: Dict[str, Any], signal_engine: Any) -> str:
+    """Resolve signal semantics, with config taking precedence over strategy metadata."""
+    configured = config.get("signal_mode")
+    declared = getattr(signal_engine, "signal_mode", None)
+    mode = configured if configured is not None else (declared or "target")
+    normalized = str(mode).strip().lower()
+    if normalized not in SIGNAL_MODES:
+        raise ValueError(
+            f"unsupported signal_mode {mode!r}; expected one of {sorted(SIGNAL_MODES)}"
+        )
+    return normalized
 
 
 def _load_optimizer(config: Dict[str, Any]) -> Optional[Callable]:
@@ -421,8 +447,11 @@ class BaseEngine(ABC):
 
         # 3. Pre-compute target weights (with optimizer)
         opt_fn = _load_optimizer(config)
+        signal_mode = _resolve_signal_mode(config, signal_engine)
+        config["_effective_signal_mode"] = signal_mode
         dates, close_df, target_pos, ret_df = _align(
             data_map, signal_map, valid_codes, optimizer=opt_fn,
+            signal_mode=signal_mode,
         )
 
         # Sync codes after _align may have dropped all-NaN symbols
@@ -463,6 +492,7 @@ class BaseEngine(ABC):
 
         # 6. Metrics
         m = calc_metrics(equity_series, self.trades, self.initial_capital, bars_per_year, bench_ret)
+        m["signal_mode"] = signal_mode
         m.update(benchmark_metadata)
         m["by_symbol"] = by_symbol_stats(self.trades)
         m["by_exit_reason"] = by_exit_reason_stats(self.trades)
@@ -559,7 +589,19 @@ class BaseEngine(ABC):
             last_ts = dates[-1]
             for c in list(self.positions.keys()):
                 price = self._safe_price(close_df, last_ts, c, self.positions[c].entry_price)
-                self._close_position(c, price, last_ts, "end_of_backtest")
+                self._active_symbol = c
+                exit_price = self.apply_slippage(price, -self.positions[c].direction)
+                self._close_position(c, exit_price, last_ts, "end_of_backtest")
+
+            # The final point must include forced-close slippage and commission.
+            if self.equity_snapshots:
+                self.equity_snapshots[-1] = EquitySnapshot(
+                    timestamp=last_ts,
+                    capital=self.capital,
+                    unrealized=0.0,
+                    equity=self.capital,
+                    positions=0,
+                )
 
     def _calc_equity(self, close_df: pd.DataFrame, ts: pd.Timestamp) -> float:
         """Total equity = free cash + sum(margin + unrealised) per position.

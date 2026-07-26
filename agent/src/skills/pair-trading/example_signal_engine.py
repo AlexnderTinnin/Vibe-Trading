@@ -78,8 +78,9 @@ class SignalEngine:
         z = (ratio - mean) / std
 
         # 信号生成
-        sig_a = pd.Series(0.0, index=common_idx)
-        sig_b = pd.Series(0.0, index=common_idx)
+        # NaN means "keep the previous pair state" between entry and exit.
+        sig_a = pd.Series(np.nan, index=common_idx)
+        sig_b = pd.Series(np.nan, index=common_idx)
 
         # Z < -entry_z → 做多 A、做空 B（比值偏低，预期回归向上）
         long_pair = z < -self.entry_z
@@ -97,8 +98,8 @@ class SignalEngine:
         sig_b[flat] = 0.0
 
         # 填充 NaN（lookback 窗口前无数据）
-        sig_a = sig_a.fillna(0.0)
-        sig_b = sig_b.fillna(0.0)
+        sig_a = sig_a.ffill().fillna(0.0)
+        sig_b = sig_b.ffill().fillna(0.0)
 
         # 对齐回原始索引
         return {

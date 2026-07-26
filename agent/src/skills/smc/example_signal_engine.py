@@ -1,25 +1,16 @@
 """Smart Money Concepts (ICT) 信号引擎。
 
-基于 smartmoneyconcepts 库实现机构交易学派的核心分析：
+使用只依赖已收盘 K 线的因果算法实现机构交易学派的核心分析：
 - 结构突破 (BOS) / 性质转变 (ChoCH)
 - 公允价值缺口 (FVG)
 
-信号逻辑：ChoCH 优先触发方向，BOS 确认，FVG 同向过滤。
+信号逻辑：延迟确认 Swing 高低点，BOS/ChoCH 触发方向，FVG 过滤。
 """
 
-import os
-import sys
 from typing import Dict, Optional
-
-# smartmoneyconcepts prints emoji on import — force UTF-8 on Windows
-if sys.platform == "win32":
-    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
 
 import numpy as np
 import pandas as pd
-from smartmoneyconcepts import smc
 
 
 def _fetch_okx(inst_id: str, bar: str = "1D", limit: int = 300) -> pd.DataFrame:
@@ -68,6 +59,8 @@ class SignalEngine:
         >>> print(signals["BTC-USDT"].value_counts())
     """
 
+    signal_mode = "event"
+
     def __init__(self, swing_length: int = 10, close_break: bool = True):
         """初始化 SMC 信号引擎。
 
@@ -75,6 +68,8 @@ class SignalEngine:
             swing_length: Swing 高低点检测窗口，值越大检测到的结构越少但越可靠。
             close_break: 是否要求收盘价突破才算有效 BOS/ChoCH。
         """
+        if swing_length < 1:
+            raise ValueError("swing_length must be at least 1")
         self.swing_length = swing_length
         self.close_break = close_break
 
@@ -95,7 +90,7 @@ class SignalEngine:
             ohlc = df[["open", "high", "low", "close", "volume"]].copy()
             ohlc.columns = ["open", "high", "low", "close", "volume"]
 
-            min_bars = self.swing_length * 2
+            min_bars = self.swing_length * 2 + 1
             if len(ohlc) < min_bars:
                 print(f"  {code} K线不足 {min_bars} 根，跳过")
                 result[code] = signal
@@ -121,33 +116,75 @@ class SignalEngine:
         Returns:
             信号 Series（1=做多, -1=做空, 0=观望）。
         """
-        signal = pd.Series(0, index=original_index)
+        signal = pd.Series(0, index=original_index, dtype=int)
+        length = self.swing_length
+        highs = ohlc["high"].to_numpy(dtype=float)
+        lows = ohlc["low"].to_numpy(dtype=float)
+        closes = ohlc["close"].to_numpy(dtype=float)
 
-        # 1) Swing 高低点检测
-        swing_hl = smc.swing_highs_lows(ohlc, swing_length=self.swing_length)
+        last_swing_high: Optional[float] = None
+        last_swing_low: Optional[float] = None
+        high_broken = True
+        low_broken = True
 
-        # 2) BOS / ChoCH 结构突破检测
-        bos_choch = smc.bos_choch(
-            ohlc, swing_highs_lows=swing_hl, close_break=self.close_break
-        )
+        for i in range(len(ohlc)):
+            # A pivot at i-length becomes knowable only now, after observing
+            # `length` bars on both sides. Never write the signal back to it.
+            if i >= 2 * length:
+                pivot_i = i - length
+                start = i - 2 * length
+                high_window = highs[start : i + 1]
+                low_window = lows[start : i + 1]
+                pivot_high = highs[pivot_i]
+                pivot_low = lows[pivot_i]
+                is_high = (
+                    pivot_high == np.max(high_window)
+                    and np.count_nonzero(high_window == pivot_high) == 1
+                )
+                is_low = (
+                    pivot_low == np.min(low_window)
+                    and np.count_nonzero(low_window == pivot_low) == 1
+                )
 
-        # 3) FVG 公允价值缺口检测
-        fvg = smc.fvg(ohlc)
+                if is_high and not is_low:
+                    last_swing_high = pivot_high
+                    high_broken = False
+                elif is_low and not is_high:
+                    last_swing_low = pivot_low
+                    low_broken = False
 
-        # 提取信号列（NaN 填 0）
-        bos_val = bos_choch["BOS"].fillna(0).astype(int)
-        choch_val = bos_choch["CHOCH"].fillna(0).astype(int)
-        fvg_val = fvg["FVG"].fillna(0).astype(int)
+            bullish_price = closes[i] if self.close_break else highs[i]
+            bearish_price = closes[i] if self.close_break else lows[i]
+            bullish_break = (
+                last_swing_high is not None
+                and not high_broken
+                and bullish_price > last_swing_high
+            )
+            bearish_break = (
+                last_swing_low is not None
+                and not low_broken
+                and bearish_price < last_swing_low
+            )
 
-        # 结构信号：ChoCH 优先，BOS 补充
-        structure = choch_val.where(choch_val != 0, bos_val)
+            if bullish_break:
+                high_broken = True
+            if bearish_break:
+                low_broken = True
+            if bullish_break == bearish_break:
+                continue
 
-        # FVG 过滤：只在 FVG 同向或中性时出信号
-        buy = (structure == 1) & (fvg_val >= 0)
-        sell = (structure == -1) & (fvg_val <= 0)
+            # A three-candle FVG is knowable on its third candle. A conflicting
+            # gap filters the break; a same-direction or neutral bar allows it.
+            fvg_direction = 0
+            if i >= 2 and lows[i] > highs[i - 2]:
+                fvg_direction = 1
+            elif i >= 2 and highs[i] < lows[i - 2]:
+                fvg_direction = -1
 
-        raw_signal = buy.astype(int) - sell.astype(int)
-        signal[:] = raw_signal.values
+            if bullish_break and fvg_direction >= 0:
+                signal.iloc[i] = 1
+            elif bearish_break and fvg_direction <= 0:
+                signal.iloc[i] = -1
 
         return signal
 

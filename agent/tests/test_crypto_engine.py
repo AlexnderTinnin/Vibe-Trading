@@ -17,9 +17,6 @@ import pytest
 from backtest.engines.crypto import CryptoEngine
 from backtest.engines._market_hooks import (
     FUNDING_HOURS as _FUNDING_HOURS,
-    _TIER_TABLE,
-    calc_crypto_funding_fee,
-    check_crypto_liquidation,
     _maintenance_rate,
 )
 from backtest.models import Position
@@ -154,6 +151,47 @@ class TestFundingFee:
         engine.on_bar("BTC-USDT", bar, ts)
         # Daily fallback: applies once even at non-settlement hour
         assert engine.capital == pytest.approx(initial_capital - 6.0)
+
+    def test_intraday_bars_do_not_apply_daily_fallback(self) -> None:
+        engine = _make_engine(interval="15m", funding_rate=0.0001)
+        engine.positions["BTC-USDT"] = Position(
+            "BTC-USDT", 1, 60000.0, pd.Timestamp("2025-01-01"), 1.0, leverage=10.0,
+        )
+        initial_capital = engine.capital
+        bar = _make_bar(close=60000.0)
+
+        engine.on_bar("BTC-USDT", bar, pd.Timestamp("2025-01-01 05:00:00"))
+        engine.on_bar("BTC-USDT", bar, pd.Timestamp("2025-01-01 08:15:00"))
+
+        assert engine.capital == initial_capital
+
+    def test_timezone_aware_settlement_is_matched_in_utc(self) -> None:
+        engine = _make_engine(interval="15m", funding_rate=0.0001)
+        engine.positions["BTC-USDT"] = Position(
+            "BTC-USDT", 1, 60000.0, pd.Timestamp("2025-01-01"), 1.0, leverage=10.0,
+        )
+        initial_capital = engine.capital
+        bar = _make_bar(close=60000.0)
+
+        # 08:00 in Asia/Shanghai is 00:00 UTC.
+        ts = pd.Timestamp("2025-01-01 08:00", tz="Asia/Shanghai")
+        engine.on_bar("BTC-USDT", bar, ts)
+
+        assert initial_capital - engine.capital == pytest.approx(6.0)
+
+    def test_intraday_bars_have_three_daily_settlements(self) -> None:
+        engine = _make_engine(interval="15m", funding_rate=0.0001)
+        engine.positions["BTC-USDT"] = Position(
+            "BTC-USDT", 1, 60000.0, pd.Timestamp("2025-01-01"), 1.0, leverage=10.0,
+        )
+        initial_capital = engine.capital
+        bar = _make_bar(close=60000.0)
+
+        for ts in ("2025-01-01 01:00", "2025-01-01 08:00", "2025-01-01 16:00"):
+            engine.on_bar("BTC-USDT", bar, pd.Timestamp(ts))
+        engine.on_bar("BTC-USDT", bar, pd.Timestamp("2025-01-02 00:00"))
+
+        assert initial_capital - engine.capital == pytest.approx(18.0)
 
     def test_short_receives_funding(self) -> None:
         engine = _make_engine(funding_rate=0.0001)

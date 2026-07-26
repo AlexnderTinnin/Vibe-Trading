@@ -156,6 +156,8 @@ def calc_crypto_funding_fee(
     funding_rate: float,
     applied_set: set,
     daily_done_set: set,
+    *,
+    daily_fallback: bool = False,
 ) -> float:
     """Calculate crypto funding fee for one symbol.
 
@@ -167,26 +169,39 @@ def calc_crypto_funding_fee(
         funding_rate: Fixed rate per settlement.
         applied_set: (symbol, date, hour) dedup set — mutated.
         daily_done_set: (symbol, date) dedup set — mutated.
+        daily_fallback: Allow one non-standard timestamp per date for daily bars.
+
+    Note:
+        Naive timestamps are interpreted as UTC. Timezone-aware timestamps are
+        converted to UTC before settlement matching.
 
     Returns:
         Fee amount (positive = longs pay, negative = longs receive).
     """
-    if not hasattr(timestamp, "date"):
+    try:
+        settlement_ts = pd.Timestamp(timestamp)
+    except (TypeError, ValueError):
         return 0.0
 
-    current_date = timestamp.date()
-    hour = timestamp.hour if hasattr(timestamp, "hour") else 0
+    if settlement_ts.tzinfo is not None:
+        settlement_ts = settlement_ts.tz_convert("UTC")
 
-    if hour in FUNDING_HOURS:
+    current_date = settlement_ts.date()
+    hour = settlement_ts.hour
+    minute = settlement_ts.minute
+
+    if hour in FUNDING_HOURS and minute == 0:
         key = (symbol, current_date, hour)
         if key in applied_set:
             return 0.0
         applied_set.add(key)
-    else:
+    elif daily_fallback:
         day_key = (symbol, current_date)
         if day_key in daily_done_set:
             return 0.0
         daily_done_set.add(day_key)
+    else:
+        return 0.0
 
     pos = positions.get(symbol)
     if pos is None:
