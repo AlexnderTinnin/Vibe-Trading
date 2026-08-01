@@ -23,7 +23,13 @@ from src.trading.connectors.okx.swap import SwapInstrument
 from src.trading.quant.backtest import PerpetualBacktester
 from src.trading.quant.costs import PerpetualCostModel
 from src.trading.quant.models import ExecutionMode, TradeAction, TradePlan
-from src.trading.quant.runner import CryptoRunnerConfig, CryptoStrategyRunner, quant_status
+from src.trading.quant.runner import (
+    CryptoRunnerConfig,
+    CryptoStrategyRunner,
+    _align_trigger_price,
+    _position_view,
+    quant_status,
+)
 from src.trading.quant.sizing import size_trade_plan
 from src.trading.quant.strategy import BtcEthTrendStrategy, TrendStrategyConfig
 
@@ -273,6 +279,7 @@ class _ShadowSDK:
     def __init__(self, bars: pd.DataFrame) -> None:
         self.bars = bars
         self.write_calls = 0
+        self.requested_periods: list[str] = []
 
     def get_account_configuration(self, config):  # noqa: ANN001
         return {"status": "ok", "account_configuration": {"uid": "demo", "position_mode": "net_mode"}}
@@ -309,6 +316,7 @@ class _ShadowSDK:
         return {"status": "ok", "instrument": _instrument(symbol).to_dict()}
 
     def get_historical_bars(self, symbol, **kwargs):  # noqa: ANN001, ANN003
+        self.requested_periods.append(str(kwargs.get("period")))
         rows = []
         for timestamp, row in self.bars.iterrows():
             rows.append(
@@ -331,7 +339,7 @@ class _ShadowSDK:
 
 def test_shadow_runner_reconciles_and_emits_plan_without_writes(runtime: Path) -> None:
     now = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
-    sdk = _ShadowSDK(_bullish_bars(now))
+    sdk = _ShadowSDK(_bullish_bars(now - timedelta(minutes=15)))
     runner = CryptoStrategyRunner(
         sdk_module=sdk,
         sdk_config=_DemoConfig(),
@@ -339,8 +347,10 @@ def test_shadow_runner_reconciles_and_emits_plan_without_writes(runtime: Path) -
         config=CryptoRunnerConfig(
             mode=ExecutionMode.SHADOW,
             instruments=("BTC-USDT-SWAP",),
+            bar_period="15m",
             bar_limit=90,
             max_data_age_seconds=60,
+            max_quote_age_seconds=20 * 60,
         ),
         mandate_loader=lambda broker: _mandate(),
         clock=lambda: now,
@@ -355,6 +365,42 @@ def test_shadow_runner_reconciles_and_emits_plan_without_writes(runtime: Path) -
     assert quant_status("okx")["run_id"] == result["run_id"]
 
 
+def test_runner_restores_position_protection_and_aligns_trigger_prices() -> None:
+    position = _position_view(
+        [
+            {
+                "symbol": "BTC-USDT-SWAP",
+                "quantity": "1",
+                "position_side": "net",
+                "average_cost": "100",
+                "leverage": "3",
+            }
+        ],
+        "BTC-USDT-SWAP",
+        algo_orders=[
+            {
+                "symbol": "BTC-USDT-SWAP",
+                "stop_loss_trigger": "94.73",
+                "take_profit_trigger": "108.26",
+            }
+        ],
+    )
+
+    assert position is not None
+    assert position.stop_loss_price == 94.73
+    assert position.take_profit_price == 108.26
+    assert _align_trigger_price(
+        94.73,
+        tick_size=Decimal("0.1"),
+        reference_price=Decimal("100"),
+    ) == Decimal("94.8")
+    assert _align_trigger_price(
+        108.26,
+        tick_size=Decimal("0.1"),
+        reference_price=Decimal("100"),
+    ) == Decimal("108.2")
+
+
 def test_shadow_runner_measures_freshness_from_confirmed_bar_close(runtime: Path) -> None:
     now = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
     sdk = _ShadowSDK(_bullish_bars(now - timedelta(minutes=22)))
@@ -365,6 +411,7 @@ def test_shadow_runner_measures_freshness_from_confirmed_bar_close(runtime: Path
         config=CryptoRunnerConfig(
             mode=ExecutionMode.SHADOW,
             instruments=("BTC-USDT-SWAP",),
+            bar_period="15m",
             bar_limit=90,
             max_data_age_seconds=10 * 60,
             max_quote_age_seconds=30 * 60,
@@ -391,6 +438,7 @@ def test_shadow_runner_rejects_bar_stale_after_its_close(runtime: Path) -> None:
         config=CryptoRunnerConfig(
             mode=ExecutionMode.SHADOW,
             instruments=("BTC-USDT-SWAP",),
+            bar_period="15m",
             bar_limit=90,
             max_data_age_seconds=10 * 60,
         ),
@@ -404,3 +452,57 @@ def test_shadow_runner_rejects_bar_stale_after_its_close(runtime: Path) -> None:
     assert result["outcome"] == "instrument_error"
     assert result["reason"] == "BTC-USDT-SWAP: BTC-USDT-SWAP confirmed market data is stale"
     assert sdk.write_calls == 0
+
+
+def test_runner_reads_separate_primary_and_daily_context_bars(runtime: Path) -> None:
+    last_open = datetime(2026, 7, 25, 8, 0, tzinfo=timezone.utc)
+    bars = _bullish_bars(last_open)
+    sdk = _ShadowSDK(bars)
+
+    class _ContextStrategy:
+        requires_daily_bars = True
+
+        def evaluate(self, *, instrument_id, bars, daily_bars, run_id, now, position=None):  # noqa: ANN001
+            assert len(bars) == len(daily_bars)
+            frame = pd.DataFrame(bars)
+            return TradePlan.create(
+                strategy_id="context-test",
+                run_id=run_id,
+                instrument_id=instrument_id,
+                signal_at=now,
+                data_as_of=pd.to_datetime(
+                    int(frame["time"].iloc[-1]), unit="ms", utc=True
+                ).to_pydatetime(),
+                action=TradeAction.HOLD,
+                confidence=0.5,
+                reference_price=float(frame["close"].iloc[-1]),
+                stop_loss_price=None,
+                take_profit_price=None,
+                leverage=1.0,
+                risk_budget_usdt=0.0,
+                reason_codes=("test",),
+                source_bar_count=len(frame),
+            )
+
+    runner = CryptoStrategyRunner(
+        sdk_module=sdk,
+        sdk_config=_DemoConfig(),
+        strategy=_ContextStrategy(),
+        config=CryptoRunnerConfig(
+            mode=ExecutionMode.SHADOW,
+            instruments=("BTC-USDT-SWAP",),
+            bar_period="4h",
+            bar_limit=90,
+            daily_bar_period="1d",
+            daily_bar_limit=120,
+            max_data_age_seconds=60,
+        ),
+        mandate_loader=lambda broker: _mandate(),
+        clock=lambda: last_open + timedelta(hours=4),
+        system_status_reader=lambda: {"status": "ok", "incidents": []},
+    )
+
+    result = runner.run_once()
+
+    assert result["outcome"] == "completed"
+    assert sdk.requested_periods == ["4h", "1d"]

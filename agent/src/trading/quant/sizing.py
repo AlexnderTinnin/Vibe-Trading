@@ -60,14 +60,16 @@ def size_trade_plan(
     )
     if resolved_price <= 0:
         raise ValueError("execution reference price must be positive")
-    if plan.action is TradeAction.OPEN_LONG and not (
-        plan.stop_loss_price < resolved_price < float(plan.take_profit_price or 0)
-    ):
-        raise ValueError("current execution price is outside the long stop/target range")
-    if plan.action is TradeAction.OPEN_SHORT and not (
-        float(plan.take_profit_price or 0) < resolved_price < plan.stop_loss_price
-    ):
-        raise ValueError("current execution price is outside the short target/stop range")
+    if plan.action is TradeAction.OPEN_LONG:
+        if plan.stop_loss_price >= resolved_price:
+            raise ValueError("current execution price is outside the long stop/target range")
+        if plan.take_profit_price is not None and resolved_price >= plan.take_profit_price:
+            raise ValueError("current execution price is outside the long stop/target range")
+    if plan.action is TradeAction.OPEN_SHORT:
+        if plan.stop_loss_price <= resolved_price:
+            raise ValueError("current execution price is outside the short target/stop range")
+        if plan.take_profit_price is not None and resolved_price <= plan.take_profit_price:
+            raise ValueError("current execution price is outside the short target/stop range")
     price = Decimal(str(resolved_price))
     leverage = Decimal(str(min(plan.leverage, mandate.hard_caps.max_leverage)))
     stop_ratio = abs(Decimal(str(resolved_price - plan.stop_loss_price))) / price
@@ -77,9 +79,16 @@ def size_trade_plan(
     risk_ratio = stop_ratio + cost_buffer
     if risk_ratio <= 0:
         raise ValueError("risk distance is not positive")
-    risk_target = Decimal(str(plan.risk_budget_usdt)) / risk_ratio
+    risk_budgets = []
+    if plan.risk_budget_usdt > 0:
+        risk_budgets.append(Decimal(str(plan.risk_budget_usdt)))
+    if plan.risk_budget_fraction is not None:
+        risk_budgets.append(Decimal(str(equity_usdt * plan.risk_budget_fraction)))
+    if not risk_budgets:
+        raise ValueError("opening TradePlan has no usable risk budget")
+    risk_target = min(risk_budgets) / risk_ratio
     caps = mandate.hard_caps
-    capacity = min(
+    capacity_limits = [
         risk_target,
         Decimal(str(caps.max_order_notional_usd)),
         Decimal(str(max(0.0, caps.max_position_notional_usd - current_position_exposure_usdt))),
@@ -94,7 +103,12 @@ def size_trade_plan(
                 )
             )
         ),
-    )
+    ]
+    if plan.target_notional_fraction is not None:
+        capacity_limits.append(
+            Decimal(str(equity_usdt * plan.target_notional_fraction))
+        )
+    capacity = min(capacity_limits)
     one_contract = instrument.contract_value * price
     contracts = floor_to_step(capacity / one_contract, instrument.lot_size)
     if contracts < instrument.minimum_size:

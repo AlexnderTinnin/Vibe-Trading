@@ -24,11 +24,11 @@ from src.live.runtime.swap_state import (
     swap_breaker_status,
 )
 from src.live.swap_order_gate import execute_swap_close, execute_swap_order
-from src.trading.connectors.okx.swap import SwapInstrument, SwapOrderIntent
+from src.trading.connectors.okx.swap import SwapInstrument, SwapOrderIntent, floor_to_step
 from src.trading.quant.costs import PerpetualCostModel
 from src.trading.quant.models import ExecutionMode, PositionView, TradeAction
 from src.trading.quant.sizing import size_trade_plan
-from src.trading.quant.strategy import BtcEthTrendStrategy
+from src.trading.quant.strategy import RegimeSwitchingStrategy
 
 STATUS_SCHEMA_VERSION = 1
 _STATUS_FILENAME = "quant_runner_status.json"
@@ -50,9 +50,11 @@ class CryptoRunnerConfig:
     broker: str = "okx"
     mode: ExecutionMode = ExecutionMode.DEMO
     instruments: tuple[str, ...] = ("BTC-USDT-SWAP", "ETH-USDT-SWAP")
-    bar_period: str = "15m"
-    bar_limit: int = 120
-    max_data_age_seconds: int = 20 * 60
+    bar_period: str = "4h"
+    bar_limit: int = 300
+    daily_bar_period: str = "1d"
+    daily_bar_limit: int = 120
+    max_data_age_seconds: int = 5 * 60 * 60
     max_quote_age_seconds: int = 30
     tick_interval_seconds: int = 60
     maintenance_pause_before_seconds: int = 15 * 60
@@ -63,9 +65,9 @@ class CryptoRunnerConfig:
             raise ValueError("use PerpetualBacktester for backtest mode")
         if set(self.instruments) - {"BTC-USDT-SWAP", "ETH-USDT-SWAP"}:
             raise ValueError("runner supports only BTC/ETH USDT perpetuals")
-        if not self.instruments or self.bar_limit < 60:
+        if not self.instruments or self.bar_limit < 60 or self.daily_bar_limit < 91:
             raise ValueError("runner instrument set/bar_limit is invalid")
-        if self.bar_period not in _BAR_PERIOD_SECONDS:
+        if self.bar_period not in _BAR_PERIOD_SECONDS or self.daily_bar_period not in _BAR_PERIOD_SECONDS:
             raise ValueError("runner bar period is unsupported")
         if min(
             self.max_data_age_seconds,
@@ -85,7 +87,7 @@ class CryptoStrategyRunner:
         *,
         sdk_module: Any,
         sdk_config: Any,
-        strategy: BtcEthTrendStrategy | None = None,
+        strategy: Any | None = None,
         config: CryptoRunnerConfig | None = None,
         mandate_loader: Callable[[str], Mandate | None] = load_mandate,
         clock: Callable[[], datetime] | None = None,
@@ -99,7 +101,7 @@ class CryptoStrategyRunner:
         self.sdk_config = sdk_config
         if self.config.mode is ExecutionMode.DEMO and not bool(getattr(sdk_config, "is_demo", False)):
             raise ValueError("Demo runner requires an OKX demo SDK config")
-        self.strategy = strategy or BtcEthTrendStrategy()
+        self.strategy = strategy or RegimeSwitchingStrategy()
         self._load_mandate = mandate_loader
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._system_status_reader = system_status_reader or self._read_system_status
@@ -151,6 +153,7 @@ class CryptoStrategyRunner:
         state = self.store.load(required=True)
         assert state is not None
         positions = list(state["positions"])
+        algo_orders = list(state["algo_orders"])
         account_configuration = dict(state["account_configuration"])
         position_mode = str(account_configuration.get("position_mode") or "")
         if position_mode not in ("net_mode", "long_short_mode"):
@@ -160,14 +163,26 @@ class CryptoStrategyRunner:
         executions: list[dict[str, Any]] = []
         for symbol in self.config.instruments:
             try:
-                bars = self._read_bars(symbol)
-                position = _position_view(positions, symbol)
+                bars = self._read_bars(
+                    symbol,
+                    period=self.config.bar_period,
+                    limit=self.config.bar_limit,
+                )
+                position = _position_view(positions, symbol, algo_orders=algo_orders)
+                strategy_inputs: dict[str, Any] = {}
+                if bool(getattr(self.strategy, "requires_daily_bars", False)):
+                    strategy_inputs["daily_bars"] = self._read_bars(
+                        symbol,
+                        period=self.config.daily_bar_period,
+                        limit=self.config.daily_bar_limit,
+                    )
                 plan = self.strategy.evaluate(
                     instrument_id=symbol,
                     bars=bars,
                     run_id=run_id,
                     now=now,
                     position=position,
+                    **strategy_inputs,
                 )
                 plans.append(plan.to_dict())
                 # OKX candle timestamps identify the bar's opening time. Measure
@@ -175,7 +190,8 @@ class CryptoStrategyRunner:
                 bar_closed_at = _parse_time(plan.data_as_of) + timedelta(
                     seconds=_BAR_PERIOD_SECONDS[self.config.bar_period]
                 )
-                if (now - bar_closed_at).total_seconds() > self.config.max_data_age_seconds:
+                data_age = (now - bar_closed_at).total_seconds()
+                if data_age < -5 or data_age > self.config.max_data_age_seconds:
                     raise ValueError(f"{symbol} confirmed market data is stale")
                 if plan.action is TradeAction.HOLD:
                     continue
@@ -235,6 +251,16 @@ class CryptoStrategyRunner:
                     cost_model=self.cost_model,
                     execution_reference_price=execution_reference,
                 )
+                stop_loss = _align_trigger_price(
+                    plan.stop_loss_price,
+                    tick_size=instrument.tick_size,
+                    reference_price=sized.reference_price,
+                )
+                take_profit = _align_trigger_price(
+                    plan.take_profit_price,
+                    tick_size=instrument.tick_size,
+                    reference_price=sized.reference_price,
+                )
                 position_side = "net" if position_mode == "net_mode" else direction
                 swap_intent = SwapOrderIntent.from_values(
                     instrument_id=symbol,
@@ -246,8 +272,8 @@ class CryptoStrategyRunner:
                     position_side=position_side,
                     leverage=plan.leverage,
                     client_order_id=_client_order_id(plan.plan_id, "open"),
-                    take_profit=plan.take_profit_price,
-                    stop_loss=plan.stop_loss_price,
+                    take_profit=take_profit,
+                    stop_loss=stop_loss,
                     trigger_price_type="mark",
                     allowed_instruments=self.config.instruments,
                     max_leverage=Decimal(str(mandate.hard_caps.max_leverage)),
@@ -318,12 +344,18 @@ class CryptoStrategyRunner:
             return "Demo runner is not bound to an OKX demo profile"
         return None
 
-    def _read_bars(self, symbol: str) -> Sequence[Mapping[str, Any]]:
+    def _read_bars(
+        self,
+        symbol: str,
+        *,
+        period: str,
+        limit: int,
+    ) -> Sequence[Mapping[str, Any]]:
         result = self.sdk.get_historical_bars(
             symbol,
             config=self.sdk_config,
-            period=self.config.bar_period,
-            limit=self.config.bar_limit,
+            period=period,
+            limit=limit,
         )
         if not isinstance(result, Mapping) or result.get("status") != "ok":
             raise ValueError(str(result.get("error") if isinstance(result, Mapping) else "bar read failed"))
@@ -503,7 +535,14 @@ def _maintenance_reason(payload: object, now: datetime, pause_before_seconds: in
     return None
 
 
-def _position_view(rows: Sequence[Mapping[str, Any]], symbol: str) -> PositionView | None:
+def _position_view(
+    rows: Sequence[Mapping[str, Any]],
+    symbol: str,
+    *,
+    algo_orders: Sequence[Mapping[str, Any]] = (),
+) -> PositionView | None:
+    stop_loss = _unique_protection_price(algo_orders, symbol, "stop_loss_trigger")
+    take_profit = _unique_protection_price(algo_orders, symbol, "take_profit_trigger")
     matches: list[PositionView] = []
     for row in rows:
         if str(row.get("symbol") or row.get("instId") or "").upper() != symbol:
@@ -520,11 +559,48 @@ def _position_view(rows: Sequence[Mapping[str, Any]], symbol: str) -> PositionVi
                 entry_price=float(row.get("average_cost", row.get("avgPx", 0)) or 0),
                 margin_mode=str(row.get("margin_mode") or row.get("mgnMode") or "cross").lower(),
                 leverage=float(row.get("leverage", row.get("lever", 1)) or 1),
+                stop_loss_price=stop_loss,
+                take_profit_price=take_profit,
             )
         )
     if len(matches) > 1:
         raise ValueError(f"{symbol} has multiple non-zero hedge positions; strategy requires one side")
     return matches[0] if matches else None
+
+
+def _unique_protection_price(
+    rows: Sequence[Mapping[str, Any]],
+    symbol: str,
+    field: str,
+) -> float | None:
+    values = {
+        float(row[field])
+        for row in rows
+        if str(row.get("symbol") or row.get("instId") or "").upper() == symbol
+        and row.get(field) not in (None, "")
+    }
+    if len(values) > 1:
+        raise ValueError(f"{symbol} has ambiguous {field} protection")
+    return next(iter(values), None)
+
+
+def _align_trigger_price(
+    value: float | None,
+    *,
+    tick_size: Decimal,
+    reference_price: Decimal,
+) -> Decimal | None:
+    """Align a trigger toward entry without crossing the execution reference."""
+    if value is None:
+        return None
+    raw = Decimal(str(value))
+    lower = floor_to_step(raw, tick_size)
+    upper = lower if lower == raw else lower + tick_size
+    if raw < reference_price:
+        return upper if upper < reference_price else lower
+    if raw > reference_price:
+        return lower if lower > reference_price else upper
+    return raw
 
 
 def _position_notional(row: Mapping[str, Any]) -> float:

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import math
+from collections import Counter
 from dataclasses import dataclass
-from typing import Mapping
+from typing import Any, Mapping
 
 import pandas as pd
 
@@ -12,7 +14,7 @@ from src.trading.connectors.okx.swap import SwapInstrument
 from src.trading.quant.costs import PerpetualCostModel
 from src.trading.quant.models import PositionView, TradeAction, TradePlan
 from src.trading.quant.sizing import size_trade_plan
-from src.trading.quant.strategy import BtcEthTrendStrategy, _normalize_bars
+from src.trading.quant.strategy import _bar_interval, _daily_from_primary, _normalize_bars
 
 
 @dataclass(frozen=True)
@@ -28,6 +30,7 @@ class BacktestTrade:
     costs_usdt: float
     net_pnl_usdt: float
     exit_reason: str
+    entry_reason_codes: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -37,11 +40,18 @@ class BacktestResult:
     net_pnl_usdt: float
     return_pct: float
     max_drawdown_pct: float
+    cagr_pct: float
+    annualized_volatility_pct: float
+    sharpe_ratio: float
+    profit_factor: float
+    total_costs_usdt: float
+    average_holding_hours: float
     trade_count: int
     rejected_plan_count: int
     win_rate: float
     trades: tuple[BacktestTrade, ...]
     equity_curve: tuple[tuple[str, float], ...]
+    exit_reasons: tuple[tuple[str, int], ...]
 
     def to_dict(self) -> dict:
         return {
@@ -50,11 +60,18 @@ class BacktestResult:
             "net_pnl_usdt": self.net_pnl_usdt,
             "return_pct": self.return_pct,
             "max_drawdown_pct": self.max_drawdown_pct,
+            "cagr_pct": self.cagr_pct,
+            "annualized_volatility_pct": self.annualized_volatility_pct,
+            "sharpe_ratio": self.sharpe_ratio,
+            "profit_factor": self.profit_factor,
+            "total_costs_usdt": self.total_costs_usdt,
+            "average_holding_hours": self.average_holding_hours,
             "trade_count": self.trade_count,
             "rejected_plan_count": self.rejected_plan_count,
             "win_rate": self.win_rate,
             "trades": [trade.__dict__ for trade in self.trades],
             "equity_curve": [list(item) for item in self.equity_curve],
+            "exit_reasons": dict(self.exit_reasons),
         }
 
 
@@ -66,10 +83,11 @@ class _OpenPosition:
     entry_price: float
     contracts: float
     stop_loss: float
-    take_profit: float
+    take_profit: float | None
     liquidation_price: float
     leverage: float
     entry_fee_usdt: float
+    entry_reason_codes: tuple[str, ...]
 
 
 class PerpetualBacktester:
@@ -78,7 +96,7 @@ class PerpetualBacktester:
     def __init__(
         self,
         *,
-        strategy: BtcEthTrendStrategy,
+        strategy: Any,
         mandate: Mandate,
         instruments: Mapping[str, SwapInstrument],
         initial_equity_usdt: float = 10_000.0,
@@ -92,12 +110,35 @@ class PerpetualBacktester:
         self.initial_equity = float(initial_equity_usdt)
         self.cost_model = cost_model or PerpetualCostModel()
 
-    def run(self, bars_by_instrument: Mapping[str, pd.DataFrame]) -> BacktestResult:
+    def run(
+        self,
+        bars_by_instrument: Mapping[str, pd.DataFrame],
+        *,
+        start_at: str | pd.Timestamp | None = None,
+        end_at: str | pd.Timestamp | None = None,
+    ) -> BacktestResult:
         frames = {symbol: _normalize_bars(frame) for symbol, frame in bars_by_instrument.items()}
         unknown = set(frames) - set(self.instruments)
         if unknown:
             raise ValueError(f"missing instrument metadata: {', '.join(sorted(unknown))}")
-        timeline = sorted(set().union(*(set(frame.index) for frame in frames.values())))
+        start = _utc_timestamp(start_at) if start_at is not None else None
+        end = _utc_timestamp(end_at) if end_at is not None else None
+        if start is not None and end is not None and start > end:
+            raise ValueError("backtest start_at must not be after end_at")
+        timeline = sorted(
+            timestamp
+            for timestamp in set().union(*(set(frame.index) for frame in frames.values()))
+            if (start is None or timestamp >= start) and (end is None or timestamp <= end)
+        )
+        bar_intervals = {symbol: _bar_interval(frame) for symbol, frame in frames.items()}
+        daily_frames = (
+            {
+                symbol: _daily_from_primary(frame, bar_intervals[symbol])
+                for symbol, frame in frames.items()
+            }
+            if bool(getattr(self.strategy, "requires_daily_bars", False))
+            else {}
+        )
         equity = self.initial_equity
         peak = equity
         max_drawdown = 0.0
@@ -137,7 +178,12 @@ class PerpetualBacktester:
                         else:
                             positions[symbol] = position
                     elif plan.action is TradeAction.CLOSE and symbol in positions:
-                        trade = self._close(positions[symbol], timestamp, float(bar["open"]), "strategy_exit")
+                        exit_reason = (
+                            plan.reason_codes[0] if plan.reason_codes else "strategy_exit"
+                        )
+                        trade = self._close(
+                            positions[symbol], timestamp, float(bar["open"]), exit_reason
+                        )
                         equity += trade.net_pnl_usdt
                         trades.append(trade)
                         del positions[symbol]
@@ -152,13 +198,17 @@ class PerpetualBacktester:
                         del positions[symbol]
 
                 history = frame.loc[:timestamp]
+                strategy_inputs: dict[str, Any] = {}
+                if symbol in daily_frames:
+                    strategy_inputs["daily_bars"] = daily_frames[symbol].loc[:timestamp]
                 try:
                     signal = self.strategy.evaluate(
                         instrument_id=symbol,
                         bars=history,
                         run_id="backtest",
-                        now=timestamp.to_pydatetime(),
+                        now=(timestamp + bar_intervals[symbol]).to_pydatetime(),
                         position=_position_view(positions.get(symbol)),
+                        **strategy_inputs,
                     )
                 except ValueError:
                     continue
@@ -192,17 +242,63 @@ class PerpetualBacktester:
 
         wins = sum(1 for trade in trades if trade.net_pnl_usdt > 0)
         net = equity - self.initial_equity
+        curve_series = pd.Series(
+            [value for _, value in curve],
+            index=pd.DatetimeIndex([timestamp for timestamp, _ in curve]),
+            dtype=float,
+        )
+        daily_returns = curve_series.resample("1D").last().dropna().pct_change().dropna()
+        annualized_volatility = (
+            float(daily_returns.std(ddof=1) * math.sqrt(365.0))
+            if len(daily_returns) > 1
+            else 0.0
+        )
+        sharpe = (
+            float(daily_returns.mean() / daily_returns.std(ddof=1) * math.sqrt(365.0))
+            if len(daily_returns) > 1 and float(daily_returns.std(ddof=1)) > 0
+            else 0.0
+        )
+        elapsed_years = (
+            (timeline[-1] - timeline[0]).total_seconds() / (365.0 * 86_400.0)
+            if len(timeline) > 1
+            else 0.0
+        )
+        cagr = (
+            (equity / self.initial_equity) ** (1.0 / elapsed_years) - 1.0
+            if elapsed_years > 0 and equity > 0
+            else 0.0
+        )
+        positive_pnl = sum(trade.net_pnl_usdt for trade in trades if trade.net_pnl_usdt > 0)
+        negative_pnl = -sum(trade.net_pnl_usdt for trade in trades if trade.net_pnl_usdt < 0)
+        profit_factor = positive_pnl / negative_pnl if negative_pnl > 0 else (math.inf if positive_pnl > 0 else 0.0)
+        holding_hours = [
+            max(
+                0.0,
+                (
+                    pd.Timestamp(trade.closed_at) - pd.Timestamp(trade.opened_at)
+                ).total_seconds()
+                / 3600.0,
+            )
+            for trade in trades
+        ]
         return BacktestResult(
             initial_equity_usdt=self.initial_equity,
             final_equity_usdt=equity,
             net_pnl_usdt=net,
             return_pct=net / self.initial_equity,
             max_drawdown_pct=max_drawdown,
+            cagr_pct=cagr,
+            annualized_volatility_pct=annualized_volatility,
+            sharpe_ratio=sharpe,
+            profit_factor=profit_factor,
+            total_costs_usdt=sum(trade.costs_usdt for trade in trades),
+            average_holding_hours=(sum(holding_hours) / len(holding_hours) if holding_hours else 0.0),
             trade_count=len(trades),
             rejected_plan_count=rejected_plans,
             win_rate=wins / len(trades) if trades else 0.0,
             trades=tuple(trades),
             equity_curve=tuple(curve),
+            exit_reasons=tuple(sorted(Counter(trade.exit_reason for trade in trades).items())),
         )
 
     def _open(
@@ -248,10 +344,13 @@ class PerpetualBacktester:
                 entry_price=entry,
                 contracts=float(sized.contracts),
                 stop_loss=float(plan.stop_loss_price),
-                take_profit=float(plan.take_profit_price),
+                take_profit=(
+                    None if plan.take_profit_price is None else float(plan.take_profit_price)
+                ),
                 liquidation_price=float(sized.planned_liquidation_price),
                 leverage=plan.leverage,
                 entry_fee_usdt=entry_cost,
+                entry_reason_codes=plan.reason_codes,
             ),
             entry_cost,
         )
@@ -263,14 +362,14 @@ class PerpetualBacktester:
                 return "liquidation", open_price
             if open_price <= position.stop_loss:
                 return "stop_loss", open_price
-            if open_price >= position.take_profit:
+            if position.take_profit is not None and open_price >= position.take_profit:
                 return "take_profit", position.take_profit
         else:
             if open_price >= position.liquidation_price:
                 return "liquidation", open_price
             if open_price >= position.stop_loss:
                 return "stop_loss", open_price
-            if open_price <= position.take_profit:
+            if position.take_profit is not None and open_price <= position.take_profit:
                 return "take_profit", position.take_profit
         return None, open_price
 
@@ -284,14 +383,14 @@ class PerpetualBacktester:
                 return "liquidation", position.liquidation_price
             if low <= position.stop_loss:
                 return "stop_loss", position.stop_loss
-            if high >= position.take_profit:
+            if position.take_profit is not None and high >= position.take_profit:
                 return "take_profit", position.take_profit
         else:
             if high >= position.liquidation_price:
                 return "liquidation", position.liquidation_price
             if high >= position.stop_loss:
                 return "stop_loss", position.stop_loss
-            if low <= position.take_profit:
+            if position.take_profit is not None and low <= position.take_profit:
                 return "take_profit", position.take_profit
         return None, float(bar["close"])
 
@@ -325,6 +424,7 @@ class PerpetualBacktester:
             costs_usdt=costs,
             net_pnl_usdt=gross - costs,
             exit_reason=reason,
+            entry_reason_codes=position.entry_reason_codes,
         )
 
     def _unrealized(self, position: _OpenPosition, bar: pd.Series) -> float:
@@ -356,4 +456,13 @@ def _position_view(position: _OpenPosition | None) -> PositionView | None:
         contracts=contracts,
         entry_price=position.entry_price,
         leverage=position.leverage,
+        stop_loss_price=position.stop_loss,
+        take_profit_price=position.take_profit,
     )
+
+
+def _utc_timestamp(value: str | pd.Timestamp) -> pd.Timestamp:
+    timestamp = pd.Timestamp(value)
+    if timestamp.tzinfo is None:
+        return timestamp.tz_localize("UTC")
+    return timestamp.tz_convert("UTC")

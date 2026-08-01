@@ -38,6 +38,8 @@ class PositionView:
     entry_price: float
     margin_mode: str = "cross"
     leverage: float = 1.0
+    stop_loss_price: float | None = None
+    take_profit_price: float | None = None
 
     @property
     def is_open(self) -> bool:
@@ -71,6 +73,8 @@ class TradePlan:
     risk_budget_usdt: float
     reason_codes: tuple[str, ...]
     source_bar_count: int
+    risk_budget_fraction: float | None = None
+    target_notional_fraction: float | None = None
 
     @classmethod
     def create(
@@ -90,6 +94,8 @@ class TradePlan:
         risk_budget_usdt: float,
         reason_codes: Iterable[str],
         source_bar_count: int,
+        risk_budget_fraction: float | None = None,
+        target_notional_fraction: float | None = None,
         ttl: timedelta = timedelta(minutes=5),
     ) -> "TradePlan":
         signal = _aware(signal_at)
@@ -122,6 +128,12 @@ class TradePlan:
             risk_budget_usdt=float(risk_budget_usdt),
             reason_codes=tuple(str(value) for value in reason_codes),
             source_bar_count=int(source_bar_count),
+            risk_budget_fraction=(
+                None if risk_budget_fraction is None else float(risk_budget_fraction)
+            ),
+            target_notional_fraction=(
+                None if target_notional_fraction is None else float(target_notional_fraction)
+            ),
         )
         plan.validate()
         return plan
@@ -137,21 +149,32 @@ class TradePlan:
             raise TradePlanError("confidence must be between 0 and 1")
         if self.reference_price <= 0 or not 1.0 <= self.leverage <= 10.0:
             raise TradePlanError("reference_price and leverage are outside supported bounds")
+        if self.risk_budget_fraction is not None and not 0 < self.risk_budget_fraction <= 1:
+            raise TradePlanError("risk_budget_fraction must be in (0, 1]")
+        if self.target_notional_fraction is not None and not 0 < self.target_notional_fraction <= 10:
+            raise TradePlanError("target_notional_fraction must be in (0, 10]")
         if self.action in (TradeAction.OPEN_LONG, TradeAction.OPEN_SHORT):
-            if self.stop_loss_price is None or self.take_profit_price is None:
-                raise TradePlanError("opening plans require both stop loss and take profit")
-            if self.risk_budget_usdt <= 0:
-                raise TradePlanError("opening plans require a positive USDT risk budget")
-            if self.action is TradeAction.OPEN_LONG and not (
-                self.stop_loss_price < self.reference_price < self.take_profit_price
-            ):
-                raise TradePlanError("long price levels must satisfy stop < reference < target")
-            if self.action is TradeAction.OPEN_SHORT and not (
-                self.take_profit_price < self.reference_price < self.stop_loss_price
-            ):
-                raise TradePlanError("short price levels must satisfy target < reference < stop")
-        elif self.action is TradeAction.HOLD and self.risk_budget_usdt != 0:
-            raise TradePlanError("hold plans must have zero risk budget")
+            if self.stop_loss_price is None:
+                raise TradePlanError("opening plans require a stop loss")
+            if self.risk_budget_usdt <= 0 and self.risk_budget_fraction is None:
+                raise TradePlanError("opening plans require a positive risk budget")
+            if self.action is TradeAction.OPEN_LONG:
+                if self.stop_loss_price >= self.reference_price:
+                    raise TradePlanError("long stop loss must be below the reference price")
+                if self.take_profit_price is not None and self.take_profit_price <= self.reference_price:
+                    raise TradePlanError("long take profit must be above the reference price")
+            elif self.stop_loss_price <= self.reference_price:
+                raise TradePlanError("short stop loss must be above the reference price")
+            elif self.take_profit_price is not None and self.take_profit_price >= self.reference_price:
+                raise TradePlanError("short take profit must be below the reference price")
+        elif any(
+            (
+                self.risk_budget_usdt != 0,
+                self.risk_budget_fraction not in (None, 0),
+                self.target_notional_fraction not in (None, 0),
+            )
+        ):
+            raise TradePlanError("non-opening plans must have zero risk and notional budgets")
         _parse_time(self.signal_at)
         data_time = _parse_time(self.data_as_of)
         if data_time > _parse_time(self.valid_until):
