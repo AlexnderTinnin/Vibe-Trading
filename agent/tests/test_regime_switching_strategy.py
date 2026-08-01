@@ -61,6 +61,24 @@ def _daily(*, direction: int, count: int = 130, start: str = "2025-09-01") -> pd
     )
 
 
+def _volatile_daily(*, count: int = 130, start: str = "2025-09-01") -> pd.DataFrame:
+    index = pd.date_range(start, periods=count, freq="1D", tz="UTC")
+    returns = np.where(np.arange(count) % 2 == 0, 0.04, -0.03)
+    returns[0] = 0.0
+    closes = 100.0 * np.cumprod(1.0 + returns)
+    return pd.DataFrame(
+        {
+            "open": closes,
+            "high": closes * 1.01,
+            "low": closes * 0.99,
+            "close": closes,
+            "volume": 1000.0,
+            "confirm": "1",
+        },
+        index=index,
+    )
+
+
 def _strategy() -> RegimeSwitchingStrategy:
     return RegimeSwitchingStrategy(
         RegimeStrategyConfig(
@@ -147,6 +165,39 @@ def test_trend_breakout_uses_daily_direction_and_has_no_fixed_take_profit() -> N
     assert plan.target_notional_fraction is not None
     assert 0 < plan.target_notional_fraction <= 1
     assert "regime_trend" in plan.reason_codes
+
+
+def test_three_x_leverage_scales_target_exposure_but_not_risk_fraction() -> None:
+    bars = _bars_4h(direction=1)
+    common = {
+        "daily_momentum_lookback": 30,
+        "realized_volatility_lookback": 20,
+        "adx_period": 10,
+        "donchian_lookback": 20,
+        "volume_lookback": 20,
+        "volatility_expansion_lookback": 10,
+        "max_notional_fraction": 3.0,
+        "max_portfolio_notional_fraction": 4.0,
+    }
+    plans = [
+        RegimeSwitchingStrategy(
+            RegimeStrategyConfig(leverage=leverage, **common)
+        ).evaluate(
+            instrument_id="BTC-USDT-SWAP",
+            bars=bars,
+            daily_bars=_volatile_daily(),
+            run_id=f"leverage-{leverage}",
+            now=bars.index[-1].to_pydatetime() + timedelta(hours=4),
+        )
+        for leverage in (1.0, 3.0)
+    ]
+
+    assert all(plan.action is TradeAction.OPEN_LONG for plan in plans)
+    assert plans[0].target_notional_fraction is not None
+    assert plans[1].target_notional_fraction == pytest.approx(
+        plans[0].target_notional_fraction * 3.0
+    )
+    assert plans[0].risk_budget_fraction == plans[1].risk_budget_fraction == 0.02
 
 
 def test_daily_context_is_cut_off_at_the_primary_bar_close() -> None:
@@ -329,6 +380,42 @@ def test_volatility_target_fraction_caps_risk_sized_notional() -> None:
     )
 
     assert Decimal("2400") <= sized.notional_usdt <= Decimal("2500")
+
+
+def test_dynamic_portfolio_fraction_caps_incremental_notional() -> None:
+    now = datetime(2026, 7, 30, tzinfo=timezone.utc)
+    plan = TradePlan.create(
+        strategy_id="portfolio-cap",
+        run_id="r1",
+        instrument_id="BTC-USDT-SWAP",
+        signal_at=now,
+        data_as_of=now,
+        action=TradeAction.OPEN_LONG,
+        confidence=0.8,
+        reference_price=100.0,
+        stop_loss_price=99.0,
+        take_profit_price=None,
+        leverage=3.0,
+        risk_budget_usdt=0.0,
+        risk_budget_fraction=0.05,
+        target_notional_fraction=1.0,
+        max_portfolio_notional_fraction=0.15,
+        reason_codes=("test",),
+        source_bar_count=100,
+    )
+
+    sized = size_trade_plan(
+        plan,
+        _instrument(),
+        _mandate(),
+        equity_usdt=10_000,
+        current_total_exposure_usdt=1_000,
+        current_position_exposure_usdt=0,
+        current_correlated_exposure_usdt=1_000,
+        margin_used_usdt=0,
+    )
+
+    assert Decimal("499") <= sized.notional_usdt <= Decimal("500")
 
 
 def test_backtester_keeps_no_take_profit_position_open_until_strategy_exit() -> None:

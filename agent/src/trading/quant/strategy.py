@@ -136,7 +136,7 @@ class BtcEthTrendStrategy:
 class RegimeStrategyConfig:
     """Parameters for the 1D-filtered, 4H regime-switching strategy."""
 
-    strategy_id: str = "btc_eth_regime_switch_v1"
+    strategy_id: str = "btc_eth_regime_switch_v2"
     daily_momentum_lookback: int = 90
     realized_volatility_lookback: int = 20
     adx_period: int = 14
@@ -156,7 +156,9 @@ class RegimeStrategyConfig:
     minimum_volume_ratio: float = 1.0
     volatility_expansion_lookback: int = 20
     target_annual_volatility: float = 0.15
+    scale_target_with_leverage: bool = True
     max_notional_fraction: float = 1.0
+    max_portfolio_notional_fraction: float = 1.5
     range_notional_scale: float = 0.5
     max_risk_fraction: float = 0.02
     leverage: float = 3.0
@@ -188,12 +190,15 @@ class RegimeStrategyConfig:
             self.minimum_volume_ratio,
             self.target_annual_volatility,
             self.max_notional_fraction,
+            self.max_portfolio_notional_fraction,
             self.range_notional_scale,
             self.max_risk_fraction,
         ) <= 0:
             raise ValueError("regime strategy risk and signal parameters must be positive")
         if self.range_notional_scale > 1 or self.max_risk_fraction > 1:
             raise ValueError("regime strategy fraction parameters exceed one")
+        if not isinstance(self.scale_target_with_leverage, bool):
+            raise ValueError("scale_target_with_leverage must be boolean")
         if not 1 <= self.leverage <= 10 or not 0 <= self.minimum_confidence <= 1:
             raise ValueError("regime strategy leverage/confidence is invalid")
 
@@ -377,8 +382,13 @@ class RegimeSwitchingStrategy:
             )
             stop = price - direction * atr_value * stop_multiple
             target = middle_value if regime == "range" else None
+            exposure_multiplier = (
+                self.config.leverage if self.config.scale_target_with_leverage else 1.0
+            )
             target_fraction = min(
-                self.config.target_annual_volatility / realized_volatility,
+                self.config.target_annual_volatility
+                * exposure_multiplier
+                / realized_volatility,
                 self.config.max_notional_fraction,
             )
             if regime == "range":
@@ -400,6 +410,11 @@ class RegimeSwitchingStrategy:
             risk_budget_usdt=0.0,
             risk_budget_fraction=risk_fraction,
             target_notional_fraction=target_fraction,
+            max_portfolio_notional_fraction=(
+                self.config.max_portfolio_notional_fraction
+                if action in (TradeAction.OPEN_LONG, TradeAction.OPEN_SHORT)
+                else None
+            ),
             reason_codes=reasons,
             source_bar_count=len(frame),
         )

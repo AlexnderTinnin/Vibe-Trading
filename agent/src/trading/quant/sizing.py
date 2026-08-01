@@ -108,6 +108,23 @@ def size_trade_plan(
         capacity_limits.append(
             Decimal(str(equity_usdt * plan.target_notional_fraction))
         )
+    if plan.max_portfolio_notional_fraction is not None:
+        dynamic_portfolio_cap = equity_usdt * plan.max_portfolio_notional_fraction
+        capacity_limits.extend(
+            (
+                Decimal(
+                    str(max(0.0, dynamic_portfolio_cap - current_total_exposure_usdt))
+                ),
+                Decimal(
+                    str(
+                        max(
+                            0.0,
+                            dynamic_portfolio_cap - current_correlated_exposure_usdt,
+                        )
+                    )
+                ),
+            )
+        )
     capacity = min(capacity_limits)
     one_contract = instrument.contract_value * price
     contracts = floor_to_step(capacity / one_contract, instrument.lot_size)

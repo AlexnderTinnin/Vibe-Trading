@@ -75,6 +75,7 @@ class TradePlan:
     source_bar_count: int
     risk_budget_fraction: float | None = None
     target_notional_fraction: float | None = None
+    max_portfolio_notional_fraction: float | None = None
 
     @classmethod
     def create(
@@ -96,6 +97,7 @@ class TradePlan:
         source_bar_count: int,
         risk_budget_fraction: float | None = None,
         target_notional_fraction: float | None = None,
+        max_portfolio_notional_fraction: float | None = None,
         ttl: timedelta = timedelta(minutes=5),
     ) -> "TradePlan":
         signal = _aware(signal_at)
@@ -134,6 +136,11 @@ class TradePlan:
             target_notional_fraction=(
                 None if target_notional_fraction is None else float(target_notional_fraction)
             ),
+            max_portfolio_notional_fraction=(
+                None
+                if max_portfolio_notional_fraction is None
+                else float(max_portfolio_notional_fraction)
+            ),
         )
         plan.validate()
         return plan
@@ -153,6 +160,11 @@ class TradePlan:
             raise TradePlanError("risk_budget_fraction must be in (0, 1]")
         if self.target_notional_fraction is not None and not 0 < self.target_notional_fraction <= 10:
             raise TradePlanError("target_notional_fraction must be in (0, 10]")
+        if (
+            self.max_portfolio_notional_fraction is not None
+            and not 0 < self.max_portfolio_notional_fraction <= 10
+        ):
+            raise TradePlanError("max_portfolio_notional_fraction must be in (0, 10]")
         if self.action in (TradeAction.OPEN_LONG, TradeAction.OPEN_SHORT):
             if self.stop_loss_price is None:
                 raise TradePlanError("opening plans require a stop loss")
@@ -172,6 +184,7 @@ class TradePlan:
                 self.risk_budget_usdt != 0,
                 self.risk_budget_fraction not in (None, 0),
                 self.target_notional_fraction not in (None, 0),
+                self.max_portfolio_notional_fraction not in (None, 0),
             )
         ):
             raise TradePlanError("non-opening plans must have zero risk and notional budgets")
