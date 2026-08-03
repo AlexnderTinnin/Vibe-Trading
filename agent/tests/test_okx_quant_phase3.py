@@ -19,8 +19,9 @@ from src.live.mandate.model import (
     Mandate,
     UniverseConstraint,
 )
+from src.live.runtime.swap_state import SwapRuntimeStore, swap_breaker_status
 from src.trading.connectors.okx.swap import SwapInstrument
-from src.trading.quant.backtest import PerpetualBacktester
+from src.trading.quant.backtest import PerpetualBacktester, _OpenPosition
 from src.trading.quant.costs import PerpetualCostModel
 from src.trading.quant.models import ExecutionMode, TradeAction, TradePlan
 from src.trading.quant.runner import (
@@ -199,6 +200,39 @@ def test_sizing_revalidates_levels_at_the_execution_reference() -> None:
         )
 
 
+def test_sizing_rejects_stop_beyond_estimated_liquidation() -> None:
+    now = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
+    plan = TradePlan.create(
+        strategy_id="liquidation-guard",
+        run_id="r1",
+        instrument_id="BTC-USDT-SWAP",
+        signal_at=now,
+        data_as_of=now,
+        action=TradeAction.OPEN_LONG,
+        confidence=1.0,
+        reference_price=100.0,
+        stop_loss_price=70.0,
+        take_profit_price=None,
+        leverage=3.0,
+        risk_budget_usdt=100.0,
+        reason_codes=("test",),
+        source_bar_count=100,
+    )
+
+    with pytest.raises(ValueError, match="above the estimated liquidation"):
+        size_trade_plan(
+            plan,
+            _instrument(),
+            _mandate(),
+            equity_usdt=10_000,
+            current_total_exposure_usdt=0,
+            current_position_exposure_usdt=0,
+            current_correlated_exposure_usdt=0,
+            margin_used_usdt=0,
+            execution_reference_price=110.0,
+        )
+
+
 def test_cost_model_includes_fee_slippage_funding_and_liquidation() -> None:
     model = PerpetualCostModel()
     costs = model.estimate(notional_usdt=10_000, holding_hours=8)
@@ -208,6 +242,48 @@ def test_cost_model_includes_fee_slippage_funding_and_liquidation() -> None:
     assert costs.total_usdt == pytest.approx(9.0)
     assert model.estimated_liquidation_price(entry_price=100, leverage=10, direction="long") < 100
     assert model.estimated_liquidation_price(entry_price=100, leverage=10, direction="short") > 100
+
+
+def test_actual_funding_rates_charge_longs_and_credit_shorts() -> None:
+    opened = pd.Timestamp("2026-01-01", tz="UTC")
+    closed = pd.Timestamp("2026-01-02", tz="UTC")
+    rates = pd.Series(
+        [0.01, 0.02],
+        index=pd.DatetimeIndex(
+            [pd.Timestamp("2026-01-01 08:00", tz="UTC"), closed]
+        ),
+    )
+    backtester = PerpetualBacktester(
+        strategy=_strategy(),
+        mandate=_mandate(),
+        instruments={"BTC-USDT-SWAP": _instrument()},
+        funding_rates_by_instrument={"BTC-USDT-SWAP": rates},
+    )
+
+    def position(direction: str) -> _OpenPosition:
+        return _OpenPosition(
+            instrument_id="BTC-USDT-SWAP",
+            direction=direction,
+            opened_at=opened,
+            entry_price=100.0,
+            contracts=1.0,
+            stop_loss=90.0 if direction == "long" else 110.0,
+            take_profit=None,
+            liquidation_price=50.0 if direction == "long" else 150.0,
+            leverage=3.0,
+            entry_fee_usdt=0.0,
+            entry_reason_codes=("test",),
+        )
+
+    long_cost = backtester._funding_cost(
+        position("long"), closed, mark_price=110.0, fallback=99.0
+    )
+    short_cost = backtester._funding_cost(
+        position("short"), closed, mark_price=110.0, fallback=99.0
+    )
+
+    assert long_cost == pytest.approx(0.033)
+    assert short_cost == pytest.approx(-0.033)
 
 
 def test_backtest_uses_same_strategy_and_returns_costed_metrics() -> None:
@@ -337,6 +413,87 @@ class _ShadowSDK:
         return {"status": "ok"}
 
 
+class _StopUpdateSDK(_ShadowSDK):
+    def __init__(self, bars: pd.DataFrame) -> None:
+        super().__init__(bars)
+        self.stop_update_calls: list[dict] = []
+        self.position = {
+            "symbol": "BTC-USDT-SWAP",
+            "quantity": "1",
+            "position_side": "net",
+            "average_cost": "100",
+            "margin_mode": "cross",
+            "leverage": "3",
+            "notional_usd": "100",
+            "margin": "33.33",
+        }
+        self.algo = {
+            "symbol": "BTC-USDT-SWAP",
+            "algo_id": "A1",
+            "client_algo_order_id": "risk-A1",
+            "stop_loss_trigger": "95",
+            "state": "live",
+        }
+
+    def get_swap_positions(self, config):  # noqa: ANN001
+        return {"status": "ok", "positions": [dict(self.position)]}
+
+    def get_swap_algo_orders(self, config):  # noqa: ANN001
+        return {"status": "ok", "algo_orders": [dict(self.algo)]}
+
+    def amend_swap_stop_loss(self, config, **kwargs):  # noqa: ANN001, ANN003
+        self.write_calls += 1
+        self.stop_update_calls.append(kwargs)
+        self.algo["stop_loss_trigger"] = kwargs["stop_loss"]
+        return {
+            "status": "ok",
+            "verification": {
+                "status": "verified",
+                "observed_stop_loss": kwargs["stop_loss"],
+            },
+            "retry_safe": False,
+        }
+
+
+class _AlwaysTightenStopStrategy:
+    def evaluate(self, *, instrument_id, bars, run_id, now, position=None):  # noqa: ANN001
+        frame = pd.DataFrame(bars)
+        return TradePlan.create(
+            strategy_id="stop-update-test",
+            run_id=run_id,
+            instrument_id=instrument_id,
+            signal_at=now,
+            data_as_of=pd.to_datetime(
+                int(frame["time"].iloc[-1]), unit="ms", utc=True
+            ).to_pydatetime(),
+            action=TradeAction.UPDATE_STOP,
+            confidence=1.0,
+            reference_price=float(frame["close"].iloc[-1]),
+            stop_loss_price=96.0,
+            take_profit_price=None,
+            leverage=3.0,
+            risk_budget_usdt=0.0,
+            reason_codes=("test_trailing_stop",),
+            source_bar_count=len(frame),
+        )
+
+
+def _seed_stop_runtime(store: SwapRuntimeStore, sdk: _StopUpdateSDK) -> None:
+    store.save(
+        {
+            "account_configuration": {"uid": "demo", "position_mode": "net_mode"},
+            "balance": {"total_equity": "10000"},
+            "orders": [],
+            "stop_amendments": [],
+            "open_orders": [],
+            "fills": [],
+            "positions": [dict(sdk.position)],
+            "algo_orders": [dict(sdk.algo)],
+            "risk": {},
+        }
+    )
+
+
 def test_shadow_runner_reconciles_and_emits_plan_without_writes(runtime: Path) -> None:
     now = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
     sdk = _ShadowSDK(_bullish_bars(now - timedelta(minutes=15)))
@@ -363,6 +520,99 @@ def test_shadow_runner_reconciles_and_emits_plan_without_writes(runtime: Path) -
     assert float(result["executions"][0]["sizing"]["notional_usdt"]) > 0
     assert sdk.write_calls == 0
     assert quant_status("okx")["run_id"] == result["run_id"]
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_status", "expected_writes"),
+    [
+        (ExecutionMode.SHADOW, "shadow", 0),
+        (ExecutionMode.DEMO, "ok", 1),
+    ],
+)
+def test_runner_handles_stop_updates_without_opening_another_position(
+    runtime: Path,
+    mode: ExecutionMode,
+    expected_status: str,
+    expected_writes: int,
+) -> None:
+    now = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
+    sdk = _StopUpdateSDK(_bullish_bars(now - timedelta(minutes=15)))
+    store = SwapRuntimeStore("okx")
+    _seed_stop_runtime(store, sdk)
+    runner = CryptoStrategyRunner(
+        sdk_module=sdk,
+        sdk_config=_DemoConfig(),
+        strategy=_AlwaysTightenStopStrategy(),
+        config=CryptoRunnerConfig(
+            mode=mode,
+            instruments=("BTC-USDT-SWAP",),
+            bar_period="15m",
+            bar_limit=90,
+            max_data_age_seconds=60,
+            max_quote_age_seconds=20 * 60,
+        ),
+        mandate_loader=lambda broker: _mandate(),
+        clock=lambda: now,
+        system_status_reader=lambda: {"status": "ok", "incidents": []},
+        store=store,
+    )
+
+    result = runner.run_once()
+
+    assert result["outcome"] == "completed"
+    assert result["plans"][0]["action"] == "update_stop"
+    assert result["executions"][0]["status"] == expected_status
+    assert sdk.write_calls == expected_writes
+    if mode is ExecutionMode.DEMO:
+        assert sdk.stop_update_calls[0]["algo_id"] == "A1"
+        amendment = store.load(required=True)["stop_amendments"][0]
+        assert amendment["status"] == "filled"
+        assert amendment["new_stop_loss"] == "96"
+
+
+def test_demo_runner_trips_breaker_when_stop_update_cannot_be_verified(
+    runtime: Path,
+) -> None:
+    now = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
+
+    class _UnverifiedStopSDK(_StopUpdateSDK):
+        def amend_swap_stop_loss(self, config, **kwargs):  # noqa: ANN001, ANN003
+            self.write_calls += 1
+            return {
+                "status": "ok",
+                "verification": {"status": "unknown"},
+                "retry_safe": False,
+            }
+
+    sdk = _UnverifiedStopSDK(_bullish_bars(now - timedelta(minutes=15)))
+    store = SwapRuntimeStore("okx")
+    _seed_stop_runtime(store, sdk)
+    runner = CryptoStrategyRunner(
+        sdk_module=sdk,
+        sdk_config=_DemoConfig(),
+        strategy=_AlwaysTightenStopStrategy(),
+        config=CryptoRunnerConfig(
+            mode=ExecutionMode.DEMO,
+            instruments=("BTC-USDT-SWAP",),
+            bar_period="15m",
+            bar_limit=90,
+            max_data_age_seconds=60,
+            max_quote_age_seconds=20 * 60,
+        ),
+        mandate_loader=lambda broker: _mandate(),
+        clock=lambda: now,
+        system_status_reader=lambda: {"status": "ok", "incidents": []},
+        store=store,
+    )
+
+    result = runner.run_once()
+
+    assert result["outcome"] == "completed"
+    assert result["executions"][0]["write_state"] == "unknown_needs_reconcile"
+    assert swap_breaker_status("okx")["reason"] == "stop amendment outcome unknown"
+    assert store.load(required=True)["stop_amendments"][0]["status"] == (
+        "unknown_needs_reconcile"
+    )
 
 
 def test_runner_restores_position_protection_and_aligns_trigger_prices() -> None:

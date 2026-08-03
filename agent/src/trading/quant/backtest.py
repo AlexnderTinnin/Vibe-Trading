@@ -27,6 +27,9 @@ class BacktestTrade:
     exit_price: float
     contracts: float
     gross_pnl_usdt: float
+    fees_usdt: float
+    funding_usdt: float
+    estimated_slippage_usdt: float
     costs_usdt: float
     net_pnl_usdt: float
     exit_reason: str
@@ -45,6 +48,10 @@ class BacktestResult:
     sharpe_ratio: float
     profit_factor: float
     total_costs_usdt: float
+    total_fees_usdt: float
+    total_funding_usdt: float
+    estimated_slippage_usdt: float
+    total_economic_costs_usdt: float
     average_holding_hours: float
     trade_count: int
     rejected_plan_count: int
@@ -65,6 +72,10 @@ class BacktestResult:
             "sharpe_ratio": self.sharpe_ratio,
             "profit_factor": self.profit_factor,
             "total_costs_usdt": self.total_costs_usdt,
+            "total_fees_usdt": self.total_fees_usdt,
+            "total_funding_usdt": self.total_funding_usdt,
+            "estimated_slippage_usdt": self.estimated_slippage_usdt,
+            "total_economic_costs_usdt": self.total_economic_costs_usdt,
             "average_holding_hours": self.average_holding_hours,
             "trade_count": self.trade_count,
             "rejected_plan_count": self.rejected_plan_count,
@@ -101,6 +112,10 @@ class PerpetualBacktester:
         instruments: Mapping[str, SwapInstrument],
         initial_equity_usdt: float = 10_000.0,
         cost_model: PerpetualCostModel | None = None,
+        funding_rates_by_instrument: Mapping[
+            str, pd.Series | pd.DataFrame
+        ]
+        | None = None,
     ) -> None:
         if initial_equity_usdt <= 0:
             raise ValueError("initial equity must be positive")
@@ -109,6 +124,17 @@ class PerpetualBacktester:
         self.instruments = dict(instruments)
         self.initial_equity = float(initial_equity_usdt)
         self.cost_model = cost_model or PerpetualCostModel()
+        self._use_actual_funding = funding_rates_by_instrument is not None
+        raw_funding = dict(funding_rates_by_instrument or {})
+        unknown_funding = set(raw_funding) - set(self.instruments)
+        if unknown_funding:
+            raise ValueError(
+                f"funding rates have no instrument metadata: {', '.join(sorted(unknown_funding))}"
+            )
+        self.funding_rates = {
+            symbol: _normalize_funding_rates(values)
+            for symbol, values in raw_funding.items()
+        }
 
     def run(
         self,
@@ -118,6 +144,11 @@ class PerpetualBacktester:
         end_at: str | pd.Timestamp | None = None,
     ) -> BacktestResult:
         frames = {symbol: _normalize_bars(frame) for symbol, frame in bars_by_instrument.items()}
+        for frame in frames.values():
+            frame.attrs["_quant_backtest_token"] = object()
+        prepare = getattr(self.strategy, "prepare_backtest", None)
+        if callable(prepare):
+            prepare(frames)
         unknown = set(frames) - set(self.instruments)
         if unknown:
             raise ValueError(f"missing instrument metadata: {', '.join(sorted(unknown))}")
@@ -187,6 +218,23 @@ class PerpetualBacktester:
                         equity += trade.net_pnl_usdt
                         trades.append(trade)
                         del positions[symbol]
+                    elif plan.action is TradeAction.UPDATE_STOP and symbol in positions:
+                        position = positions[symbol]
+                        proposed = plan.stop_loss_price
+                        if proposed is None or not self._is_tighter_stop(position, proposed):
+                            rejected_plans += 1
+                        elif self._stop_crossed_at_open(position, proposed, float(bar["open"])):
+                            trade = self._close(
+                                position,
+                                timestamp,
+                                float(bar["open"]),
+                                "trailing_stop_gap",
+                            )
+                            equity += trade.net_pnl_usdt
+                            trades.append(trade)
+                            del positions[symbol]
+                        else:
+                            position.stop_loss = float(proposed)
 
                 position = positions.get(symbol)
                 if position is not None:
@@ -198,6 +246,9 @@ class PerpetualBacktester:
                         del positions[symbol]
 
                 history = frame.loc[:timestamp]
+                history_limit = getattr(self.strategy, "history_limit", None)
+                if history_limit is not None:
+                    history = history.iloc[-int(history_limit) :]
                 strategy_inputs: dict[str, Any] = {}
                 if symbol in daily_frames:
                     strategy_inputs["daily_bars"] = daily_frames[symbol].loc[:timestamp]
@@ -281,6 +332,9 @@ class PerpetualBacktester:
             )
             for trade in trades
         ]
+        total_fees = sum(trade.fees_usdt for trade in trades)
+        total_funding = sum(trade.funding_usdt for trade in trades)
+        estimated_slippage = sum(trade.estimated_slippage_usdt for trade in trades)
         return BacktestResult(
             initial_equity_usdt=self.initial_equity,
             final_equity_usdt=equity,
@@ -291,7 +345,11 @@ class PerpetualBacktester:
             annualized_volatility_pct=annualized_volatility,
             sharpe_ratio=sharpe,
             profit_factor=profit_factor,
-            total_costs_usdt=sum(trade.costs_usdt for trade in trades),
+            total_costs_usdt=total_fees + total_funding,
+            total_fees_usdt=total_fees,
+            total_funding_usdt=total_funding,
+            estimated_slippage_usdt=estimated_slippage,
+            total_economic_costs_usdt=total_fees + total_funding + estimated_slippage,
             average_holding_hours=(sum(holding_hours) / len(holding_hours) if holding_hours else 0.0),
             trade_count=len(trades),
             rejected_plan_count=rejected_plans,
@@ -373,6 +431,22 @@ class PerpetualBacktester:
                 return "take_profit", position.take_profit
         return None, open_price
 
+    @staticmethod
+    def _is_tighter_stop(position: _OpenPosition, proposed: float) -> bool:
+        if position.direction == "long":
+            return position.stop_loss < proposed
+        return proposed < position.stop_loss
+
+    @staticmethod
+    def _stop_crossed_at_open(
+        position: _OpenPosition,
+        proposed: float,
+        open_price: float,
+    ) -> bool:
+        if position.direction == "long":
+            return open_price <= proposed
+        return open_price >= proposed
+
     def _intrabar_exit(self, position: _OpenPosition, bar: pd.Series) -> tuple[str | None, float]:
         gap_reason, gap_reference = self._gap_exit(position, bar)
         if gap_reason is not None:
@@ -410,8 +484,22 @@ class PerpetualBacktester:
         hours = max(0.0, (timestamp - position.opened_at).total_seconds() / 3600.0)
         notional = position.contracts * float(instrument.contract_value) * exit_price
         estimated = self.cost_model.estimate(notional_usdt=notional, holding_hours=hours)
+        funding = self._funding_cost(
+            position,
+            timestamp,
+            mark_price=reference_price,
+            fallback=estimated.funding_usdt,
+        )
         # Slippage is already embedded in the adverse entry/exit prices.
-        costs = position.entry_fee_usdt + estimated.fee_usdt + estimated.funding_usdt
+        fees = position.entry_fee_usdt + estimated.fee_usdt
+        costs = fees + funding
+        slippage_ratio = self.cost_model.slippage_bps / 10_000.0
+        raw_entry = position.entry_price / (
+            1.0 + slippage_ratio if position.direction == "long" else 1.0 - slippage_ratio
+        )
+        estimated_slippage = base_qty * (
+            abs(position.entry_price - raw_entry) + abs(exit_price - reference_price)
+        )
         return BacktestTrade(
             instrument_id=position.instrument_id,
             direction=position.direction,
@@ -421,6 +509,9 @@ class PerpetualBacktester:
             exit_price=exit_price,
             contracts=position.contracts,
             gross_pnl_usdt=gross,
+            fees_usdt=fees,
+            funding_usdt=funding,
+            estimated_slippage_usdt=estimated_slippage,
             costs_usdt=costs,
             net_pnl_usdt=gross - costs,
             exit_reason=reason,
@@ -439,11 +530,38 @@ class PerpetualBacktester:
         timestamp = bar.name if isinstance(bar.name, pd.Timestamp) else position.opened_at
         hours = max(0.0, (timestamp - position.opened_at).total_seconds() / 3600.0)
         notional = position.contracts * float(instrument.contract_value) * float(bar["close"])
-        funding = self.cost_model.estimate(
+        estimated_funding = self.cost_model.estimate(
             notional_usdt=notional,
             holding_hours=hours,
         ).funding_usdt
+        funding = self._funding_cost(
+            position,
+            timestamp,
+            mark_price=float(bar["close"]),
+            fallback=estimated_funding,
+        )
         return gross - position.entry_fee_usdt - funding
+
+    def _funding_cost(
+        self,
+        position: _OpenPosition,
+        timestamp: pd.Timestamp,
+        *,
+        mark_price: float,
+        fallback: float,
+    ) -> float:
+        if not self._use_actual_funding:
+            return fallback
+        rates = self.funding_rates.get(position.instrument_id)
+        if rates is None or rates.empty:
+            return 0.0
+        paid = rates.loc[(rates.index > position.opened_at) & (rates.index <= timestamp)]
+        if paid.empty:
+            return 0.0
+        instrument = self.instruments[position.instrument_id]
+        notional = position.contracts * float(instrument.contract_value) * mark_price
+        direction = 1.0 if position.direction == "long" else -1.0
+        return notional * float(paid.sum()) * direction
 
 
 def _position_view(position: _OpenPosition | None) -> PositionView | None:
@@ -466,3 +584,22 @@ def _utc_timestamp(value: str | pd.Timestamp) -> pd.Timestamp:
     if timestamp.tzinfo is None:
         return timestamp.tz_localize("UTC")
     return timestamp.tz_convert("UTC")
+
+
+def _normalize_funding_rates(values: pd.Series | pd.DataFrame) -> pd.Series:
+    if isinstance(values, pd.DataFrame):
+        if "funding_rate" not in values.columns:
+            raise ValueError("funding-rate frame requires a funding_rate column")
+        series = values["funding_rate"].copy()
+    elif isinstance(values, pd.Series):
+        series = values.copy()
+    else:
+        raise ValueError("funding rates must be a pandas Series or DataFrame")
+    index = pd.DatetimeIndex(series.index)
+    if index.tz is None:
+        index = index.tz_localize("UTC")
+    else:
+        index = index.tz_convert("UTC")
+    series.index = index
+    series = pd.to_numeric(series, errors="coerce").dropna().sort_index()
+    return series.loc[~series.index.duplicated(keep="last")]

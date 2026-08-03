@@ -133,10 +133,16 @@ class _FakeAccount:
 
 
 class _FakeTrade:
-    def __init__(self, existing_orders: dict[str, dict] | None = None) -> None:
+    def __init__(
+        self,
+        existing_orders: dict[str, dict] | None = None,
+        algo_orders: dict[str, dict] | None = None,
+    ) -> None:
         self.orders = dict(existing_orders or {})
+        self.algo_orders = dict(algo_orders or {})
         self.place_calls: list[dict] = []
         self.close_calls: list[dict] = []
+        self.amend_algo_calls: list[dict] = []
 
     def get_order(self, **kwargs):  # noqa: ANN003
         client_id = str(kwargs.get("clOrdId") or "")
@@ -176,6 +182,28 @@ class _FakeTrade:
         }
         self.orders[kwargs["clOrdId"]] = row
         return {"code": "0", "data": [row]}
+
+    def get_algo_order_details(self, **kwargs):  # noqa: ANN003
+        row = self.algo_orders.get(str(kwargs.get("algoId") or ""))
+        if row is None:
+            return {"code": "51603", "msg": "Algo order does not exist", "data": []}
+        return {"code": "0", "data": [dict(row)]}
+
+    def amend_algo_order(self, **kwargs):  # noqa: ANN003
+        self.amend_algo_calls.append(kwargs)
+        algo_id = str(kwargs.get("algoId") or "")
+        row = self.algo_orders.get(algo_id)
+        if row is None:
+            return {
+                "code": "0",
+                "data": [{"algoId": algo_id, "sCode": "51603", "sMsg": "not found"}],
+            }
+        row["slTriggerPx"] = kwargs["newSlTriggerPx"]
+        row["slTriggerPxType"] = kwargs["newSlTriggerPxType"]
+        return {
+            "code": "0",
+            "data": [{"algoId": algo_id, "reqId": kwargs["reqId"], "sCode": "0"}],
+        }
 
 
 def _config(*, profile: str = "paper") -> ox.OKXConfig:
@@ -537,6 +565,77 @@ def test_set_swap_leverage_writes_then_reads_back(monkeypatch) -> None:
     assert account.set_leverage_calls == [
         {"instId": "BTC-USDT-SWAP", "lever": "10", "mgnMode": "cross"}
     ]
+
+
+def test_amend_swap_stop_loss_writes_once_and_verifies(monkeypatch) -> None:
+    trade = _FakeTrade(
+        algo_orders={
+            "A1": {
+                "instId": "BTC-USDT-SWAP",
+                "algoId": "A1",
+                "ordType": "conditional",
+                "slTriggerPx": "95000",
+                "state": "live",
+            }
+        }
+    )
+    _patch_clients(monkeypatch, trade=trade)
+
+    out = ox.amend_swap_stop_loss(
+        _config(),
+        symbol="BTC-USDT-SWAP",
+        algo_id="A1",
+        stop_loss="96000",
+        request_id="stop-btc-001",
+    )
+
+    assert out["status"] == "ok"
+    assert out["verification"]["status"] == "verified"
+    assert out["verification"]["observed_stop_loss"] == "96000"
+    assert out["retry_safe"] is False
+    assert trade.amend_algo_calls == [
+        {
+            "instId": "BTC-USDT-SWAP",
+            "algoId": "A1",
+            "cxlOnFail": "false",
+            "reqId": "stop-btc-001",
+            "newSlTriggerPx": "96000",
+            "newSlOrdPx": "-1",
+            "newSlTriggerPxType": "mark",
+        }
+    ]
+
+
+def test_amend_swap_stop_loss_transport_error_is_not_retryable(monkeypatch) -> None:
+    class _UncertainTrade(_FakeTrade):
+        def amend_algo_order(self, **kwargs):  # noqa: ANN003
+            self.amend_algo_calls.append(kwargs)
+            raise TimeoutError("response timed out")
+
+    trade = _UncertainTrade(
+        algo_orders={
+            "A1": {
+                "instId": "BTC-USDT-SWAP",
+                "algoId": "A1",
+                "slTriggerPx": "95000",
+                "state": "live",
+            }
+        }
+    )
+    _patch_clients(monkeypatch, trade=trade)
+
+    out = ox.amend_swap_stop_loss(
+        _config(),
+        symbol="BTC-USDT-SWAP",
+        algo_id="A1",
+        stop_loss="96000",
+        request_id="stop-btc-002",
+    )
+
+    assert out["status"] == "error"
+    assert out["write_state"] == "unknown_needs_reconcile"
+    assert out["retry_safe"] is False
+    assert len(trade.amend_algo_calls) == 1
 
 
 def test_full_close_uses_close_endpoint_and_verifies_zero_position(monkeypatch) -> None:

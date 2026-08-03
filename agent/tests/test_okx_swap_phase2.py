@@ -180,6 +180,89 @@ def test_unknown_write_is_durable_and_trips_breaker(runtime: Path) -> None:
         store.stage_order({"client_order_id": "cid-1"})
 
 
+def test_verified_stop_amendment_is_durable(runtime: Path) -> None:
+    store = SwapRuntimeStore("okx")
+    store.stage_stop_amendment(
+        {
+            "request_id": "stop-1",
+            "algo_id": "A1",
+            "symbol": "BTC-USDT-SWAP",
+            "old_stop_loss": "95000",
+            "new_stop_loss": "96000",
+        }
+    )
+
+    tracked = store.record_stop_amendment_result(
+        "stop-1",
+        {"status": "ok", "verification": {"status": "verified"}},
+    )
+
+    assert tracked["status"] == SwapOrderStatus.FILLED.value
+    assert store.load(required=True)["stop_amendments"][0]["request_id"] == "stop-1"
+
+
+def test_reconcile_resolves_unknown_stop_amendment_from_broker_state(runtime: Path) -> None:
+    store = SwapRuntimeStore("okx")
+    position = {
+        "symbol": "BTC-USDT-SWAP",
+        "position_side": "net",
+        "margin_mode": "cross",
+        "quantity": "1",
+    }
+    algo = {
+        "symbol": "BTC-USDT-SWAP",
+        "algo_id": "A1",
+        "stop_loss_trigger": "95000",
+    }
+    store.save(
+        {
+            "account_configuration": {"uid": "demo", "position_mode": "net_mode"},
+            "balance": {"total_equity": "10000"},
+            "orders": [],
+            "stop_amendments": [],
+            "open_orders": [],
+            "fills": [],
+            "positions": [position],
+            "algo_orders": [algo],
+            "risk": {},
+        }
+    )
+    store.stage_stop_amendment(
+        {
+            "request_id": "stop-unknown",
+            "algo_id": "A1",
+            "symbol": "BTC-USDT-SWAP",
+            "old_stop_loss": "95000",
+            "new_stop_loss": "96000",
+        }
+    )
+    store.record_stop_amendment_result(
+        "stop-unknown",
+        {
+            "status": "error",
+            "write_state": "unknown_needs_reconcile",
+            "retry_safe": False,
+        },
+    )
+    reads = {
+        "read_account_configuration": lambda: {
+            "account_configuration": {"uid": "demo", "position_mode": "net_mode"}
+        },
+        "read_balance": lambda: {"account": {"total_equity": "10000"}},
+        "read_positions": lambda: {"positions": [position]},
+        "read_open_orders": lambda: {"open_orders": []},
+        "read_fills": lambda: {"fills": []},
+        "read_algo_orders": lambda: {
+            "algo_orders": [{**algo, "stop_loss_trigger": "96000"}]
+        },
+    }
+
+    report = reconcile_swap("okx", **reads)
+
+    assert report.is_safe
+    assert store.load(required=True)["stop_amendments"][0]["status"] == "filled"
+
+
 def _empty_reads():
     return {
         "read_account_configuration": lambda: {"account_configuration": {"uid": "demo", "position_mode": "net_mode"}},

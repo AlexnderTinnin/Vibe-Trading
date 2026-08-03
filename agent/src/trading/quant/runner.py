@@ -23,7 +23,11 @@ from src.live.runtime.swap_state import (
     reconcile_swap,
     swap_breaker_status,
 )
-from src.live.swap_order_gate import execute_swap_close, execute_swap_order
+from src.live.swap_order_gate import (
+    execute_swap_close,
+    execute_swap_order,
+    execute_swap_stop_update,
+)
 from src.trading.connectors.okx.swap import SwapInstrument, SwapOrderIntent, floor_to_step
 from src.trading.quant.costs import PerpetualCostModel
 from src.trading.quant.models import ExecutionMode, PositionView, TradeAction
@@ -194,6 +198,63 @@ class CryptoStrategyRunner:
                 if data_age < -5 or data_age > self.config.max_data_age_seconds:
                     raise ValueError(f"{symbol} confirmed market data is stale")
                 if plan.action is TradeAction.HOLD:
+                    continue
+                if plan.action is TradeAction.UPDATE_STOP:
+                    if position is None or position.stop_loss_price is None:
+                        raise ValueError(f"{symbol} has no protected position to update")
+                    algo_order = _stop_algo_order(algo_orders, symbol)
+                    instrument = self._read_instrument(symbol)
+                    protective_side = "sell" if position.direction == "long" else "buy"
+                    execution_reference = self._read_execution_reference(
+                        symbol,
+                        side=protective_side,
+                        now=now,
+                    )
+                    stop_loss = _align_trigger_price(
+                        plan.stop_loss_price,
+                        tick_size=instrument.tick_size,
+                        reference_price=Decimal(str(execution_reference)),
+                    )
+                    if stop_loss is None:
+                        raise ValueError("stop update has no stop-loss price")
+                    _validate_tighter_stop(
+                        direction=position.direction,
+                        current=Decimal(str(position.stop_loss_price)),
+                        proposed=stop_loss,
+                        reference=Decimal(str(execution_reference)),
+                    )
+                    request_id = _client_order_id(plan.plan_id, "stop")
+                    if self.config.mode is ExecutionMode.SHADOW:
+                        executions.append(
+                            {
+                                "status": "shadow",
+                                "plan_id": plan.plan_id,
+                                "action": plan.action.value,
+                                "would_execute": True,
+                                "algo_id": str(
+                                    algo_order.get("algo_id") or algo_order.get("algoId")
+                                ),
+                                "old_stop_loss": str(position.stop_loss_price),
+                                "new_stop_loss": str(stop_loss),
+                            }
+                        )
+                        continue
+                    result = execute_swap_stop_update(
+                        broker=self.config.broker,
+                        mandate=mandate,
+                        sdk_module=self.sdk,
+                        config=self.sdk_config,
+                        symbol=symbol,
+                        position_side=position.direction,
+                        algo_order=algo_order,
+                        current_stop_loss=position.stop_loss_price,
+                        new_stop_loss=stop_loss,
+                        reference_price=execution_reference,
+                        request_id=request_id,
+                        session_id=run_id,
+                        store=self.store,
+                    )
+                    executions.append({"plan_id": plan.plan_id, **result})
                     continue
                 if plan.action is TradeAction.CLOSE:
                     if position is None:
@@ -582,6 +643,45 @@ def _unique_protection_price(
     if len(values) > 1:
         raise ValueError(f"{symbol} has ambiguous {field} protection")
     return next(iter(values), None)
+
+
+def _stop_algo_order(
+    rows: Sequence[Mapping[str, Any]],
+    symbol: str,
+) -> Mapping[str, Any]:
+    matches = [
+        row
+        for row in rows
+        if str(row.get("symbol") or row.get("instId") or "").upper() == symbol
+        and row.get("stop_loss_trigger", row.get("slTriggerPx")) not in (None, "")
+    ]
+    if len(matches) != 1:
+        raise ValueError(f"{symbol} requires exactly one pending stop-loss algo order")
+    if not str(matches[0].get("algo_id") or matches[0].get("algoId") or "").strip():
+        raise ValueError(f"{symbol} stop-loss algo order id is unavailable")
+    return matches[0]
+
+
+def _validate_tighter_stop(
+    *,
+    direction: str,
+    current: Decimal,
+    proposed: Decimal,
+    reference: Decimal,
+) -> None:
+    if direction == "long":
+        if proposed <= current:
+            raise ValueError("long stop update does not tighten the existing stop")
+        if proposed >= reference:
+            raise ValueError("long stop update is crossed by the execution quote")
+        return
+    if direction == "short":
+        if proposed >= current:
+            raise ValueError("short stop update does not tighten the existing stop")
+        if proposed <= reference:
+            raise ValueError("short stop update is crossed by the execution quote")
+        return
+    raise ValueError("position direction must resolve to long or short")
 
 
 def _align_trigger_price(

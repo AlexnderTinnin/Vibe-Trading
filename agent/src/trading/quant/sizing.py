@@ -72,6 +72,21 @@ def size_trade_plan(
             raise ValueError("current execution price is outside the short target/stop range")
     price = Decimal(str(resolved_price))
     leverage = Decimal(str(min(plan.leverage, mandate.hard_caps.max_leverage)))
+    direction = "long" if plan.action is TradeAction.OPEN_LONG else "short"
+    liquidation = Decimal(
+        str(
+            model.estimated_liquidation_price(
+                entry_price=resolved_price,
+                leverage=float(leverage),
+                direction=direction,
+            )
+        )
+    )
+    stop = Decimal(str(plan.stop_loss_price))
+    if direction == "long" and stop <= liquidation:
+        raise ValueError("long stop loss is not above the estimated liquidation price")
+    if direction == "short" and stop >= liquidation:
+        raise ValueError("short stop loss is not below the estimated liquidation price")
     stop_ratio = abs(Decimal(str(resolved_price - plan.stop_loss_price))) / price
     cost_buffer = Decimal(
         str(2.0 * (model.taker_fee_bps + model.slippage_bps) / 10_000.0)
@@ -137,14 +152,4 @@ def size_trade_plan(
         raise ValueError("risk-sized order is below the instrument minimum")
     notional = contracts * one_contract
     margin = notional / leverage
-    direction = "long" if plan.action is TradeAction.OPEN_LONG else "short"
-    liquidation = Decimal(
-        str(
-            model.estimated_liquidation_price(
-                entry_price=resolved_price,
-                leverage=float(leverage),
-                direction=direction,
-            )
-        )
-    )
     return SizedTrade(plan.plan_id, contracts, notional, margin, price, liquidation)

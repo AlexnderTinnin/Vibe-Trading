@@ -22,6 +22,7 @@ class TradeAction(str, Enum):
     OPEN_LONG = "open_long"
     OPEN_SHORT = "open_short"
     CLOSE = "close"
+    UPDATE_STOP = "update_stop"
 
 
 class ExecutionMode(str, Enum):
@@ -179,6 +180,20 @@ class TradePlan:
                 raise TradePlanError("short stop loss must be above the reference price")
             elif self.take_profit_price is not None and self.take_profit_price >= self.reference_price:
                 raise TradePlanError("short take profit must be below the reference price")
+        elif self.action is TradeAction.UPDATE_STOP:
+            if self.stop_loss_price is None:
+                raise TradePlanError("stop updates require a stop loss price")
+            if self.take_profit_price is not None:
+                raise TradePlanError("stop updates must not change take profit")
+            if any(
+                (
+                    self.risk_budget_usdt != 0,
+                    self.risk_budget_fraction not in (None, 0),
+                    self.target_notional_fraction not in (None, 0),
+                    self.max_portfolio_notional_fraction not in (None, 0),
+                )
+            ):
+                raise TradePlanError("stop updates must have zero risk and notional budgets")
         elif any(
             (
                 self.risk_budget_usdt != 0,
@@ -196,6 +211,10 @@ class TradePlan:
     @property
     def is_opening(self) -> bool:
         return self.action in (TradeAction.OPEN_LONG, TradeAction.OPEN_SHORT)
+
+    @property
+    def is_stop_update(self) -> bool:
+        return self.action is TradeAction.UPDATE_STOP
 
     @property
     def position_side(self) -> str | None:

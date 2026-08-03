@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from typing import Any, Mapping
 
 from src.live.audit import LiveActionEvent, write_live_action
@@ -227,6 +228,173 @@ def execute_swap_order(
     return result
 
 
+def execute_swap_stop_update(
+    *,
+    broker: str,
+    mandate: Mandate,
+    sdk_module: Any,
+    config: Any,
+    symbol: str,
+    position_side: str,
+    algo_order: Mapping[str, Any],
+    current_stop_loss: float | str,
+    new_stop_loss: float | str,
+    reference_price: float | str,
+    request_id: str,
+    trigger_price_type: str = "mark",
+    session_id: str = "quant-runtime",
+    store: SwapRuntimeStore | None = None,
+) -> dict[str, Any]:
+    """Durably stage, submit once, and verify a strictly tighter Demo stop."""
+    key = broker.strip().lower()
+    reason = _preflight_reason(key, mandate, config)
+    if reason is not None:
+        return _blocked(
+            key,
+            reason,
+            session_id=session_id,
+            mandate=mandate,
+            remote_tool="amend_swap_stop_loss",
+        )
+    try:
+        if swap_breaker_status(key).get("tripped") is True:
+            return _blocked(
+                key,
+                "swap circuit breaker is tripped; manual reconciliation and clear required",
+                session_id=session_id,
+                mandate=mandate,
+                remote_tool="amend_swap_stop_loss",
+            )
+    except SwapStateError as exc:
+        return _blocked(
+            key,
+            str(exc),
+            session_id=session_id,
+            mandate=mandate,
+            remote_tool="amend_swap_stop_loss",
+        )
+
+    clean_symbol = symbol.strip().upper()
+    direction = position_side.strip().lower()
+    algo_id = str(algo_order.get("algo_id") or algo_order.get("algoId") or "").strip()
+    try:
+        current = _positive_decimal(current_stop_loss, "current_stop_loss")
+        proposed = _positive_decimal(new_stop_loss, "new_stop_loss")
+        reference = _positive_decimal(reference_price, "reference_price")
+        observed = _positive_decimal(
+            algo_order.get("stop_loss_trigger", algo_order.get("slTriggerPx")),
+            "algo stop loss",
+        )
+        if clean_symbol not in mandate.universe.include_symbols:
+            raise ValueError("stop update instrument is outside the mandate symbol allowlist")
+        if str(algo_order.get("symbol") or algo_order.get("instId") or "").upper() != clean_symbol:
+            raise ValueError("stop algo order does not match the position instrument")
+        if not algo_id:
+            raise ValueError("stop algo order id is unavailable")
+        if observed != current:
+            raise ValueError("durable position stop differs from the selected broker algo order")
+        if direction == "long":
+            if proposed <= current:
+                raise ValueError("long stop update must strictly tighten the existing stop")
+            if proposed >= reference:
+                raise ValueError("long stop update is already crossed by the execution quote")
+        elif direction == "short":
+            if proposed >= current:
+                raise ValueError("short stop update must strictly tighten the existing stop")
+            if proposed <= reference:
+                raise ValueError("short stop update is already crossed by the execution quote")
+        else:
+            raise ValueError("stop update position side must resolve to long or short")
+    except ValueError as exc:
+        return _blocked(
+            key,
+            str(exc),
+            session_id=session_id,
+            mandate=mandate,
+            remote_tool="amend_swap_stop_loss",
+        )
+
+    state_store = store or SwapRuntimeStore(key, environment="demo")
+    staged = {
+        "request_id": request_id,
+        "symbol": clean_symbol,
+        "position_side": direction,
+        "algo_id": algo_id,
+        "old_stop_loss": decimal_string(current),
+        "new_stop_loss": decimal_string(proposed),
+        "trigger_price_type": trigger_price_type,
+        "action": "tighten_stop_loss",
+    }
+    try:
+        state_store.stage_stop_amendment(staged)
+    except Exception as exc:
+        trip_swap_breaker(key, "could not durably stage stop amendment", error=str(exc))
+        blocked = _blocked(
+            key,
+            f"durable stop amendment staging failed: {exc}",
+            session_id=session_id,
+            mandate=mandate,
+            remote_tool="amend_swap_stop_loss",
+        )
+        blocked["safety_event"] = (
+            "duplicate_order" if "already exists" in str(exc).lower() else "reconcile_unsafe"
+        )
+        return blocked
+
+    request = {
+        "symbol": clean_symbol,
+        "algo_id": algo_id,
+        "stop_loss": decimal_string(proposed),
+        "request_id": request_id,
+        "trigger_price_type": trigger_price_type,
+    }
+    try:
+        result = sdk_module.amend_swap_stop_loss(config, **request)
+    except Exception as exc:  # broker outcome may be unknown; never retry
+        result = {
+            "status": "error",
+            "error": str(exc),
+            "write_state": "unknown_needs_reconcile",
+            "retry_safe": False,
+            "request_id": request_id,
+            "algo_id": algo_id,
+        }
+    result = dict(result)
+    verification = result.get("verification")
+    verified_stop = False
+    if isinstance(verification, Mapping):
+        try:
+            verified_stop = (
+                str(verification.get("status") or "").lower() == "verified"
+                and _positive_decimal(
+                    verification.get("observed_stop_loss"),
+                    "observed_stop_loss",
+                )
+                == proposed
+            )
+        except ValueError:
+            verified_stop = False
+    if result.get("status") == "ok" and not verified_stop:
+        result["write_state"] = "unknown_needs_reconcile"
+        result["retry_safe"] = False
+
+    try:
+        persisted = state_store.record_stop_amendment_result(request_id, result)
+    except Exception as exc:
+        trip_swap_breaker(key, "post-amendment state persistence failed", error=str(exc))
+        result.update(
+            {
+                "write_state": "unknown_needs_reconcile",
+                "retry_safe": False,
+                "state_tracking": {"status": "error", "error": str(exc)},
+            }
+        )
+    else:
+        result["state_tracking"] = persisted
+    _audit_stop_update(key, session_id, mandate, staged, request, result)
+    return result
+
+
 def execute_swap_close(
     *,
     broker: str,
@@ -353,6 +521,7 @@ def _blocked(
     session_id: str,
     mandate: Mandate,
     breach: Mapping[str, Any] | None = None,
+    remote_tool: str = "place_swap_order",
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "status": "blocked",
@@ -369,7 +538,7 @@ def _blocked(
                 session_id=session_id,
                 outcome="blocked",
                 server=broker,
-                remote_tool="place_swap_order",
+                remote_tool=remote_tool,
                 mandate_snapshot_ref=mandate.consent.consent_token_sha256,
                 gate_decision={"allowed": False, "reason": reason, "breach": dict(breach or {})},
                 error=reason,
@@ -378,6 +547,49 @@ def _blocked(
     except Exception:
         logger.warning("failed to audit blocked swap order", exc_info=True)
     return result
+
+
+def _positive_decimal(value: object, field: str) -> Decimal:
+    try:
+        parsed = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValueError(f"{field} must be a finite positive number") from exc
+    if not parsed.is_finite() or parsed <= 0:
+        raise ValueError(f"{field} must be a finite positive number")
+    return parsed
+
+
+def _audit_stop_update(
+    broker: str,
+    session_id: str,
+    mandate: Mandate,
+    staged: Mapping[str, Any],
+    request: Mapping[str, Any],
+    response: Mapping[str, Any],
+) -> None:
+    known = response.get("write_state") != "unknown_needs_reconcile"
+    ok = str(response.get("status") or "").lower() == "ok" and known
+    try:
+        write_live_action(
+            LiveActionEvent(
+                kind="order_placed" if ok else "order_rejected",
+                session_id=session_id,
+                outcome="accepted" if ok else "error",
+                server=broker,
+                remote_tool="amend_swap_stop_loss",
+                intent_normalized=(
+                    f"tighten {staged['symbol']} {staged['position_side']} stop "
+                    f"from {staged['old_stop_loss']} to {staged['new_stop_loss']}"
+                ),
+                mandate_snapshot_ref=mandate.consent.consent_token_sha256,
+                broker_request=dict(request),
+                broker_response=dict(response),
+                gate_decision={"allowed": True, "risk_reducing": True},
+                error=None if ok else str(response.get("error") or "stop amendment unverified"),
+            )
+        )
+    except Exception:
+        logger.warning("failed to audit stop amendment", exc_info=True)
 
 
 def _audit_result(

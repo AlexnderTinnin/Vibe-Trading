@@ -40,6 +40,7 @@ from src.trading.connectors.okx.swap import (
     as_decimal,
     build_attached_algo_orders,
     decimal_string,
+    is_step_aligned,
     normalize_allowed_instruments,
     resolve_contract_size,
     validate_client_order_id,
@@ -947,6 +948,106 @@ def cancel_swap_algo_order(
     return result
 
 
+def amend_swap_stop_loss(
+    config: OKXConfig | None = None,
+    *,
+    symbol: str,
+    algo_id: str,
+    stop_loss: float | str,
+    request_id: str,
+    trigger_price_type: str = "mark",
+) -> dict[str, Any]:
+    """Tighten one pending SWAP stop-loss algo in Demo, once, then verify it."""
+    cfg = config or load_config()
+    clean_symbol = str(symbol or "").strip().upper()
+    clean_algo_id = str(algo_id or "").strip()
+    clean_request_id = str(request_id or "").strip()
+    try:
+        _require_demo_swap_write(cfg)
+        _require_configured(cfg)
+        instrument = _load_swap_instrument(cfg, clean_symbol)
+        if not clean_algo_id:
+            raise SwapValidationError("algo_id is required")
+        try:
+            clean_request_id = validate_client_order_id(clean_request_id)
+        except SwapValidationError as exc:
+            raise SwapValidationError(str(exc).replace("client_order_id", "request_id")) from exc
+        clean_stop = as_decimal(stop_loss, "stop_loss")
+        if clean_stop <= 0:
+            raise SwapValidationError("stop_loss must be positive")
+        if not is_step_aligned(clean_stop, instrument.tick_size):
+            raise SwapValidationError("stop_loss is not aligned to instrument tickSz")
+        clean_trigger_type = str(trigger_price_type or "").strip().lower()
+        if clean_trigger_type not in ("last", "index", "mark"):
+            raise SwapValidationError("trigger_price_type must be 'last', 'index', or 'mark'")
+        trade = _trade_client(cfg)
+        before = _read_swap_algo_detail(trade, clean_algo_id)
+        if str(before.get("symbol") or "").upper() != clean_symbol:
+            raise SwapValidationError("algo order does not belong to the requested instrument")
+        if before.get("stop_loss_trigger") in (None, ""):
+            raise SwapValidationError("algo order has no stop loss to amend")
+    except (SwapValidationError, OKXConfigError, OKXDependencyError) as exc:
+        return _order_error(
+            cfg,
+            str(exc),
+            symbol=clean_symbol,
+            operation="amend_swap_stop_loss",
+            algo_id=clean_algo_id,
+            request_id=clean_request_id,
+            retry_safe=True,
+        )
+    except Exception as exc:  # validation/read only; no write has occurred
+        return _order_error(
+            cfg,
+            str(exc),
+            symbol=clean_symbol,
+            operation="amend_swap_stop_loss",
+            algo_id=clean_algo_id,
+            request_id=clean_request_id,
+            retry_safe=True,
+        )
+
+    try:
+        resp = trade.amend_algo_order(
+            instId=clean_symbol,
+            algoId=clean_algo_id,
+            cxlOnFail="false",
+            reqId=clean_request_id,
+            newSlTriggerPx=decimal_string(clean_stop),
+            newSlOrdPx="-1",
+            newSlTriggerPxType=clean_trigger_type,
+        )
+    except Exception as exc:  # request may have reached OKX; never retry automatically
+        return _unknown_write_error(
+            cfg,
+            str(exc),
+            symbol=clean_symbol,
+            operation="amend_swap_stop_loss",
+            algo_id=clean_algo_id,
+            request_id=clean_request_id,
+            requested_stop_loss=decimal_string(clean_stop),
+        )
+
+    result = _mutation_result(
+        cfg,
+        resp,
+        symbol=clean_symbol,
+        operation="amend_swap_stop_loss",
+        algo_id=clean_algo_id,
+        request_id=clean_request_id,
+        requested_stop_loss=decimal_string(clean_stop),
+    )
+    result["retry_safe"] = False
+    if result.get("status") == "ok":
+        result["verification"] = _verify_algo_stop_loss(
+            trade,
+            clean_symbol,
+            clean_algo_id,
+            clean_stop,
+        )
+    return result
+
+
 def set_swap_leverage(
     config: OKXConfig | None = None,
     *,
@@ -1697,6 +1798,40 @@ def _verify_order(
                 "error": _resp_message(resp) or "accepted order is not yet visible",
             }
         return {"status": "verified", "order": _order_to_dict(rows[0])}
+    except Exception as exc:  # noqa: BLE001 - accepted write must not be retried
+        return {"status": "unknown", "error": str(exc)}
+
+
+def _read_swap_algo_detail(trade: Any, algo_id: str) -> dict[str, Any]:
+    rows = _checked_read_rows(
+        _safe_read_call(trade, "get_algo_order_details", algoId=algo_id),
+        "swap algo order",
+    )
+    if len(rows) != 1:
+        raise OKXConfigError("OKX swap algo order lookup did not return exactly one row")
+    return _algo_order_to_dict(rows[0])
+
+
+def _verify_algo_stop_loss(
+    trade: Any,
+    symbol: str,
+    algo_id: str,
+    expected_stop: Decimal,
+) -> dict[str, Any]:
+    try:
+        observed = _read_swap_algo_detail(trade, algo_id)
+        observed_stop = as_decimal(observed.get("stop_loss_trigger"), "stop_loss_trigger")
+        matches = (
+            str(observed.get("symbol") or "").upper() == symbol
+            and str(observed.get("algo_id") or "") == algo_id
+            and observed_stop == expected_stop
+        )
+        return {
+            "status": "verified" if matches else "mismatch",
+            "expected_stop_loss": decimal_string(expected_stop),
+            "observed_stop_loss": decimal_string(observed_stop),
+            "algo_order": observed,
+        }
     except Exception as exc:  # noqa: BLE001 - accepted write must not be retried
         return {"status": "unknown", "error": str(exc)}
 

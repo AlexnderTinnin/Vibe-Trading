@@ -133,6 +133,263 @@ class BtcEthTrendStrategy:
 
 
 @dataclass(frozen=True)
+class MediumTermTrendConfig:
+    """Parameters for the daily momentum and Donchian trend strategy."""
+
+    strategy_id: str = "btc_eth_medium_term_trend_v2"
+    momentum_lookback: int = 75
+    realized_volatility_lookback: int = 30
+    entry_lookback: int = 50
+    exit_lookback: int = 20
+    adx_period: int = 14
+    minimum_adx: float = 15.0
+    atr_period: int = 14
+    initial_stop_atr_multiple: float = 2.5
+    trailing_stop_atr_multiple: float = 2.5
+    maximum_initial_stop_fraction: float = 0.20
+    minimum_stop_update_atr_fraction: float = 0.10
+    target_annual_volatility: float = 0.45
+    max_notional_fraction: float = 1.0
+    max_portfolio_notional_fraction: float = 1.5
+    max_risk_fraction: float = 0.02
+    leverage: float = 3.0
+    allow_short: bool = True
+    maximum_history_bars: int = 300
+
+    def validate(self) -> None:
+        lookbacks = (
+            self.momentum_lookback,
+            self.realized_volatility_lookback,
+            self.entry_lookback,
+            self.exit_lookback,
+            self.adx_period,
+            self.atr_period,
+        )
+        if min(lookbacks) <= 1:
+            raise ValueError("medium-term trend lookbacks must be greater than one")
+        if self.exit_lookback >= self.entry_lookback:
+            raise ValueError("medium-term trend exit lookback must be shorter than entry lookback")
+        if not 0 < self.minimum_adx <= 100:
+            raise ValueError("medium-term trend ADX threshold is invalid")
+        if min(
+            self.initial_stop_atr_multiple,
+            self.trailing_stop_atr_multiple,
+            self.minimum_stop_update_atr_fraction,
+            self.target_annual_volatility,
+            self.max_notional_fraction,
+            self.max_portfolio_notional_fraction,
+            self.max_risk_fraction,
+        ) <= 0:
+            raise ValueError("medium-term trend risk parameters must be positive")
+        if self.max_risk_fraction > 1:
+            raise ValueError("medium-term trend risk fraction exceeds one")
+        if not 0 < self.maximum_initial_stop_fraction < 1:
+            raise ValueError("medium-term trend maximum initial stop fraction is invalid")
+        if not isinstance(self.allow_short, bool):
+            raise ValueError("allow_short must be boolean")
+        if not 1 <= self.leverage <= 10:
+            raise ValueError("medium-term trend leverage is invalid")
+        if (
+            not isinstance(self.maximum_history_bars, int)
+            or self.maximum_history_bars < self.minimum_history_bars
+        ):
+            raise ValueError("medium-term trend history window is shorter than its lookbacks")
+
+    @property
+    def minimum_history_bars(self) -> int:
+        return max(
+            self.momentum_lookback + 1,
+            self.realized_volatility_lookback + 1,
+            self.entry_lookback + 2,
+            self.exit_lookback + 2,
+            self.adx_period * 3,
+            self.atr_period + 2,
+        )
+
+
+class MediumTermTrendStrategy:
+    """Daily time-series momentum with Donchian entry and ATR trailing stops."""
+
+    def __init__(self, config: MediumTermTrendConfig | None = None) -> None:
+        self.config = config or MediumTermTrendConfig()
+        self.config.validate()
+        self._prepared_indicators: dict[tuple[str, object], pd.DataFrame] = {}
+
+    @property
+    def history_limit(self) -> int:
+        """Maximum bars needed by live evaluation and backtest parity."""
+        return self.config.maximum_history_bars
+
+    def prepare_backtest(self, frames: Mapping[str, pd.DataFrame]) -> None:
+        """Precompute immutable indicators for bar-by-bar research runs."""
+        for instrument_id, frame in frames.items():
+            token = frame.attrs.get("_quant_backtest_token")
+            if token is None:
+                continue
+            self._prepared_indicators[(instrument_id, token)] = _medium_term_indicators(
+                frame,
+                self.config,
+            )
+
+    def evaluate(
+        self,
+        *,
+        instrument_id: str,
+        bars: pd.DataFrame | Sequence[Mapping[str, Any]],
+        run_id: str,
+        now: datetime,
+        position: PositionView | None = None,
+    ) -> TradePlan:
+        backtest_token = (
+            bars.attrs.get("_quant_backtest_token")
+            if isinstance(bars, pd.DataFrame)
+            else None
+        )
+        frame = bars if backtest_token is not None else _normalize_bars(bars)
+        interval = _bar_interval(frame)
+        if not pd.Timedelta(hours=20) <= interval <= pd.Timedelta(hours=28):
+            raise ValueError("medium-term trend strategy requires confirmed daily bars")
+
+        needed = self.config.minimum_history_bars
+        if len(frame) < needed:
+            raise ValueError(
+                f"medium-term trend strategy requires at least {needed} confirmed daily bars"
+            )
+        frame = frame.iloc[-self.config.maximum_history_bars :]
+
+        close = frame["close"].astype(float)
+        high = frame["high"].astype(float)
+        low = frame["low"].astype(float)
+        prepared = self._prepared_indicators.get((instrument_id, backtest_token))
+        if prepared is not None and frame.index[-1] in prepared.index:
+            latest_row = prepared.loc[frame.index[-1]]
+        else:
+            latest_row = _medium_term_indicators(frame, self.config).iloc[-1]
+        latest = tuple(
+            latest_row[column]
+            for column in (
+                "atr",
+                "adx",
+                "entry_high",
+                "entry_low",
+                "exit_high",
+                "exit_low",
+                "momentum",
+                "realized_volatility",
+            )
+        )
+        if not all(pd.notna(value) for value in latest):
+            raise ValueError("medium-term trend indicators are unavailable")
+
+        price = float(close.iloc[-1])
+        atr_value = float(latest_row["atr"])
+        adx_value = float(latest_row["adx"])
+        momentum = float(latest_row["momentum"])
+        realized_volatility = float(latest_row["realized_volatility"])
+        if not math.isfinite(realized_volatility) or realized_volatility <= 0:
+            raise ValueError("daily realized volatility is unavailable")
+
+        action = TradeAction.HOLD
+        stop: float | None = None
+        reasons = ["no_entry"]
+        confidence = min(
+            1.0,
+            0.55
+            + max(0.0, adx_value - self.config.minimum_adx) / 100.0
+            + min(abs(momentum), 0.50) * 0.20,
+        )
+        target_fraction: float | None = None
+        risk_fraction: float | None = None
+
+        if position and position.is_open:
+            direction = 1 if position.direction == "long" else -1
+            channel_reversed = (
+                direction > 0 and price < float(latest_row["exit_low"])
+            ) or (
+                direction < 0 and price > float(latest_row["exit_high"])
+            )
+            momentum_reversed = direction * momentum <= 0
+            if channel_reversed:
+                action = TradeAction.CLOSE
+                reasons = ["donchian_exit", f"close_{position.direction}"]
+            elif momentum_reversed:
+                action = TradeAction.CLOSE
+                reasons = ["momentum_reversal", f"close_{position.direction}"]
+            else:
+                candidate = (
+                    float(high.iloc[-1])
+                    - self.config.trailing_stop_atr_multiple * atr_value
+                    if direction > 0
+                    else float(low.iloc[-1])
+                    + self.config.trailing_stop_atr_multiple * atr_value
+                )
+                current = position.stop_loss_price
+                improvement = (
+                    candidate - current
+                    if direction > 0 and current is not None
+                    else current - candidate
+                    if direction < 0 and current is not None
+                    else math.inf
+                )
+                if improvement >= self.config.minimum_stop_update_atr_fraction * atr_value:
+                    action = TradeAction.UPDATE_STOP
+                    stop = candidate
+                    reasons = ["atr_trailing_stop", f"protect_{position.direction}"]
+                else:
+                    reasons = ["position_held", f"trend_{position.direction}"]
+        elif adx_value >= self.config.minimum_adx:
+            if momentum > 0 and price > float(latest_row["entry_high"]):
+                action = TradeAction.OPEN_LONG
+                stop = max(
+                    price - self.config.initial_stop_atr_multiple * atr_value,
+                    price * (1.0 - self.config.maximum_initial_stop_fraction),
+                )
+                reasons = ["momentum_long", "donchian_breakout_high", "adx_confirmed"]
+            elif (
+                self.config.allow_short
+                and momentum < 0
+                and price < float(latest_row["entry_low"])
+            ):
+                action = TradeAction.OPEN_SHORT
+                stop = min(
+                    price + self.config.initial_stop_atr_multiple * atr_value,
+                    price * (1.0 + self.config.maximum_initial_stop_fraction),
+                )
+                reasons = ["momentum_short", "donchian_breakout_low", "adx_confirmed"]
+
+        if action in (TradeAction.OPEN_LONG, TradeAction.OPEN_SHORT):
+            target_fraction = min(
+                self.config.target_annual_volatility / realized_volatility,
+                self.config.max_notional_fraction,
+            )
+            risk_fraction = self.config.max_risk_fraction
+
+        return TradePlan.create(
+            strategy_id=self.config.strategy_id,
+            run_id=run_id,
+            instrument_id=instrument_id,
+            signal_at=_aware(now),
+            data_as_of=_aware(frame.index[-1].to_pydatetime()),
+            action=action,
+            confidence=confidence,
+            reference_price=price,
+            stop_loss_price=stop,
+            take_profit_price=None,
+            leverage=self.config.leverage,
+            risk_budget_usdt=0.0,
+            risk_budget_fraction=risk_fraction,
+            target_notional_fraction=target_fraction,
+            max_portfolio_notional_fraction=(
+                self.config.max_portfolio_notional_fraction
+                if action in (TradeAction.OPEN_LONG, TradeAction.OPEN_SHORT)
+                else None
+            ),
+            reason_codes=reasons,
+            source_bar_count=len(frame),
+        )
+
+
+@dataclass(frozen=True)
 class RegimeStrategyConfig:
     """Parameters for the 1D-filtered, 4H regime-switching strategy."""
 
@@ -511,6 +768,33 @@ def _wilder_rsi(close: pd.Series, period: int) -> pd.Series:
     relative_strength = gains / losses.where(losses != 0)
     result = 100.0 - 100.0 / (1.0 + relative_strength)
     return result.mask((losses == 0) & (gains > 0), 100.0).mask((losses == 0) & (gains == 0), 50.0)
+
+
+def _medium_term_indicators(
+    frame: pd.DataFrame,
+    config: MediumTermTrendConfig,
+) -> pd.DataFrame:
+    close = frame["close"].astype(float)
+    high = frame["high"].astype(float)
+    low = frame["low"].astype(float)
+    return pd.DataFrame(
+        {
+            "atr": _wilder_atr(high, low, close, config.atr_period),
+            "adx": _wilder_adx(high, low, close, config.adx_period),
+            "entry_high": high.shift(1).rolling(config.entry_lookback).max(),
+            "entry_low": low.shift(1).rolling(config.entry_lookback).min(),
+            "exit_high": high.shift(1).rolling(config.exit_lookback).max(),
+            "exit_low": low.shift(1).rolling(config.exit_lookback).min(),
+            "momentum": close / close.shift(config.momentum_lookback) - 1.0,
+            "realized_volatility": (
+                close.pct_change()
+                .rolling(config.realized_volatility_lookback)
+                .std(ddof=1)
+                * math.sqrt(365.0)
+            ),
+        },
+        index=frame.index,
+    )
 
 
 def _normalize_bars(bars: pd.DataFrame | Sequence[Mapping[str, Any]]) -> pd.DataFrame:

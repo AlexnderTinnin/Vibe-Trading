@@ -22,7 +22,12 @@ from src.trading.connectors.okx.swap import SwapInstrument
 from src.trading.quant.backtest import PerpetualBacktester
 from src.trading.quant.models import PositionView, TradeAction, TradePlan
 from src.trading.quant.sizing import size_trade_plan
-from src.trading.quant.strategy import RegimeStrategyConfig, RegimeSwitchingStrategy
+from src.trading.quant.strategy import (
+    MediumTermTrendConfig,
+    MediumTermTrendStrategy,
+    RegimeStrategyConfig,
+    RegimeSwitchingStrategy,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -71,6 +76,27 @@ def _volatile_daily(*, count: int = 130, start: str = "2025-09-01") -> pd.DataFr
             "open": closes,
             "high": closes * 1.01,
             "low": closes * 0.99,
+            "close": closes,
+            "volume": 1000.0,
+            "confirm": "1",
+        },
+        index=index,
+    )
+
+
+def _daily_breakout(*, direction: int, count: int = 140) -> pd.DataFrame:
+    index = pd.date_range("2025-01-01", periods=count, freq="1D", tz="UTC")
+    closes = np.linspace(100.0, 150.0 if direction > 0 else 60.0, count)
+    closes[-1] = (
+        max(closes[-56:-1]) + 4.0
+        if direction > 0
+        else min(closes[-56:-1]) - 4.0
+    )
+    return pd.DataFrame(
+        {
+            "open": closes,
+            "high": closes + 1.0,
+            "low": closes - 1.0,
             "close": closes,
             "volume": 1000.0,
             "confirm": "1",
@@ -198,6 +224,180 @@ def test_three_x_leverage_scales_target_exposure_but_not_risk_fraction() -> None
         plans[0].target_notional_fraction * 3.0
     )
     assert plans[0].risk_budget_fraction == plans[1].risk_budget_fraction == 0.02
+
+
+def test_medium_term_trend_opens_daily_breakout_with_volatility_sizing() -> None:
+    bars = _daily_breakout(direction=1)
+    strategy = MediumTermTrendStrategy()
+
+    plan = strategy.evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=bars,
+        run_id="medium-trend",
+        now=bars.index[-1].to_pydatetime() + timedelta(days=1),
+    )
+
+    assert plan.action is TradeAction.OPEN_LONG
+    assert plan.stop_loss_price is not None
+    assert plan.stop_loss_price < plan.reference_price
+    assert plan.take_profit_price is None
+    assert plan.risk_budget_fraction == 0.02
+    assert plan.target_notional_fraction is not None
+    assert 0 < plan.target_notional_fraction <= 1.0
+    assert plan.max_portfolio_notional_fraction == 1.5
+
+
+def test_medium_term_initial_stop_stays_inside_leverage_safety_cap() -> None:
+    bars = _daily_breakout(direction=1)
+    bars.loc[:, "high"] = bars["close"] * 1.25
+    bars.loc[:, "low"] = bars["close"] * 0.75
+    bars.iloc[-1, bars.columns.get_loc("close")] = float(bars["high"].iloc[-2]) + 10.0
+    bars.iloc[-1, bars.columns.get_loc("open")] = bars["close"].iloc[-1]
+    bars.iloc[-1, bars.columns.get_loc("high")] = bars["close"].iloc[-1] * 1.25
+    bars.iloc[-1, bars.columns.get_loc("low")] = bars["close"].iloc[-1] * 0.75
+    strategy = MediumTermTrendStrategy(MediumTermTrendConfig(minimum_adx=1.0))
+
+    plan = strategy.evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=bars,
+        run_id="medium-stop-cap",
+        now=bars.index[-1].to_pydatetime() + timedelta(days=1),
+    )
+
+    assert plan.action is TradeAction.OPEN_LONG
+    assert plan.stop_loss_price == pytest.approx(plan.reference_price * 0.80)
+
+
+def test_medium_term_strategy_bounds_indicator_history_to_live_window() -> None:
+    bars = _daily_breakout(direction=1, count=400)
+
+    plan = MediumTermTrendStrategy().evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=bars,
+        run_id="medium-bounded-history",
+        now=bars.index[-1].to_pydatetime() + timedelta(days=1),
+    )
+
+    assert plan.action is TradeAction.OPEN_LONG
+    assert plan.source_bar_count == 300
+
+
+def test_medium_term_trend_emits_only_tighter_atr_stop_updates() -> None:
+    bars = _daily_breakout(direction=1)
+    strategy = MediumTermTrendStrategy()
+    opened = strategy.evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=bars,
+        run_id="medium-open",
+        now=bars.index[-1].to_pydatetime() + timedelta(days=1),
+    )
+    assert opened.stop_loss_price is not None
+    position = PositionView(
+        instrument_id="BTC-USDT-SWAP",
+        position_side="long",
+        contracts=1.0,
+        entry_price=opened.reference_price,
+        leverage=3.0,
+        stop_loss_price=opened.stop_loss_price,
+    )
+    next_index = bars.index[-1] + pd.Timedelta(days=1)
+    extended = pd.concat(
+        [
+            bars,
+            pd.DataFrame(
+                {
+                    "open": [opened.reference_price + 5.0],
+                    "high": [opened.reference_price + 10.0],
+                    "low": [opened.reference_price + 4.0],
+                    "close": [opened.reference_price + 8.0],
+                    "volume": [1000.0],
+                    "confirm": ["1"],
+                },
+                index=pd.DatetimeIndex([next_index]),
+            ),
+        ]
+    )
+
+    update = strategy.evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=extended,
+        run_id="medium-update",
+        now=next_index.to_pydatetime() + timedelta(days=1),
+        position=position,
+    )
+
+    assert update.action is TradeAction.UPDATE_STOP
+    assert update.stop_loss_price is not None
+    assert update.stop_loss_price > position.stop_loss_price
+    assert update.risk_budget_fraction is None
+    assert update.target_notional_fraction is None
+
+    already_tighter = PositionView(
+        **{
+            **position.__dict__,
+            "stop_loss_price": update.stop_loss_price + 1.0,
+        }
+    )
+    held = strategy.evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=extended,
+        run_id="medium-hold",
+        now=next_index.to_pydatetime() + timedelta(days=1),
+        position=already_tighter,
+    )
+    assert held.action is TradeAction.HOLD
+
+
+def test_backtester_applies_stop_update_before_intrabar_exit() -> None:
+    index = pd.date_range("2026-07-01", periods=4, freq="1D", tz="UTC")
+    bars = pd.DataFrame(
+        {
+            "open": [100.0, 100.0, 105.0, 104.0],
+            "high": [101.0, 106.0, 106.0, 105.0],
+            "low": [99.0, 99.0, 101.0, 103.0],
+            "close": [100.0, 105.0, 104.0, 104.0],
+            "volume": 1000.0,
+            "confirm": "1",
+        },
+        index=index,
+    )
+
+    class _TrailingStrategy:
+        def evaluate(self, *, instrument_id, bars, run_id, now, position=None):  # noqa: ANN001
+            frame = pd.DataFrame(bars)
+            action = (
+                TradeAction.OPEN_LONG
+                if len(frame) == 1
+                else TradeAction.UPDATE_STOP
+                if len(frame) == 2 and position is not None
+                else TradeAction.HOLD
+            )
+            return TradePlan.create(
+                strategy_id="trailing-test",
+                run_id=run_id,
+                instrument_id=instrument_id,
+                signal_at=now,
+                data_as_of=frame.index[-1].to_pydatetime(),
+                action=action,
+                confidence=1.0,
+                reference_price=float(frame.iloc[-1]["close"]),
+                stop_loss_price=(90.0 if action is TradeAction.OPEN_LONG else 102.0 if action is TradeAction.UPDATE_STOP else None),
+                take_profit_price=None,
+                leverage=3.0,
+                risk_budget_usdt=25.0 if action is TradeAction.OPEN_LONG else 0.0,
+                reason_codes=("test",),
+                source_bar_count=len(frame),
+            )
+
+    result = PerpetualBacktester(
+        strategy=_TrailingStrategy(),
+        mandate=_mandate(),
+        instruments={"BTC-USDT-SWAP": _instrument()},
+    ).run({"BTC-USDT-SWAP": bars})
+
+    assert result.trade_count == 1
+    assert result.trades[0].exit_reason == "stop_loss"
+    assert result.trades[0].exit_price == pytest.approx(102.0 * (1.0 - 0.0003))
 
 
 def test_daily_context_is_cut_off_at_the_primary_bar_close() -> None:

@@ -113,6 +113,7 @@ def _empty_state(broker: str, *, environment: str = "demo") -> dict[str, Any]:
         "account_configuration": {},
         "balance": {},
         "orders": [],
+        "stop_amendments": [],
         "open_orders": [],
         "fills": [],
         "positions": [],
@@ -156,7 +157,17 @@ class SwapRuntimeStore:
             raise SwapStateError("swap runtime state broker mismatch")
         if str(raw.get("environment") or "").lower() != self.environment:
             raise SwapStateError("swap runtime state environment mismatch")
-        for key in ("orders", "open_orders", "fills", "positions", "algo_orders"):
+        # ``stop_amendments`` was added without invalidating existing Demo
+        # baselines; old schema-v2 files acquire the empty journal on read.
+        raw.setdefault("stop_amendments", [])
+        for key in (
+            "orders",
+            "stop_amendments",
+            "open_orders",
+            "fills",
+            "positions",
+            "algo_orders",
+        ):
             if not isinstance(raw.get(key), list):
                 raise SwapStateError(f"swap runtime state field {key} must be a list")
         return raw
@@ -218,6 +229,74 @@ class SwapRuntimeStore:
         self.save(state)
         if status is SwapOrderStatus.UNKNOWN_NEEDS_RECONCILE:
             trip_swap_breaker(self.broker, "order outcome unknown", client_order_id=client_order_id)
+        return dict(row)
+
+    def stage_stop_amendment(self, amendment: Mapping[str, Any]) -> dict[str, Any]:
+        """Persist a stop amendment before the non-idempotent broker write."""
+        request_id = str(amendment.get("request_id") or "").strip()
+        algo_id = str(amendment.get("algo_id") or "").strip()
+        if not request_id or not algo_id:
+            raise SwapStateError("request_id and algo_id are required before stop amendment")
+        state = self.load() or _empty_state(self.broker, environment=self.environment)
+        journal = state.setdefault("stop_amendments", [])
+        existing = next(
+            (row for row in journal if str(row.get("request_id") or "") == request_id),
+            None,
+        )
+        if existing is not None:
+            raise SwapStateError(f"request_id {request_id!r} already exists in durable state")
+        row = dict(amendment)
+        row.update({"status": SwapOrderStatus.SUBMITTING.value, "staged_at": _utc_now()})
+        journal.append(row)
+        self.save(state)
+        return row
+
+    def record_stop_amendment_result(
+        self,
+        request_id: str,
+        result: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Persist the verified, rejected, or ambiguous outcome of one amendment."""
+        state = self.load(required=True)
+        assert state is not None
+        row = next(
+            (
+                item
+                for item in state["stop_amendments"]
+                if str(item.get("request_id") or "") == request_id
+            ),
+            None,
+        )
+        if row is None:
+            raise SwapStateError("cannot record a result for an unstaged stop amendment")
+        verification = (
+            result.get("verification")
+            if isinstance(result.get("verification"), Mapping)
+            else {}
+        )
+        accepted = str(result.get("status") or "").lower() == "ok"
+        verified = accepted and str(verification.get("status") or "").lower() == "verified"
+        if verified:
+            status = SwapOrderStatus.FILLED
+        elif accepted or result.get("write_state") == SwapOrderStatus.UNKNOWN_NEEDS_RECONCILE.value:
+            status = SwapOrderStatus.UNKNOWN_NEEDS_RECONCILE
+        else:
+            status = SwapOrderStatus.REJECTED
+        row.update(
+            {
+                "status": status.value,
+                "result_recorded_at": _utc_now(),
+                "verification_status": str(verification.get("status") or ""),
+            }
+        )
+        self.save(state)
+        if status is SwapOrderStatus.UNKNOWN_NEEDS_RECONCILE:
+            trip_swap_breaker(
+                self.broker,
+                "stop amendment outcome unknown",
+                request_id=request_id,
+                algo_id=str(row.get("algo_id") or ""),
+            )
         return dict(row)
 
     def risk_snapshot(self) -> dict[str, Any]:
@@ -627,6 +706,54 @@ def reconcile_swap(
                         broker={str(key): str(value) for key, value in current_positions.items()},
                     )
                 )
+        current_open_symbols = {
+            key[0] for key, quantity in current_positions.items() if quantity != 0
+        }
+        for amendment in prior.get("stop_amendments", []):
+            status = str(amendment.get("status") or "")
+            if status not in _UNRESOLVED_STATUSES:
+                continue
+            symbol = str(amendment.get("symbol") or "").upper()
+            algo_id = str(amendment.get("algo_id") or "")
+            if symbol not in current_open_symbols:
+                amendment.update(
+                    {
+                        "status": SwapOrderStatus.CANCELLED.value,
+                        "reconciled_at": _utc_now(),
+                    }
+                )
+                continue
+            matches = [
+                row
+                for row in algo_orders
+                if _identity(row, "algo_id", "algoId") == algo_id
+                and str(row.get("symbol") or row.get("instId") or "").upper() == symbol
+            ]
+            expected = _decimal(amendment, "new_stop_loss")
+            if len(matches) == 1 and _decimal(
+                matches[0], "stop_loss_trigger", "slTriggerPx"
+            ) == expected:
+                amendment.update(
+                    {
+                        "status": SwapOrderStatus.FILLED.value,
+                        "reconciled_at": _utc_now(),
+                        "verification_status": "reconciled",
+                    }
+                )
+                continue
+            issues.append(
+                SwapReconcileIssue(
+                    kind="unknown_stop_amendment",
+                    subject="algo_order",
+                    identity=algo_id or "<unknown>",
+                    detail=(
+                        "submitted stop amendment cannot be verified against the pending "
+                        "broker algo order"
+                    ),
+                    recorded=amendment,
+                    broker=matches[0] if len(matches) == 1 else None,
+                )
+            )
         expected_algo_ids = {
             str(algo.get("attachAlgoClOrdId") or "")
             for order in prior["orders"]
