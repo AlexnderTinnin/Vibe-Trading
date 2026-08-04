@@ -20,11 +20,13 @@ from src.live.mandate.model import (
 )
 from src.trading.connectors.okx.swap import SwapInstrument
 from src.trading.quant.backtest import PerpetualBacktester
-from src.trading.quant.models import PositionView, TradeAction, TradePlan
+from src.trading.quant.models import PositionView, RecentExitView, TradeAction, TradePlan
 from src.trading.quant.sizing import size_trade_plan
 from src.trading.quant.strategy import (
     EnhancedMediumTermTrendConfig,
     EnhancedMediumTermTrendStrategy,
+    LeveragedMediumTermTrendConfig,
+    LeveragedMediumTermTrendStrategy,
     MediumTermTrendConfig,
     MediumTermTrendStrategy,
     RegimeStrategyConfig,
@@ -335,6 +337,178 @@ def test_enhanced_trend_scales_or_skips_adverse_funding_entry() -> None:
     assert scaled.risk_budget_fraction == pytest.approx(0.01)
     assert skipped.action is TradeAction.HOLD
     assert "extreme_adverse_funding" in skipped.reason_codes
+
+
+def test_leveraged_trend_scales_risk_budget_and_keeps_v3_unchanged() -> None:
+    bars = _daily_breakout(direction=1)
+    v3 = EnhancedMediumTermTrendStrategy().evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=bars,
+        run_id="v3-risk",
+        now=bars.index[-1].to_pydatetime() + timedelta(days=1),
+    )
+    v4 = LeveragedMediumTermTrendStrategy().evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=bars,
+        run_id="v4-risk",
+        now=bars.index[-1].to_pydatetime() + timedelta(days=1),
+    )
+
+    assert v3.risk_budget_fraction == 0.02
+    assert v3.max_portfolio_risk_fraction == 0.045
+    assert v4.risk_budget_fraction == pytest.approx(0.035)
+    assert v4.max_portfolio_risk_fraction == 0.07875
+    assert v4.strategy_id == "btc_eth_medium_term_trend_v4"
+    assert "leverage_scaled_risk" in v4.reason_codes
+
+
+def test_leveraged_trend_uses_faster_breakout_entry() -> None:
+    bars = _daily_breakout(direction=1)
+    bars.iloc[-15, bars.columns.get_loc("high")] = bars["close"].iloc[-1] + 2.0
+    recent_exit = RecentExitView(
+        instrument_id="BTC-USDT-SWAP",
+        direction="long",
+        exited_at=bars.index[-5].isoformat(),
+        exit_price=float(bars["close"].iloc[-6]),
+        net_pnl_usdt=100.0,
+        exit_reason="stop_loss",
+    )
+
+    v3 = EnhancedMediumTermTrendStrategy().evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=bars,
+        run_id="v3-slow-entry",
+        now=bars.index[-1].to_pydatetime() + timedelta(days=1),
+        recent_exit=recent_exit,
+    )
+    v4 = LeveragedMediumTermTrendStrategy(
+        LeveragedMediumTermTrendConfig(fast_reentry_lookback=10)
+    ).evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=bars,
+        run_id="v4-fast-entry",
+        now=bars.index[-1].to_pydatetime() + timedelta(days=1),
+        recent_exit=recent_exit,
+    )
+
+    assert v3.action is TradeAction.HOLD
+    assert v4.action is TradeAction.OPEN_LONG
+    assert v4.risk_budget_fraction == pytest.approx(0.02625)
+    assert "fast_reentry_long" in v4.reason_codes
+
+
+def test_leveraged_trend_does_not_reenter_on_exit_day_or_after_a_loss() -> None:
+    bars = _daily_breakout(direction=1)
+    strategy = LeveragedMediumTermTrendStrategy(
+        LeveragedMediumTermTrendConfig(fast_reentry_lookback=10)
+    )
+
+    def evaluate(exit_view: RecentExitView) -> TradePlan:
+        return strategy.evaluate(
+            instrument_id="BTC-USDT-SWAP",
+            bars=bars,
+            run_id=exit_view.exited_at,
+            now=bars.index[-1].to_pydatetime() + timedelta(days=1),
+            recent_exit=exit_view,
+        )
+
+    same_day = RecentExitView(
+        instrument_id="BTC-USDT-SWAP",
+        direction="long",
+        exited_at=bars.index[-1].isoformat(),
+        exit_price=float(bars["close"].iloc[-2]),
+        net_pnl_usdt=100.0,
+        exit_reason="stop_loss",
+    )
+    losing = RecentExitView(
+        instrument_id="BTC-USDT-SWAP",
+        direction="long",
+        exited_at=bars.index[-5].isoformat(),
+        exit_price=float(bars["close"].iloc[-6]),
+        net_pnl_usdt=-1.0,
+        exit_reason="stop_loss",
+    )
+
+    assert evaluate(same_day).action is TradeAction.HOLD
+    assert evaluate(same_day).reason_codes == ("same_bar_reentry_blocked",)
+    assert evaluate(losing).action is TradeAction.OPEN_LONG
+    assert "fast_reentry_long" not in evaluate(losing).reason_codes
+
+
+def test_leveraged_trend_rejects_risk_multiplier_above_leverage() -> None:
+    with pytest.raises(ValueError, match="multiplier exceeds leverage"):
+        LeveragedMediumTermTrendStrategy(
+            LeveragedMediumTermTrendConfig(
+                leverage=3.0,
+                risk_budget_leverage_multiplier=3.1,
+            )
+        )
+
+
+def test_backtester_forwards_recent_exit_context() -> None:
+    class ExitContextProbe:
+        requires_recent_exit_context = True
+
+        def __init__(self) -> None:
+            self.opened = False
+            self.contexts: list[RecentExitView | None] = []
+
+        def evaluate(
+            self,
+            *,
+            instrument_id: str,
+            bars: pd.DataFrame,
+            run_id: str,
+            now: datetime,
+            position: PositionView | None = None,
+            recent_exit: RecentExitView | None = None,
+        ) -> TradePlan:
+            self.contexts.append(recent_exit)
+            should_open = not self.opened and position is None and recent_exit is None
+            if should_open:
+                self.opened = True
+            return TradePlan.create(
+                strategy_id="recent-exit-probe",
+                run_id=run_id,
+                instrument_id=instrument_id,
+                signal_at=now,
+                data_as_of=bars.index[-1].to_pydatetime(),
+                action=TradeAction.OPEN_LONG if should_open else TradeAction.HOLD,
+                confidence=0.8,
+                reference_price=float(bars["close"].iloc[-1]),
+                stop_loss_price=90.0 if should_open else None,
+                take_profit_price=None,
+                leverage=3.0,
+                risk_budget_usdt=100.0 if should_open else 0.0,
+                reason_codes=("probe_open",) if should_open else ("probe_hold",),
+                source_bar_count=len(bars),
+            )
+
+    index = pd.date_range("2026-01-01", periods=3, freq="1D", tz="UTC")
+    bars = pd.DataFrame(
+        {
+            "open": [100.0, 100.0, 100.0],
+            "high": [101.0, 105.0, 101.0],
+            "low": [99.0, 95.0, 80.0],
+            "close": [100.0, 100.0, 90.0],
+            "volume": [1000.0, 1000.0, 1000.0],
+        },
+        index=index,
+    )
+    strategy = ExitContextProbe()
+
+    PerpetualBacktester(
+        strategy=strategy,
+        mandate=_mandate(),
+        instruments={"BTC-USDT-SWAP": _instrument()},
+        initial_equity_usdt=10_000,
+    ).run({"BTC-USDT-SWAP": bars})
+
+    exit_contexts = [context for context in strategy.contexts if context is not None]
+    assert len(exit_contexts) == 1
+    assert exit_contexts[0].direction == "long"
+    assert exit_contexts[0].exit_reason == "stop_loss"
+    assert exit_contexts[0].net_pnl_usdt < 0
 
 
 def test_enhanced_trend_confirms_then_scales_with_protected_risk() -> None:

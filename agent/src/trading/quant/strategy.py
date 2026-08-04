@@ -9,7 +9,7 @@ from typing import Any, Mapping, Sequence
 
 import pandas as pd
 
-from src.trading.quant.models import PositionView, TradeAction, TradePlan
+from src.trading.quant.models import PositionView, RecentExitView, TradeAction, TradePlan
 
 
 @dataclass(frozen=True)
@@ -423,6 +423,10 @@ class EnhancedMediumTermTrendConfig:
     adverse_funding_notional_scale: float = 0.50
     funding_rate_lookback_events: int = 9
     leverage: float = 3.0
+    risk_budget_leverage_multiplier: float = 1.0
+    fast_reentry_lookback: int | None = None
+    fast_reentry_window_bars: int = 30
+    fast_reentry_risk_scale: float = 0.75
     allow_short: bool = True
     enable_pyramiding: bool = False
     maximum_history_bars: int = 400
@@ -462,6 +466,7 @@ class EnhancedMediumTermTrendConfig:
             self.adverse_funding_rate_8h,
             self.extreme_funding_rate_8h,
             self.adverse_funding_notional_scale,
+            self.risk_budget_leverage_multiplier,
         )
         if min(positive) <= 0:
             raise ValueError("enhanced trend risk parameters must be positive")
@@ -475,6 +480,14 @@ class EnhancedMediumTermTrendConfig:
             raise ValueError("momentum reversal confirmation bars are invalid")
         if not 1 <= self.funding_rate_lookback_events <= 90:
             raise ValueError("funding rate lookback events are invalid")
+        if self.fast_reentry_lookback is not None and not (
+            1 < self.fast_reentry_lookback <= self.early_entry_lookback
+        ):
+            raise ValueError("fast re-entry lookback is invalid")
+        if not 1 <= self.fast_reentry_window_bars <= 90:
+            raise ValueError("fast re-entry window is invalid")
+        if not 0 < self.fast_reentry_risk_scale <= 1:
+            raise ValueError("fast re-entry risk scale is invalid")
         stages = self.stage_target_fractions
         if (
             len(stages) != 3
@@ -493,6 +506,14 @@ class EnhancedMediumTermTrendConfig:
             raise ValueError("enhanced trend boolean settings are invalid")
         if not 1 <= self.leverage <= 10:
             raise ValueError("enhanced trend leverage is invalid")
+        if self.risk_budget_leverage_multiplier > self.leverage:
+            raise ValueError("risk budget leverage multiplier exceeds leverage")
+        if (
+            max(self.initial_risk_fraction, self.scale_in_risk_fraction)
+            * self.risk_budget_leverage_multiplier
+            > 1
+        ):
+            raise ValueError("leveraged risk budget fraction exceeds one")
         if (
             not isinstance(self.maximum_history_bars, int)
             or self.maximum_history_bars < self.minimum_history_bars
@@ -505,6 +526,7 @@ class EnhancedMediumTermTrendConfig:
             self.momentum_lookback + self.momentum_reversal_confirmation_bars,
             self.realized_volatility_lookback + 1,
             self.confirmation_entry_lookback + 2,
+            (self.fast_reentry_lookback or self.early_entry_lookback) + 2,
             self.exit_lookback + 2,
             self.trend_ema_period + self.trend_ema_slope_lookback,
             self.adx_period * 3,
@@ -548,6 +570,7 @@ class EnhancedMediumTermTrendStrategy:
         now: datetime,
         position: PositionView | None = None,
         funding_rate_8h: float | None = None,
+        recent_exit: RecentExitView | None = None,
     ) -> TradePlan:
         backtest_token = (
             bars.attrs.get("_quant_backtest_token")
@@ -578,6 +601,8 @@ class EnhancedMediumTermTrendStrategy:
             "minus_di",
             "early_high",
             "early_low",
+            "reentry_high",
+            "reentry_low",
             "confirmation_high",
             "confirmation_low",
             "exit_high",
@@ -626,6 +651,7 @@ class EnhancedMediumTermTrendStrategy:
         reasons = ["no_entry"]
         risk_fraction: float | None = None
         target_fraction: float | None = None
+        entry_size_scale = 1.0
 
         if position is not None and position.is_open:
             action, stop, reasons, target_fraction, risk_fraction = self._manage_position(
@@ -640,6 +666,36 @@ class EnhancedMediumTermTrendStrategy:
                 short_regime=short_regime,
                 funding_rate_8h=funding_rate_8h,
             )
+        elif self._exited_on_latest_bar(recent_exit, frame.index[-1]):
+            reasons = ["same_bar_reentry_blocked"]
+        elif self._is_fast_reentry(
+            instrument_id=instrument_id,
+            recent_exit=recent_exit,
+            frame=frame,
+            latest=latest,
+            price=price,
+            long_regime=long_regime,
+            short_regime=short_regime,
+        ):
+            direction = 1 if recent_exit and recent_exit.direction == "long" else -1
+            action = TradeAction.OPEN_LONG if direction > 0 else TradeAction.OPEN_SHORT
+            stop = (
+                max(
+                    price - self.config.initial_stop_atr_multiple * atr_value,
+                    price * (1.0 - self.config.maximum_initial_stop_fraction),
+                )
+                if direction > 0
+                else min(
+                    price + self.config.initial_stop_atr_multiple * atr_value,
+                    price * (1.0 + self.config.maximum_initial_stop_fraction),
+                )
+            )
+            entry_size_scale = self.config.fast_reentry_risk_scale
+            reasons = [
+                f"fast_reentry_{recent_exit.direction}",
+                "profitable_trend_resume",
+                "adx_di_confirmed",
+            ]
         elif long_regime and price > float(latest["early_high"]):
             action = TradeAction.OPEN_LONG
             stop = max(
@@ -673,8 +729,17 @@ class EnhancedMediumTermTrendStrategy:
                     if self.config.enable_pyramiding
                     else 1.0
                 )
-                target_fraction = base_target * stage_scale * funding_scale
-                risk_fraction = self.config.initial_risk_fraction * funding_scale
+                target_fraction = (
+                    base_target * stage_scale * funding_scale * entry_size_scale
+                )
+                risk_fraction = (
+                    self.config.initial_risk_fraction
+                    * self.config.risk_budget_leverage_multiplier
+                    * funding_scale
+                    * entry_size_scale
+                )
+                if self.config.risk_budget_leverage_multiplier > 1:
+                    reasons.append("leverage_scaled_risk")
                 if funding_scale < 1:
                     reasons.append("adverse_funding_scaled")
 
@@ -797,12 +862,16 @@ class EnhancedMediumTermTrendStrategy:
                     ]
                     if funding_scale < 1:
                         reasons.append("adverse_funding_scaled")
+                    if self.config.risk_budget_leverage_multiplier > 1:
+                        reasons.append("leverage_scaled_risk")
                     return (
                         action,
                         protected_stop,
                         reasons,
                         target,
-                        self.config.scale_in_risk_fraction * funding_scale,
+                        self.config.scale_in_risk_fraction
+                        * self.config.risk_budget_leverage_multiplier
+                        * funding_scale,
                     )
 
         initial_stop = (
@@ -856,6 +925,63 @@ class EnhancedMediumTermTrendStrategy:
             self.config.max_notional_fraction,
         )
 
+    def _is_fast_reentry(
+        self,
+        *,
+        instrument_id: str,
+        recent_exit: RecentExitView | None,
+        frame: pd.DataFrame,
+        latest: pd.Series,
+        price: float,
+        long_regime: bool,
+        short_regime: bool,
+    ) -> bool:
+        if self.config.fast_reentry_lookback is None or recent_exit is None:
+            return False
+        if (
+            recent_exit.instrument_id != instrument_id
+            or not recent_exit.was_profitable
+            or recent_exit.exit_reason
+            not in {"stop_loss", "donchian_exit", "trailing_stop_gap"}
+        ):
+            return False
+        exited_at = pd.Timestamp(recent_exit.exited_at)
+        if exited_at.tzinfo is None:
+            exited_at = exited_at.tz_localize("UTC")
+        else:
+            exited_at = exited_at.tz_convert("UTC")
+        bars_since_exit = frame.index[(frame.index > exited_at) & (frame.index <= frame.index[-1])]
+        if not 1 <= len(bars_since_exit) <= self.config.fast_reentry_window_bars:
+            return False
+        if recent_exit.direction == "long":
+            return bool(
+                long_regime
+                and price > recent_exit.exit_price
+                and price > float(latest["reentry_high"])
+            )
+        if recent_exit.direction == "short":
+            return bool(
+                self.config.allow_short
+                and short_regime
+                and price < recent_exit.exit_price
+                and price < float(latest["reentry_low"])
+            )
+        return False
+
+    @staticmethod
+    def _exited_on_latest_bar(
+        recent_exit: RecentExitView | None,
+        latest_bar: pd.Timestamp,
+    ) -> bool:
+        if recent_exit is None:
+            return False
+        exited_at = pd.Timestamp(recent_exit.exited_at)
+        if exited_at.tzinfo is None:
+            exited_at = exited_at.tz_localize("UTC")
+        else:
+            exited_at = exited_at.tz_convert("UTC")
+        return exited_at.date() == latest_bar.date()
+
     def _funding_scale(self, direction: int, funding_rate_8h: float | None) -> float:
         if funding_rate_8h is None:
             return 1.0
@@ -865,6 +991,27 @@ class EnhancedMediumTermTrendStrategy:
         if adverse_rate >= self.config.adverse_funding_rate_8h:
             return self.config.adverse_funding_notional_scale
         return 1.0
+
+
+@dataclass(frozen=True)
+class LeveragedMediumTermTrendConfig(EnhancedMediumTermTrendConfig):
+    """Drawdown-bounded v4 research parameters for leveraged trend capture."""
+
+    strategy_id: str = "btc_eth_medium_term_trend_v4"
+    momentum_lookback: int = 60
+    minimum_adx: float = 18.0
+    max_portfolio_open_risk_fraction: float = 0.07875
+    risk_budget_leverage_multiplier: float = 1.75
+    fast_reentry_lookback: int | None = None
+
+
+class LeveragedMediumTermTrendStrategy(EnhancedMediumTermTrendStrategy):
+    """Research-only v4 with leverage-aware risk and optional fast re-entry."""
+
+    requires_recent_exit_context = True
+
+    def __init__(self, config: LeveragedMediumTermTrendConfig | None = None) -> None:
+        super().__init__(config or LeveragedMediumTermTrendConfig())
 
 
 @dataclass(frozen=True)
@@ -1311,6 +1458,12 @@ def _enhanced_medium_term_indicators(
             "minus_di": minus_di,
             "early_high": high.shift(1).rolling(config.early_entry_lookback).max(),
             "early_low": low.shift(1).rolling(config.early_entry_lookback).min(),
+            "reentry_high": high.shift(1)
+            .rolling(config.fast_reentry_lookback or config.early_entry_lookback)
+            .max(),
+            "reentry_low": low.shift(1)
+            .rolling(config.fast_reentry_lookback or config.early_entry_lookback)
+            .min(),
             "confirmation_high": high.shift(1)
             .rolling(config.confirmation_entry_lookback)
             .max(),

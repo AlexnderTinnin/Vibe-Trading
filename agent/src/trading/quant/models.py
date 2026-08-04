@@ -60,6 +60,20 @@ class PositionView:
 
 
 @dataclass(frozen=True)
+class RecentExitView:
+    instrument_id: str
+    direction: str
+    exited_at: str
+    exit_price: float
+    net_pnl_usdt: float
+    exit_reason: str
+
+    @property
+    def was_profitable(self) -> bool:
+        return self.net_pnl_usdt > 0
+
+
+@dataclass(frozen=True)
 class TradePlan:
     """Strategy decision with no OKX API parameter names or quantity guesses."""
 

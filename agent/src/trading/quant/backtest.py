@@ -12,7 +12,7 @@ import pandas as pd
 from src.live.mandate.model import Mandate
 from src.trading.connectors.okx.swap import SwapInstrument
 from src.trading.quant.costs import PerpetualCostModel
-from src.trading.quant.models import PositionView, TradeAction, TradePlan
+from src.trading.quant.models import PositionView, RecentExitView, TradeAction, TradePlan
 from src.trading.quant.sizing import size_trade_plan
 from src.trading.quant.strategy import _bar_interval, _daily_from_primary, _normalize_bars
 
@@ -213,6 +213,7 @@ class PerpetualBacktester:
         max_drawdown = 0.0
         positions: dict[str, _OpenPosition] = {}
         pending: dict[str, TradePlan] = {}
+        recent_exits: dict[str, RecentExitView] = {}
         trades: list[BacktestTrade] = []
         scale_ins = 0
         rejected_plans = 0
@@ -231,6 +232,7 @@ class PerpetualBacktester:
                         trade = self._close(position, timestamp, exit_reference, exit_reason)
                         equity += trade.net_pnl_usdt
                         trades.append(trade)
+                        recent_exits[symbol] = _recent_exit_view(trade)
                         del positions[symbol]
 
                 plan = pending.pop(symbol, None)
@@ -273,6 +275,7 @@ class PerpetualBacktester:
                         )
                         equity += trade.net_pnl_usdt
                         trades.append(trade)
+                        recent_exits[symbol] = _recent_exit_view(trade)
                         del positions[symbol]
                     elif plan.action is TradeAction.UPDATE_STOP and symbol in positions:
                         position = positions[symbol]
@@ -288,6 +291,7 @@ class PerpetualBacktester:
                             )
                             equity += trade.net_pnl_usdt
                             trades.append(trade)
+                            recent_exits[symbol] = _recent_exit_view(trade)
                             del positions[symbol]
                         else:
                             position.stop_loss = float(proposed)
@@ -299,6 +303,7 @@ class PerpetualBacktester:
                         trade = self._close(position, timestamp, exit_reference, exit_reason)
                         equity += trade.net_pnl_usdt
                         trades.append(trade)
+                        recent_exits[symbol] = _recent_exit_view(trade)
                         del positions[symbol]
 
                 history = frame.loc[:timestamp]
@@ -313,6 +318,8 @@ class PerpetualBacktester:
                         symbol,
                         timestamp,
                     )
+                if bool(getattr(self.strategy, "requires_recent_exit_context", False)):
+                    strategy_inputs["recent_exit"] = recent_exits.get(symbol)
                 try:
                     signal = self.strategy.evaluate(
                         instrument_id=symbol,
@@ -812,6 +819,17 @@ def _position_view(position: _OpenPosition | None) -> PositionView | None:
         opened_at=position.opened_at.isoformat(),
         initial_stop_loss_price=position.initial_stop_loss,
         scale_count=position.scale_count,
+    )
+
+
+def _recent_exit_view(trade: BacktestTrade) -> RecentExitView:
+    return RecentExitView(
+        instrument_id=trade.instrument_id,
+        direction=trade.direction,
+        exited_at=trade.closed_at,
+        exit_price=trade.exit_price,
+        net_pnl_usdt=trade.net_pnl_usdt,
+        exit_reason=trade.exit_reason,
     )
 
 
