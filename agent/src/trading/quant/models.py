@@ -21,6 +21,8 @@ class TradeAction(str, Enum):
     HOLD = "hold"
     OPEN_LONG = "open_long"
     OPEN_SHORT = "open_short"
+    ADD_LONG = "add_long"
+    ADD_SHORT = "add_short"
     CLOSE = "close"
     UPDATE_STOP = "update_stop"
 
@@ -41,6 +43,10 @@ class PositionView:
     leverage: float = 1.0
     stop_loss_price: float | None = None
     take_profit_price: float | None = None
+    opened_at: str | None = None
+    initial_stop_loss_price: float | None = None
+    entry_atr: float | None = None
+    scale_count: int = 1
 
     @property
     def is_open(self) -> bool:
@@ -77,6 +83,7 @@ class TradePlan:
     risk_budget_fraction: float | None = None
     target_notional_fraction: float | None = None
     max_portfolio_notional_fraction: float | None = None
+    max_portfolio_risk_fraction: float | None = None
 
     @classmethod
     def create(
@@ -99,6 +106,7 @@ class TradePlan:
         risk_budget_fraction: float | None = None,
         target_notional_fraction: float | None = None,
         max_portfolio_notional_fraction: float | None = None,
+        max_portfolio_risk_fraction: float | None = None,
         ttl: timedelta = timedelta(minutes=5),
     ) -> "TradePlan":
         signal = _aware(signal_at)
@@ -142,6 +150,11 @@ class TradePlan:
                 if max_portfolio_notional_fraction is None
                 else float(max_portfolio_notional_fraction)
             ),
+            max_portfolio_risk_fraction=(
+                None
+                if max_portfolio_risk_fraction is None
+                else float(max_portfolio_risk_fraction)
+            ),
         )
         plan.validate()
         return plan
@@ -166,12 +179,17 @@ class TradePlan:
             and not 0 < self.max_portfolio_notional_fraction <= 10
         ):
             raise TradePlanError("max_portfolio_notional_fraction must be in (0, 10]")
-        if self.action in (TradeAction.OPEN_LONG, TradeAction.OPEN_SHORT):
+        if (
+            self.max_portfolio_risk_fraction is not None
+            and not 0 < self.max_portfolio_risk_fraction <= 1
+        ):
+            raise TradePlanError("max_portfolio_risk_fraction must be in (0, 1]")
+        if self.is_risk_increasing:
             if self.stop_loss_price is None:
-                raise TradePlanError("opening plans require a stop loss")
+                raise TradePlanError("risk-increasing plans require a stop loss")
             if self.risk_budget_usdt <= 0 and self.risk_budget_fraction is None:
-                raise TradePlanError("opening plans require a positive risk budget")
-            if self.action is TradeAction.OPEN_LONG:
+                raise TradePlanError("risk-increasing plans require a positive risk budget")
+            if self.position_side == "long":
                 if self.stop_loss_price >= self.reference_price:
                     raise TradePlanError("long stop loss must be below the reference price")
                 if self.take_profit_price is not None and self.take_profit_price <= self.reference_price:
@@ -191,6 +209,7 @@ class TradePlan:
                     self.risk_budget_fraction not in (None, 0),
                     self.target_notional_fraction not in (None, 0),
                     self.max_portfolio_notional_fraction not in (None, 0),
+                    self.max_portfolio_risk_fraction not in (None, 0),
                 )
             ):
                 raise TradePlanError("stop updates must have zero risk and notional budgets")
@@ -200,9 +219,10 @@ class TradePlan:
                 self.risk_budget_fraction not in (None, 0),
                 self.target_notional_fraction not in (None, 0),
                 self.max_portfolio_notional_fraction not in (None, 0),
+                self.max_portfolio_risk_fraction not in (None, 0),
             )
         ):
-            raise TradePlanError("non-opening plans must have zero risk and notional budgets")
+            raise TradePlanError("risk-neutral plans must have zero risk and notional budgets")
         _parse_time(self.signal_at)
         data_time = _parse_time(self.data_as_of)
         if data_time > _parse_time(self.valid_until):
@@ -213,14 +233,22 @@ class TradePlan:
         return self.action in (TradeAction.OPEN_LONG, TradeAction.OPEN_SHORT)
 
     @property
+    def is_scale_in(self) -> bool:
+        return self.action in (TradeAction.ADD_LONG, TradeAction.ADD_SHORT)
+
+    @property
+    def is_risk_increasing(self) -> bool:
+        return self.is_opening or self.is_scale_in
+
+    @property
     def is_stop_update(self) -> bool:
         return self.action is TradeAction.UPDATE_STOP
 
     @property
     def position_side(self) -> str | None:
-        if self.action is TradeAction.OPEN_LONG:
+        if self.action in (TradeAction.OPEN_LONG, TradeAction.ADD_LONG):
             return "long"
-        if self.action is TradeAction.OPEN_SHORT:
+        if self.action in (TradeAction.OPEN_SHORT, TradeAction.ADD_SHORT):
             return "short"
         return None
 

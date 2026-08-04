@@ -23,6 +23,8 @@ from src.trading.quant.backtest import PerpetualBacktester
 from src.trading.quant.models import PositionView, TradeAction, TradePlan
 from src.trading.quant.sizing import size_trade_plan
 from src.trading.quant.strategy import (
+    EnhancedMediumTermTrendConfig,
+    EnhancedMediumTermTrendStrategy,
     MediumTermTrendConfig,
     MediumTermTrendStrategy,
     RegimeStrategyConfig,
@@ -280,6 +282,224 @@ def test_medium_term_strategy_bounds_indicator_history_to_live_window() -> None:
 
     assert plan.action is TradeAction.OPEN_LONG
     assert plan.source_bar_count == 300
+
+
+def test_enhanced_trend_opens_early_breakout_with_bounded_target() -> None:
+    bars = _daily_breakout(direction=1)
+    plan = EnhancedMediumTermTrendStrategy().evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=bars,
+        run_id="enhanced-open",
+        now=bars.index[-1].to_pydatetime() + timedelta(days=1),
+    )
+
+    assert plan.action is TradeAction.OPEN_LONG
+    assert plan.stop_loss_price is not None
+    assert plan.stop_loss_price < plan.reference_price
+    assert plan.risk_budget_fraction == 0.02
+    assert plan.target_notional_fraction is not None
+    assert plan.target_notional_fraction <= 1.0
+    assert plan.max_portfolio_notional_fraction == 1.5
+    assert plan.max_portfolio_risk_fraction == 0.045
+
+
+def test_enhanced_trend_scales_or_skips_adverse_funding_entry() -> None:
+    bars = _daily_breakout(direction=1)
+    strategy = EnhancedMediumTermTrendStrategy()
+    normal = strategy.evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=bars,
+        run_id="funding-normal",
+        now=bars.index[-1].to_pydatetime() + timedelta(days=1),
+        funding_rate_8h=0.0,
+    )
+    scaled = strategy.evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=bars,
+        run_id="funding-scaled",
+        now=bars.index[-1].to_pydatetime() + timedelta(days=1),
+        funding_rate_8h=0.0004,
+    )
+    skipped = strategy.evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=bars,
+        run_id="funding-skipped",
+        now=bars.index[-1].to_pydatetime() + timedelta(days=1),
+        funding_rate_8h=0.001,
+    )
+
+    assert scaled.action is TradeAction.OPEN_LONG
+    assert scaled.target_notional_fraction == pytest.approx(
+        normal.target_notional_fraction * 0.5
+    )
+    assert scaled.risk_budget_fraction == pytest.approx(0.01)
+    assert skipped.action is TradeAction.HOLD
+    assert "extreme_adverse_funding" in skipped.reason_codes
+
+
+def test_enhanced_trend_confirms_then_scales_with_protected_risk() -> None:
+    bars = _daily_breakout(direction=1)
+    strategy = EnhancedMediumTermTrendStrategy(
+        EnhancedMediumTermTrendConfig(
+            enable_pyramiding=True,
+            target_annual_volatility=0.75,
+            max_notional_fraction=1.5,
+            max_portfolio_notional_fraction=2.5,
+        )
+    )
+    opened = strategy.evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=bars,
+        run_id="enhanced-stage-one",
+        now=bars.index[-1].to_pydatetime() + timedelta(days=1),
+    )
+    assert opened.stop_loss_price is not None
+    position = PositionView(
+        instrument_id="BTC-USDT-SWAP",
+        position_side="long",
+        contracts=1.0,
+        entry_price=opened.reference_price - 2.0,
+        leverage=3.0,
+        stop_loss_price=opened.stop_loss_price,
+        opened_at=bars.index[-1].isoformat(),
+        initial_stop_loss_price=opened.stop_loss_price,
+        scale_count=1,
+    )
+
+    add = strategy.evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=bars,
+        run_id="enhanced-stage-two",
+        now=bars.index[-1].to_pydatetime() + timedelta(days=1),
+        position=position,
+    )
+
+    assert add.action is TradeAction.ADD_LONG
+    assert add.stop_loss_price == pytest.approx(position.entry_price)
+    assert add.risk_budget_fraction == 0.01
+    assert add.target_notional_fraction is not None
+    assert add.target_notional_fraction <= 1.050001
+    assert "confirmation_scale_in" in add.reason_codes
+
+
+def test_enhanced_trend_arms_trailing_only_after_one_r() -> None:
+    bars = _daily_breakout(direction=1)
+    strategy = EnhancedMediumTermTrendStrategy(
+        EnhancedMediumTermTrendConfig(enable_pyramiding=False)
+    )
+    opened = strategy.evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=bars,
+        run_id="enhanced-trailing-open",
+        now=bars.index[-1].to_pydatetime() + timedelta(days=1),
+    )
+    assert opened.stop_loss_price is not None
+    position = PositionView(
+        instrument_id="BTC-USDT-SWAP",
+        position_side="long",
+        contracts=1.0,
+        entry_price=opened.reference_price,
+        leverage=3.0,
+        stop_loss_price=opened.stop_loss_price,
+        opened_at=bars.index[-1].isoformat(),
+        initial_stop_loss_price=opened.stop_loss_price,
+    )
+    held = strategy.evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=bars,
+        run_id="enhanced-trailing-held",
+        now=bars.index[-1].to_pydatetime() + timedelta(days=1),
+        position=position,
+    )
+    assert held.action is TradeAction.HOLD
+    assert "trailing_not_armed" in held.reason_codes
+
+    next_index = bars.index[-1] + pd.Timedelta(days=1)
+    next_close = opened.reference_price + 30.0
+    extended = pd.concat(
+        [
+            bars,
+            pd.DataFrame(
+                {
+                    "open": [next_close - 1.0],
+                    "high": [next_close + 1.0],
+                    "low": [next_close - 2.0],
+                    "close": [next_close],
+                    "volume": [1000.0],
+                    "confirm": ["1"],
+                },
+                index=pd.DatetimeIndex([next_index]),
+            ),
+        ]
+    )
+    update = strategy.evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=extended,
+        run_id="enhanced-trailing-armed",
+        now=next_index.to_pydatetime() + timedelta(days=1),
+        position=position,
+    )
+
+    assert update.action is TradeAction.UPDATE_STOP
+    assert update.stop_loss_price is not None
+    assert update.stop_loss_price > position.stop_loss_price
+
+
+def test_enhanced_trend_requires_three_momentum_reversals_to_exit() -> None:
+    index = pd.date_range("2025-01-01", periods=140, freq="1D", tz="UTC")
+    closes = np.concatenate(
+        [
+            np.linspace(100.0, 200.0, 80),
+            150.0 + np.sin(np.arange(60)) * 2.0,
+        ]
+    )
+
+    def frame(values: np.ndarray) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "open": values,
+                "high": values + 1.0,
+                "low": values - 1.0,
+                "close": values,
+                "volume": 1000.0,
+                "confirm": "1",
+            },
+            index=index,
+        )
+
+    position = PositionView(
+        instrument_id="BTC-USDT-SWAP",
+        position_side="long",
+        contracts=1.0,
+        entry_price=160.0,
+        leverage=3.0,
+        stop_loss_price=130.0,
+        opened_at=index[100].isoformat(),
+        initial_stop_loss_price=130.0,
+    )
+    strategy = EnhancedMediumTermTrendStrategy(
+        EnhancedMediumTermTrendConfig(enable_pyramiding=False)
+    )
+    two_reversals = closes.copy()
+    two_reversals[62] = 100.0
+    held = strategy.evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=frame(two_reversals),
+        run_id="two-reversals",
+        now=index[-1].to_pydatetime() + timedelta(days=1),
+        position=position,
+    )
+    closed = strategy.evaluate(
+        instrument_id="BTC-USDT-SWAP",
+        bars=frame(closes),
+        run_id="three-reversals",
+        now=index[-1].to_pydatetime() + timedelta(days=1),
+        position=position,
+    )
+
+    assert held.action is TradeAction.HOLD
+    assert closed.action is TradeAction.CLOSE
+    assert "confirmed_momentum_reversal" in closed.reason_codes
 
 
 def test_medium_term_trend_emits_only_tighter_atr_stop_updates() -> None:
@@ -616,6 +836,119 @@ def test_dynamic_portfolio_fraction_caps_incremental_notional() -> None:
     )
 
     assert Decimal("499") <= sized.notional_usdt <= Decimal("500")
+
+
+def test_scale_in_sizing_targets_total_position_and_portfolio_open_risk() -> None:
+    now = datetime(2026, 7, 30, tzinfo=timezone.utc)
+    plan = TradePlan.create(
+        strategy_id="scale-in-cap",
+        run_id="r1",
+        instrument_id="BTC-USDT-SWAP",
+        signal_at=now,
+        data_as_of=now,
+        action=TradeAction.ADD_LONG,
+        confidence=0.8,
+        reference_price=100.0,
+        stop_loss_price=90.0,
+        take_profit_price=None,
+        leverage=3.0,
+        risk_budget_usdt=0.0,
+        risk_budget_fraction=0.10,
+        target_notional_fraction=0.50,
+        max_portfolio_notional_fraction=1.0,
+        max_portfolio_risk_fraction=0.05,
+        reason_codes=("test",),
+        source_bar_count=100,
+    )
+
+    sized = size_trade_plan(
+        plan,
+        _instrument(),
+        _mandate(),
+        equity_usdt=10_000,
+        current_total_exposure_usdt=4_000,
+        current_position_exposure_usdt=4_000,
+        current_correlated_exposure_usdt=4_000,
+        margin_used_usdt=1_333,
+        current_portfolio_open_risk_usdt=450,
+    )
+
+    assert plan.is_scale_in
+    assert Decimal("490") <= sized.notional_usdt <= Decimal("500")
+
+
+def test_backtester_aggregates_scale_in_lots_under_one_position() -> None:
+    index = pd.date_range("2026-07-01", periods=4, freq="1D", tz="UTC")
+    bars = pd.DataFrame(
+        {
+            "open": [100.0, 101.0, 104.0, 109.0],
+            "high": [101.0, 104.0, 108.0, 111.0],
+            "low": [99.0, 100.0, 103.0, 108.0],
+            "close": [100.0, 103.0, 107.0, 110.0],
+            "volume": 1000.0,
+            "confirm": "1",
+        },
+        index=index,
+    )
+
+    class _ScaleInStrategy:
+        def evaluate(self, *, instrument_id, bars, run_id, now, position=None):  # noqa: ANN001
+            frame = pd.DataFrame(bars)
+            action = TradeAction.HOLD
+            stop = None
+            risk = None
+            target = None
+            reasons = ("hold",)
+            if position is None and len(frame) == 1:
+                action = TradeAction.OPEN_LONG
+                stop = 90.0
+                risk = 0.05
+                target = 0.10
+                reasons = ("initial",)
+            elif position is not None and position.scale_count == 1:
+                action = TradeAction.ADD_LONG
+                stop = position.entry_price
+                risk = 0.05
+                target = 0.20
+                reasons = ("add",)
+            risk_increasing = action in (
+                TradeAction.OPEN_LONG,
+                TradeAction.OPEN_SHORT,
+                TradeAction.ADD_LONG,
+                TradeAction.ADD_SHORT,
+            )
+            return TradePlan.create(
+                strategy_id="scale-in-test",
+                run_id=run_id,
+                instrument_id=instrument_id,
+                signal_at=now,
+                data_as_of=frame.index[-1].to_pydatetime(),
+                action=action,
+                confidence=0.8,
+                reference_price=float(frame["close"].iloc[-1]),
+                stop_loss_price=stop,
+                take_profit_price=None,
+                leverage=3.0,
+                risk_budget_usdt=0.0,
+                risk_budget_fraction=risk,
+                target_notional_fraction=target,
+                max_portfolio_notional_fraction=(1.0 if risk_increasing else None),
+                max_portfolio_risk_fraction=(0.20 if risk_increasing else None),
+                reason_codes=reasons,
+                source_bar_count=len(frame),
+            )
+
+    result = PerpetualBacktester(
+        strategy=_ScaleInStrategy(),
+        mandate=_mandate(),
+        instruments={"BTC-USDT-SWAP": _instrument()},
+    ).run({"BTC-USDT-SWAP": bars})
+
+    assert result.scale_in_count == 1
+    assert result.rejected_plan_count == 0
+    assert result.trade_count == 1
+    assert "add" in result.trades[0].entry_reason_codes
+    assert result.max_gross_exposure_fraction > 0.10
 
 
 def test_backtester_keeps_no_take_profit_position_open_until_strategy_exit() -> None:

@@ -284,6 +284,11 @@ class CryptoStrategyRunner:
                     )
                     executions.append({"plan_id": plan.plan_id, **result})
                     continue
+                if plan.is_scale_in:
+                    raise ValueError(
+                        "strategy scale-in plans are research-only until Demo protection "
+                        "resizing and reconciliation are implemented"
+                    )
                 if position is not None:
                     raise ValueError(f"{symbol} already has an open position")
 

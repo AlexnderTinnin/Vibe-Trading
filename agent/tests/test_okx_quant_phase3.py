@@ -21,7 +21,7 @@ from src.live.mandate.model import (
 )
 from src.live.runtime.swap_state import SwapRuntimeStore, swap_breaker_status
 from src.trading.connectors.okx.swap import SwapInstrument
-from src.trading.quant.backtest import PerpetualBacktester, _OpenPosition
+from src.trading.quant.backtest import PerpetualBacktester, _OpenPosition, _PositionLot
 from src.trading.quant.costs import PerpetualCostModel
 from src.trading.quant.models import ExecutionMode, TradeAction, TradePlan
 from src.trading.quant.runner import (
@@ -264,26 +264,41 @@ def test_actual_funding_rates_charge_longs_and_credit_shorts() -> None:
         return _OpenPosition(
             instrument_id="BTC-USDT-SWAP",
             direction=direction,
-            opened_at=opened,
-            entry_price=100.0,
-            contracts=1.0,
+            lots=[
+                _PositionLot(
+                    opened_at=opened,
+                    entry_price=100.0,
+                    contracts=1.0,
+                    entry_fee_usdt=0.0,
+                    entry_reason_codes=("test",),
+                )
+            ],
             stop_loss=90.0 if direction == "long" else 110.0,
             take_profit=None,
             liquidation_price=50.0 if direction == "long" else 150.0,
             leverage=3.0,
-            entry_fee_usdt=0.0,
-            entry_reason_codes=("test",),
+            initial_stop_loss=90.0 if direction == "long" else 110.0,
         )
 
-    long_cost = backtester._funding_cost(
-        position("long"), closed, mark_price=110.0, fallback=99.0
-    )
-    short_cost = backtester._funding_cost(
-        position("short"), closed, mark_price=110.0, fallback=99.0
-    )
+    long_cost = backtester._funding_cost(position("long"), closed, mark_price=110.0)
+    short_cost = backtester._funding_cost(position("short"), closed, mark_price=110.0)
 
     assert long_cost == pytest.approx(0.033)
     assert short_cost == pytest.approx(-0.033)
+
+    scaled = position("long")
+    scaled.lots.append(
+        _PositionLot(
+            opened_at=pd.Timestamp("2026-01-01 12:00", tz="UTC"),
+            entry_price=105.0,
+            contracts=1.0,
+            entry_fee_usdt=0.0,
+            entry_reason_codes=("add",),
+        )
+    )
+    assert backtester._funding_cost(scaled, closed, mark_price=110.0) == pytest.approx(
+        0.055
+    )
 
 
 def test_backtest_uses_same_strategy_and_returns_costed_metrics() -> None:

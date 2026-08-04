@@ -390,6 +390,484 @@ class MediumTermTrendStrategy:
 
 
 @dataclass(frozen=True)
+class EnhancedMediumTermTrendConfig:
+    """Robust, staged daily trend parameters for research and walk-forward tests."""
+
+    strategy_id: str = "btc_eth_medium_term_trend_v3"
+    momentum_lookback: int = 75
+    realized_volatility_lookback: int = 30
+    early_entry_lookback: int = 20
+    confirmation_entry_lookback: int = 50
+    exit_lookback: int = 20
+    trend_ema_period: int = 100
+    trend_ema_slope_lookback: int = 20
+    adx_period: int = 14
+    minimum_adx: float = 20.0
+    atr_period: int = 14
+    initial_stop_atr_multiple: float = 3.0
+    trailing_stop_atr_multiple: float = 4.0
+    trailing_activation_r_multiple: float = 1.0
+    maximum_initial_stop_fraction: float = 0.20
+    minimum_stop_update_atr_fraction: float = 0.10
+    momentum_reversal_confirmation_bars: int = 3
+    pyramid_atr_step: float = 1.0
+    stage_target_fractions: tuple[float, float, float] = (0.40, 0.70, 1.0)
+    target_annual_volatility: float = 0.45
+    max_notional_fraction: float = 1.0
+    max_portfolio_notional_fraction: float = 1.5
+    initial_risk_fraction: float = 0.02
+    scale_in_risk_fraction: float = 0.01
+    max_portfolio_open_risk_fraction: float = 0.045
+    adverse_funding_rate_8h: float = 0.0003
+    extreme_funding_rate_8h: float = 0.00075
+    adverse_funding_notional_scale: float = 0.50
+    funding_rate_lookback_events: int = 9
+    leverage: float = 3.0
+    allow_short: bool = True
+    enable_pyramiding: bool = False
+    maximum_history_bars: int = 400
+
+    def validate(self) -> None:
+        lookbacks = (
+            self.momentum_lookback,
+            self.realized_volatility_lookback,
+            self.early_entry_lookback,
+            self.confirmation_entry_lookback,
+            self.exit_lookback,
+            self.trend_ema_period,
+            self.trend_ema_slope_lookback,
+            self.adx_period,
+            self.atr_period,
+        )
+        if min(lookbacks) <= 1:
+            raise ValueError("enhanced trend lookbacks must be greater than one")
+        if self.exit_lookback > self.confirmation_entry_lookback:
+            raise ValueError("enhanced trend exit lookback exceeds confirmation entry")
+        if self.early_entry_lookback > self.confirmation_entry_lookback:
+            raise ValueError("enhanced trend early entry exceeds confirmation entry")
+        if not 0 < self.minimum_adx <= 100:
+            raise ValueError("enhanced trend ADX threshold is invalid")
+        positive = (
+            self.initial_stop_atr_multiple,
+            self.trailing_stop_atr_multiple,
+            self.trailing_activation_r_multiple,
+            self.minimum_stop_update_atr_fraction,
+            self.pyramid_atr_step,
+            self.target_annual_volatility,
+            self.max_notional_fraction,
+            self.max_portfolio_notional_fraction,
+            self.initial_risk_fraction,
+            self.scale_in_risk_fraction,
+            self.max_portfolio_open_risk_fraction,
+            self.adverse_funding_rate_8h,
+            self.extreme_funding_rate_8h,
+            self.adverse_funding_notional_scale,
+        )
+        if min(positive) <= 0:
+            raise ValueError("enhanced trend risk parameters must be positive")
+        if not 0 < self.maximum_initial_stop_fraction < 1:
+            raise ValueError("enhanced trend initial stop cap is invalid")
+        if self.extreme_funding_rate_8h <= self.adverse_funding_rate_8h:
+            raise ValueError("extreme funding threshold must exceed the adverse threshold")
+        if self.adverse_funding_notional_scale > 1:
+            raise ValueError("adverse funding scale must not exceed one")
+        if not 1 <= self.momentum_reversal_confirmation_bars <= 10:
+            raise ValueError("momentum reversal confirmation bars are invalid")
+        if not 1 <= self.funding_rate_lookback_events <= 90:
+            raise ValueError("funding rate lookback events are invalid")
+        stages = self.stage_target_fractions
+        if (
+            len(stages) != 3
+            or not 0 < stages[0] < stages[1] < stages[2] <= 1
+        ):
+            raise ValueError("enhanced trend stage target fractions are invalid")
+        if max(
+            self.initial_risk_fraction,
+            self.scale_in_risk_fraction,
+            self.max_portfolio_open_risk_fraction,
+        ) > 1:
+            raise ValueError("enhanced trend risk fraction exceeds one")
+        if not isinstance(self.allow_short, bool) or not isinstance(
+            self.enable_pyramiding, bool
+        ):
+            raise ValueError("enhanced trend boolean settings are invalid")
+        if not 1 <= self.leverage <= 10:
+            raise ValueError("enhanced trend leverage is invalid")
+        if (
+            not isinstance(self.maximum_history_bars, int)
+            or self.maximum_history_bars < self.minimum_history_bars
+        ):
+            raise ValueError("enhanced trend history window is shorter than its lookbacks")
+
+    @property
+    def minimum_history_bars(self) -> int:
+        return max(
+            self.momentum_lookback + self.momentum_reversal_confirmation_bars,
+            self.realized_volatility_lookback + 1,
+            self.confirmation_entry_lookback + 2,
+            self.exit_lookback + 2,
+            self.trend_ema_period + self.trend_ema_slope_lookback,
+            self.adx_period * 3,
+            self.atr_period + 2,
+        )
+
+
+class EnhancedMediumTermTrendStrategy:
+    """Daily staged trend following with delayed trailing and funding-aware size."""
+
+    requires_funding_rate = True
+    research_only = True
+
+    def __init__(self, config: EnhancedMediumTermTrendConfig | None = None) -> None:
+        self.config = config or EnhancedMediumTermTrendConfig()
+        self.config.validate()
+        self._prepared_indicators: dict[tuple[str, object], pd.DataFrame] = {}
+
+    @property
+    def history_limit(self) -> int:
+        return self.config.maximum_history_bars
+
+    @property
+    def funding_rate_lookback_events(self) -> int:
+        return self.config.funding_rate_lookback_events
+
+    def prepare_backtest(self, frames: Mapping[str, pd.DataFrame]) -> None:
+        for instrument_id, frame in frames.items():
+            token = frame.attrs.get("_quant_backtest_token")
+            if token is not None:
+                self._prepared_indicators[(instrument_id, token)] = (
+                    _enhanced_medium_term_indicators(frame, self.config)
+                )
+
+    def evaluate(
+        self,
+        *,
+        instrument_id: str,
+        bars: pd.DataFrame | Sequence[Mapping[str, Any]],
+        run_id: str,
+        now: datetime,
+        position: PositionView | None = None,
+        funding_rate_8h: float | None = None,
+    ) -> TradePlan:
+        backtest_token = (
+            bars.attrs.get("_quant_backtest_token")
+            if isinstance(bars, pd.DataFrame)
+            else None
+        )
+        frame = bars if backtest_token is not None else _normalize_bars(bars)
+        interval = _bar_interval(frame)
+        if not pd.Timedelta(hours=20) <= interval <= pd.Timedelta(hours=28):
+            raise ValueError("enhanced trend strategy requires confirmed daily bars")
+        if len(frame) < self.config.minimum_history_bars:
+            raise ValueError(
+                "enhanced trend strategy requires at least "
+                f"{self.config.minimum_history_bars} confirmed daily bars"
+            )
+        frame = frame.iloc[-self.config.maximum_history_bars :]
+        prepared = self._prepared_indicators.get((instrument_id, backtest_token))
+        indicators = (
+            prepared.loc[: frame.index[-1]]
+            if prepared is not None and frame.index[-1] in prepared.index
+            else _enhanced_medium_term_indicators(frame, self.config)
+        )
+        latest = indicators.iloc[-1]
+        required = (
+            "atr",
+            "adx",
+            "plus_di",
+            "minus_di",
+            "early_high",
+            "early_low",
+            "confirmation_high",
+            "confirmation_low",
+            "exit_high",
+            "exit_low",
+            "momentum",
+            "realized_volatility",
+            "trend_ema",
+            "trend_ema_slope",
+        )
+        if not all(pd.notna(latest[column]) for column in required):
+            raise ValueError("enhanced trend indicators are unavailable")
+
+        close = frame["close"].astype(float)
+        price = float(close.iloc[-1])
+        atr_value = float(latest["atr"])
+        adx_value = float(latest["adx"])
+        momentum = float(latest["momentum"])
+        realized_volatility = float(latest["realized_volatility"])
+        if not math.isfinite(realized_volatility) or realized_volatility <= 0:
+            raise ValueError("enhanced trend realized volatility is unavailable")
+        if funding_rate_8h is not None and not math.isfinite(float(funding_rate_8h)):
+            raise ValueError("enhanced trend funding rate is invalid")
+
+        long_regime = (
+            price > float(latest["trend_ema"])
+            and float(latest["trend_ema_slope"]) > 0
+            and momentum > 0
+            and float(latest["plus_di"]) > float(latest["minus_di"])
+            and adx_value >= self.config.minimum_adx
+        )
+        short_regime = (
+            price < float(latest["trend_ema"])
+            and float(latest["trend_ema_slope"]) < 0
+            and momentum < 0
+            and float(latest["minus_di"]) > float(latest["plus_di"])
+            and adx_value >= self.config.minimum_adx
+        )
+        confidence = min(
+            1.0,
+            0.60
+            + max(0.0, adx_value - self.config.minimum_adx) / 100.0
+            + min(abs(momentum), 0.50) * 0.20,
+        )
+        action = TradeAction.HOLD
+        stop: float | None = None
+        reasons = ["no_entry"]
+        risk_fraction: float | None = None
+        target_fraction: float | None = None
+
+        if position is not None and position.is_open:
+            action, stop, reasons, target_fraction, risk_fraction = self._manage_position(
+                position=position,
+                frame=frame,
+                indicators=indicators,
+                latest=latest,
+                price=price,
+                atr_value=atr_value,
+                realized_volatility=realized_volatility,
+                long_regime=long_regime,
+                short_regime=short_regime,
+                funding_rate_8h=funding_rate_8h,
+            )
+        elif long_regime and price > float(latest["early_high"]):
+            action = TradeAction.OPEN_LONG
+            stop = max(
+                price - self.config.initial_stop_atr_multiple * atr_value,
+                price * (1.0 - self.config.maximum_initial_stop_fraction),
+            )
+            reasons = ["early_donchian_long", "ema_rising", "adx_di_confirmed"]
+        elif (
+            self.config.allow_short
+            and short_regime
+            and price < float(latest["early_low"])
+        ):
+            action = TradeAction.OPEN_SHORT
+            stop = min(
+                price + self.config.initial_stop_atr_multiple * atr_value,
+                price * (1.0 + self.config.maximum_initial_stop_fraction),
+            )
+            reasons = ["early_donchian_short", "ema_falling", "adx_di_confirmed"]
+
+        if action in (TradeAction.OPEN_LONG, TradeAction.OPEN_SHORT):
+            direction = 1 if action is TradeAction.OPEN_LONG else -1
+            funding_scale = self._funding_scale(direction, funding_rate_8h)
+            if funding_scale == 0:
+                action = TradeAction.HOLD
+                stop = None
+                reasons = ["extreme_adverse_funding", "entry_skipped"]
+            else:
+                base_target = self._base_target_fraction(realized_volatility)
+                stage_scale = (
+                    self.config.stage_target_fractions[0]
+                    if self.config.enable_pyramiding
+                    else 1.0
+                )
+                target_fraction = base_target * stage_scale * funding_scale
+                risk_fraction = self.config.initial_risk_fraction * funding_scale
+                if funding_scale < 1:
+                    reasons.append("adverse_funding_scaled")
+
+        return TradePlan.create(
+            strategy_id=self.config.strategy_id,
+            run_id=run_id,
+            instrument_id=instrument_id,
+            signal_at=_aware(now),
+            data_as_of=_aware(frame.index[-1].to_pydatetime()),
+            action=action,
+            confidence=confidence,
+            reference_price=price,
+            stop_loss_price=stop,
+            take_profit_price=None,
+            leverage=self.config.leverage,
+            risk_budget_usdt=0.0,
+            risk_budget_fraction=risk_fraction,
+            target_notional_fraction=target_fraction,
+            max_portfolio_notional_fraction=(
+                self.config.max_portfolio_notional_fraction
+                if action in (
+                    TradeAction.OPEN_LONG,
+                    TradeAction.OPEN_SHORT,
+                    TradeAction.ADD_LONG,
+                    TradeAction.ADD_SHORT,
+                )
+                else None
+            ),
+            max_portfolio_risk_fraction=(
+                self.config.max_portfolio_open_risk_fraction
+                if action in (
+                    TradeAction.OPEN_LONG,
+                    TradeAction.OPEN_SHORT,
+                    TradeAction.ADD_LONG,
+                    TradeAction.ADD_SHORT,
+                )
+                else None
+            ),
+            reason_codes=reasons,
+            source_bar_count=len(frame),
+        )
+
+    def _manage_position(
+        self,
+        *,
+        position: PositionView,
+        frame: pd.DataFrame,
+        indicators: pd.DataFrame,
+        latest: pd.Series,
+        price: float,
+        atr_value: float,
+        realized_volatility: float,
+        long_regime: bool,
+        short_regime: bool,
+        funding_rate_8h: float | None,
+    ) -> tuple[TradeAction, float | None, list[str], float | None, float | None]:
+        direction = 1 if position.direction == "long" else -1
+        channel_reversed = (
+            direction > 0 and price < float(latest["exit_low"])
+        ) or (
+            direction < 0 and price > float(latest["exit_high"])
+        )
+        if channel_reversed:
+            return (
+                TradeAction.CLOSE,
+                None,
+                ["donchian_exit", f"close_{position.direction}"],
+                None,
+                None,
+            )
+
+        recent_momentum = indicators["momentum"].dropna().iloc[
+            -self.config.momentum_reversal_confirmation_bars :
+        ]
+        confirmed_reversal = (
+            len(recent_momentum) == self.config.momentum_reversal_confirmation_bars
+            and bool((direction * recent_momentum <= 0).all())
+        )
+        if confirmed_reversal:
+            return (
+                TradeAction.CLOSE,
+                None,
+                ["confirmed_momentum_reversal", f"close_{position.direction}"],
+                None,
+                None,
+            )
+
+        current_stop = position.stop_loss_price
+        if current_stop is None:
+            raise ValueError("enhanced trend position requires a durable stop")
+        regime_held = long_regime if direction > 0 else short_regime
+        scale_count = max(1, int(position.scale_count))
+        if self.config.enable_pyramiding and regime_held and scale_count < 3:
+            confirmation_crossed = (
+                direction > 0 and price > float(latest["confirmation_high"])
+            ) or (
+                direction < 0 and price < float(latest["confirmation_low"])
+            )
+            favorable_move = direction * (price - position.entry_price)
+            pyramid_crossed = favorable_move >= self.config.pyramid_atr_step * atr_value
+            should_add = confirmation_crossed if scale_count == 1 else pyramid_crossed
+            if should_add:
+                funding_scale = self._funding_scale(direction, funding_rate_8h)
+                if funding_scale > 0:
+                    action = TradeAction.ADD_LONG if direction > 0 else TradeAction.ADD_SHORT
+                    protected_stop = (
+                        max(current_stop, position.entry_price)
+                        if direction > 0
+                        else min(current_stop, position.entry_price)
+                    )
+                    target = (
+                        self._base_target_fraction(realized_volatility)
+                        * self.config.stage_target_fractions[scale_count]
+                        * funding_scale
+                    )
+                    reasons = [
+                        "confirmation_scale_in" if scale_count == 1 else "profit_scale_in",
+                        f"scale_level_{scale_count + 1}",
+                        "existing_risk_protected",
+                    ]
+                    if funding_scale < 1:
+                        reasons.append("adverse_funding_scaled")
+                    return (
+                        action,
+                        protected_stop,
+                        reasons,
+                        target,
+                        self.config.scale_in_risk_fraction * funding_scale,
+                    )
+
+        initial_stop = (
+            position.initial_stop_loss_price
+            if position.initial_stop_loss_price is not None
+            else current_stop
+        )
+        initial_risk = abs(position.entry_price - initial_stop)
+        favorable_move = direction * (price - position.entry_price)
+        if initial_risk <= 0 or favorable_move < (
+            self.config.trailing_activation_r_multiple * initial_risk
+        ):
+            reasons = ["position_held", "trailing_not_armed"]
+            if not regime_held:
+                reasons.append("trend_confirmation_softened")
+            return TradeAction.HOLD, None, reasons, None, None
+
+        opened_at = pd.Timestamp(position.opened_at) if position.opened_at else frame.index[0]
+        if opened_at.tzinfo is None:
+            opened_at = opened_at.tz_localize("UTC")
+        else:
+            opened_at = opened_at.tz_convert("UTC")
+        since_entry = frame.loc[frame.index >= opened_at]
+        if since_entry.empty:
+            since_entry = frame.iloc[[-1]]
+        candidate = (
+            float(since_entry["high"].max())
+            - self.config.trailing_stop_atr_multiple * atr_value
+            if direction > 0
+            else float(since_entry["low"].min())
+            + self.config.trailing_stop_atr_multiple * atr_value
+        )
+        improvement = candidate - current_stop if direction > 0 else current_stop - candidate
+        crossed = candidate >= price if direction > 0 else candidate <= price
+        if (
+            improvement >= self.config.minimum_stop_update_atr_fraction * atr_value
+            and not crossed
+        ):
+            return (
+                TradeAction.UPDATE_STOP,
+                candidate,
+                ["delayed_atr_trailing_stop", f"protect_{position.direction}"],
+                None,
+                None,
+            )
+        return TradeAction.HOLD, None, ["position_held", "trend_active"], None, None
+
+    def _base_target_fraction(self, realized_volatility: float) -> float:
+        return min(
+            self.config.target_annual_volatility / realized_volatility,
+            self.config.max_notional_fraction,
+        )
+
+    def _funding_scale(self, direction: int, funding_rate_8h: float | None) -> float:
+        if funding_rate_8h is None:
+            return 1.0
+        adverse_rate = direction * float(funding_rate_8h)
+        if adverse_rate >= self.config.extreme_funding_rate_8h:
+            return 0.0
+        if adverse_rate >= self.config.adverse_funding_rate_8h:
+            return self.config.adverse_funding_notional_scale
+        return 1.0
+
+
+@dataclass(frozen=True)
 class RegimeStrategyConfig:
     """Parameters for the 1D-filtered, 4H regime-switching strategy."""
 
@@ -749,6 +1227,16 @@ def _wilder_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int) 
 
 
 def _wilder_adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int) -> pd.Series:
+    adx, _, _ = _wilder_directional_index(high, low, close, period)
+    return adx
+
+
+def _wilder_directional_index(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    period: int,
+) -> tuple[pd.Series, pd.Series, pd.Series]:
     upward = high.diff()
     downward = -low.diff()
     plus_dm = upward.where((upward > downward) & (upward > 0), 0.0)
@@ -758,7 +1246,7 @@ def _wilder_adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int) 
     minus_di = 100.0 * _wilder_average(minus_dm, period) / atr.where(atr != 0)
     denominator = (plus_di + minus_di).where((plus_di + minus_di) != 0)
     dx = 100.0 * (plus_di - minus_di).abs() / denominator
-    return _wilder_average(dx, period)
+    return _wilder_average(dx, period), plus_di, minus_di
 
 
 def _wilder_rsi(close: pd.Series, period: int) -> pd.Series:
@@ -791,6 +1279,56 @@ def _medium_term_indicators(
                 .rolling(config.realized_volatility_lookback)
                 .std(ddof=1)
                 * math.sqrt(365.0)
+            ),
+        },
+        index=frame.index,
+    )
+
+
+def _enhanced_medium_term_indicators(
+    frame: pd.DataFrame,
+    config: EnhancedMediumTermTrendConfig,
+) -> pd.DataFrame:
+    close = frame["close"].astype(float)
+    high = frame["high"].astype(float)
+    low = frame["low"].astype(float)
+    adx, plus_di, minus_di = _wilder_directional_index(
+        high,
+        low,
+        close,
+        config.adx_period,
+    )
+    trend_ema = close.ewm(
+        span=config.trend_ema_period,
+        adjust=False,
+        min_periods=config.trend_ema_period,
+    ).mean()
+    return pd.DataFrame(
+        {
+            "atr": _wilder_atr(high, low, close, config.atr_period),
+            "adx": adx,
+            "plus_di": plus_di,
+            "minus_di": minus_di,
+            "early_high": high.shift(1).rolling(config.early_entry_lookback).max(),
+            "early_low": low.shift(1).rolling(config.early_entry_lookback).min(),
+            "confirmation_high": high.shift(1)
+            .rolling(config.confirmation_entry_lookback)
+            .max(),
+            "confirmation_low": low.shift(1)
+            .rolling(config.confirmation_entry_lookback)
+            .min(),
+            "exit_high": high.shift(1).rolling(config.exit_lookback).max(),
+            "exit_low": low.shift(1).rolling(config.exit_lookback).min(),
+            "momentum": close / close.shift(config.momentum_lookback) - 1.0,
+            "realized_volatility": (
+                close.pct_change()
+                .rolling(config.realized_volatility_lookback)
+                .std(ddof=1)
+                * math.sqrt(365.0)
+            ),
+            "trend_ema": trend_ema,
+            "trend_ema_slope": (
+                trend_ema / trend_ema.shift(config.trend_ema_slope_lookback) - 1.0
             ),
         },
         index=frame.index,

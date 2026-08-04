@@ -8,7 +8,7 @@ from decimal import Decimal
 from src.live.mandate.model import Mandate
 from src.trading.connectors.okx.swap import SwapInstrument, decimal_string, floor_to_step
 from src.trading.quant.costs import PerpetualCostModel
-from src.trading.quant.models import TradeAction, TradePlan
+from src.trading.quant.models import TradePlan
 
 
 @dataclass(frozen=True)
@@ -41,15 +41,18 @@ def size_trade_plan(
     current_position_exposure_usdt: float,
     current_correlated_exposure_usdt: float,
     margin_used_usdt: float,
+    current_portfolio_open_risk_usdt: float = 0.0,
     cost_model: PerpetualCostModel | None = None,
     execution_reference_price: float | None = None,
 ) -> SizedTrade:
     """Risk-budget sizing followed by every mandate and product cap."""
     plan.validate()
-    if plan.action not in (TradeAction.OPEN_LONG, TradeAction.OPEN_SHORT):
-        raise ValueError("only opening TradePlans are sized by risk budget")
+    if not plan.is_risk_increasing:
+        raise ValueError("only risk-increasing TradePlans are sized by risk budget")
     if equity_usdt <= 0:
         raise ValueError("positive equity is required for sizing")
+    if current_portfolio_open_risk_usdt < 0:
+        raise ValueError("current portfolio open risk must not be negative")
     if plan.stop_loss_price is None:
         raise ValueError("opening TradePlan has no stop loss")
     model = cost_model or PerpetualCostModel()
@@ -60,19 +63,21 @@ def size_trade_plan(
     )
     if resolved_price <= 0:
         raise ValueError("execution reference price must be positive")
-    if plan.action is TradeAction.OPEN_LONG:
+    if plan.position_side == "long":
         if plan.stop_loss_price >= resolved_price:
             raise ValueError("current execution price is outside the long stop/target range")
         if plan.take_profit_price is not None and resolved_price >= plan.take_profit_price:
             raise ValueError("current execution price is outside the long stop/target range")
-    if plan.action is TradeAction.OPEN_SHORT:
+    if plan.position_side == "short":
         if plan.stop_loss_price <= resolved_price:
             raise ValueError("current execution price is outside the short target/stop range")
         if plan.take_profit_price is not None and resolved_price <= plan.take_profit_price:
             raise ValueError("current execution price is outside the short target/stop range")
     price = Decimal(str(resolved_price))
     leverage = Decimal(str(min(plan.leverage, mandate.hard_caps.max_leverage)))
-    direction = "long" if plan.action is TradeAction.OPEN_LONG else "short"
+    direction = plan.position_side
+    if direction is None:
+        raise ValueError("risk-increasing plan has no position direction")
     liquidation = Decimal(
         str(
             model.estimated_liquidation_price(
@@ -120,8 +125,11 @@ def size_trade_plan(
         ),
     ]
     if plan.target_notional_fraction is not None:
+        target_notional = equity_usdt * plan.target_notional_fraction
+        if plan.is_scale_in:
+            target_notional = max(0.0, target_notional - current_position_exposure_usdt)
         capacity_limits.append(
-            Decimal(str(equity_usdt * plan.target_notional_fraction))
+            Decimal(str(target_notional))
         )
     if plan.max_portfolio_notional_fraction is not None:
         dynamic_portfolio_cap = equity_usdt * plan.max_portfolio_notional_fraction
@@ -140,6 +148,13 @@ def size_trade_plan(
                 ),
             )
         )
+    if plan.max_portfolio_risk_fraction is not None:
+        remaining_open_risk = max(
+            0.0,
+            equity_usdt * plan.max_portfolio_risk_fraction
+            - current_portfolio_open_risk_usdt,
+        )
+        capacity_limits.append(Decimal(str(remaining_open_risk)) / risk_ratio)
     capacity = min(capacity_limits)
     one_contract = instrument.contract_value * price
     contracts = floor_to_step(capacity / one_contract, instrument.lot_size)

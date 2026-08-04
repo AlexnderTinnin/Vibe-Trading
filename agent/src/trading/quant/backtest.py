@@ -54,8 +54,10 @@ class BacktestResult:
     total_economic_costs_usdt: float
     average_holding_hours: float
     trade_count: int
+    scale_in_count: int
     rejected_plan_count: int
     win_rate: float
+    max_gross_exposure_fraction: float
     trades: tuple[BacktestTrade, ...]
     equity_curve: tuple[tuple[str, float], ...]
     exit_reasons: tuple[tuple[str, int], ...]
@@ -78,8 +80,10 @@ class BacktestResult:
             "total_economic_costs_usdt": self.total_economic_costs_usdt,
             "average_holding_hours": self.average_holding_hours,
             "trade_count": self.trade_count,
+            "scale_in_count": self.scale_in_count,
             "rejected_plan_count": self.rejected_plan_count,
             "win_rate": self.win_rate,
+            "max_gross_exposure_fraction": self.max_gross_exposure_fraction,
             "trades": [trade.__dict__ for trade in self.trades],
             "equity_curve": [list(item) for item in self.equity_curve],
             "exit_reasons": dict(self.exit_reasons),
@@ -87,18 +91,52 @@ class BacktestResult:
 
 
 @dataclass
-class _OpenPosition:
-    instrument_id: str
-    direction: str
+class _PositionLot:
     opened_at: pd.Timestamp
     entry_price: float
     contracts: float
+    entry_fee_usdt: float
+    entry_reason_codes: tuple[str, ...]
+
+
+@dataclass
+class _OpenPosition:
+    instrument_id: str
+    direction: str
+    lots: list[_PositionLot]
     stop_loss: float
     take_profit: float | None
     liquidation_price: float
     leverage: float
-    entry_fee_usdt: float
-    entry_reason_codes: tuple[str, ...]
+    initial_stop_loss: float
+    scale_count: int = 1
+
+    @property
+    def opened_at(self) -> pd.Timestamp:
+        return min(lot.opened_at for lot in self.lots)
+
+    @property
+    def contracts(self) -> float:
+        return sum(lot.contracts for lot in self.lots)
+
+    @property
+    def entry_price(self) -> float:
+        contracts = self.contracts
+        if contracts <= 0:
+            return 0.0
+        return sum(lot.entry_price * lot.contracts for lot in self.lots) / contracts
+
+    @property
+    def entry_fee_usdt(self) -> float:
+        return sum(lot.entry_fee_usdt for lot in self.lots)
+
+    @property
+    def entry_reason_codes(self) -> tuple[str, ...]:
+        return tuple(
+            reason
+            for lot in self.lots
+            for reason in lot.entry_reason_codes
+        )
 
 
 class PerpetualBacktester:
@@ -176,7 +214,9 @@ class PerpetualBacktester:
         positions: dict[str, _OpenPosition] = {}
         pending: dict[str, TradePlan] = {}
         trades: list[BacktestTrade] = []
+        scale_ins = 0
         rejected_plans = 0
+        max_gross_exposure_fraction = 0.0
         curve: list[tuple[str, float]] = []
 
         for timestamp in timeline:
@@ -208,6 +248,22 @@ class PerpetualBacktester:
                             rejected_plans += 1
                         else:
                             positions[symbol] = position
+                    elif plan.is_scale_in and symbol in positions:
+                        try:
+                            self._increase(
+                                positions[symbol],
+                                plan,
+                                timestamp,
+                                float(bar["open"]),
+                                equity,
+                                positions,
+                            )
+                        except ValueError:
+                            rejected_plans += 1
+                        else:
+                            scale_ins += 1
+                    elif plan.is_scale_in:
+                        rejected_plans += 1
                     elif plan.action is TradeAction.CLOSE and symbol in positions:
                         exit_reason = (
                             plan.reason_codes[0] if plan.reason_codes else "strategy_exit"
@@ -252,6 +308,11 @@ class PerpetualBacktester:
                 strategy_inputs: dict[str, Any] = {}
                 if symbol in daily_frames:
                     strategy_inputs["daily_bars"] = daily_frames[symbol].loc[:timestamp]
+                if bool(getattr(self.strategy, "requires_funding_rate", False)):
+                    strategy_inputs["funding_rate_8h"] = self._recent_funding_rate(
+                        symbol,
+                        timestamp,
+                    )
                 try:
                     signal = self.strategy.evaluate(
                         instrument_id=symbol,
@@ -271,6 +332,18 @@ class PerpetualBacktester:
                 for symbol, position in positions.items()
                 if timestamp in frames[symbol].index
             )
+            gross_exposure = sum(
+                position.contracts
+                * float(self.instruments[symbol].contract_value)
+                * float(frames[symbol].loc[timestamp]["close"])
+                for symbol, position in positions.items()
+                if timestamp in frames[symbol].index
+            )
+            if mark_equity > 0:
+                max_gross_exposure_fraction = max(
+                    max_gross_exposure_fraction,
+                    gross_exposure / mark_equity,
+                )
             peak = max(peak, mark_equity)
             if peak > 0:
                 max_drawdown = max(max_drawdown, (peak - mark_equity) / peak)
@@ -352,8 +425,10 @@ class PerpetualBacktester:
             total_economic_costs_usdt=total_fees + total_funding + estimated_slippage,
             average_holding_hours=(sum(holding_hours) / len(holding_hours) if holding_hours else 0.0),
             trade_count=len(trades),
+            scale_in_count=scale_ins,
             rejected_plan_count=rejected_plans,
             win_rate=wins / len(trades) if trades else 0.0,
+            max_gross_exposure_fraction=max_gross_exposure_fraction,
             trades=tuple(trades),
             equity_curve=tuple(curve),
             exit_reasons=tuple(sorted(Counter(trade.exit_reason for trade in trades).items())),
@@ -368,11 +443,11 @@ class PerpetualBacktester:
         positions: Mapping[str, _OpenPosition],
     ) -> tuple[_OpenPosition, float]:
         instrument = self.instruments[plan.instrument_id]
-        total = sum(
-            value.contracts * float(self.instruments[symbol].contract_value) * value.entry_price
-            for symbol, value in positions.items()
-        )
-        side = "buy" if plan.action is TradeAction.OPEN_LONG else "sell"
+        direction = plan.position_side
+        if direction is None:
+            raise ValueError("opening plan has no direction")
+        total = self._total_exposure(positions)
+        side = "buy" if direction == "long" else "sell"
         entry = self.cost_model.adverse_execution_price(reference_price=open_price, side=side)
         sized = size_trade_plan(
             plan,
@@ -382,13 +457,8 @@ class PerpetualBacktester:
             current_total_exposure_usdt=total,
             current_position_exposure_usdt=0.0,
             current_correlated_exposure_usdt=total,
-            margin_used_usdt=sum(
-                value.contracts
-                * float(self.instruments[symbol].contract_value)
-                * value.entry_price
-                / max(value.leverage, 1.0)
-                for symbol, value in positions.items()
-            ),
+            margin_used_usdt=self._margin_used(positions),
+            current_portfolio_open_risk_usdt=self._portfolio_open_risk(positions),
             cost_model=self.cost_model,
             execution_reference_price=entry,
         )
@@ -397,21 +467,142 @@ class PerpetualBacktester:
         return (
             _OpenPosition(
                 instrument_id=plan.instrument_id,
-                direction="long" if plan.action is TradeAction.OPEN_LONG else "short",
-                opened_at=timestamp,
-                entry_price=entry,
-                contracts=float(sized.contracts),
+                direction=direction,
+                lots=[
+                    _PositionLot(
+                        opened_at=timestamp,
+                        entry_price=entry,
+                        contracts=float(sized.contracts),
+                        entry_fee_usdt=entry_cost,
+                        entry_reason_codes=plan.reason_codes,
+                    )
+                ],
                 stop_loss=float(plan.stop_loss_price),
                 take_profit=(
                     None if plan.take_profit_price is None else float(plan.take_profit_price)
                 ),
                 liquidation_price=float(sized.planned_liquidation_price),
                 leverage=plan.leverage,
-                entry_fee_usdt=entry_cost,
-                entry_reason_codes=plan.reason_codes,
+                initial_stop_loss=float(plan.stop_loss_price),
             ),
             entry_cost,
         )
+
+    def _increase(
+        self,
+        position: _OpenPosition,
+        plan: TradePlan,
+        timestamp: pd.Timestamp,
+        open_price: float,
+        equity: float,
+        positions: Mapping[str, _OpenPosition],
+    ) -> float:
+        direction = plan.position_side
+        if direction is None or direction != position.direction:
+            raise ValueError("scale-in direction does not match the open position")
+        if plan.stop_loss_price is None:
+            raise ValueError("scale-in plan has no aggregate stop loss")
+        proposed_stop = float(plan.stop_loss_price)
+        if direction == "long" and proposed_stop < position.stop_loss:
+            raise ValueError("long scale-in must not loosen the aggregate stop")
+        if direction == "short" and proposed_stop > position.stop_loss:
+            raise ValueError("short scale-in must not loosen the aggregate stop")
+
+        instrument = self.instruments[plan.instrument_id]
+        total = self._total_exposure(positions)
+        current_position_exposure = (
+            position.contracts * float(instrument.contract_value) * position.entry_price
+        )
+        side = "buy" if direction == "long" else "sell"
+        entry = self.cost_model.adverse_execution_price(reference_price=open_price, side=side)
+        protected_portfolio_risk = sum(
+            self._position_open_risk(
+                item,
+                stop_override=(proposed_stop if symbol == plan.instrument_id else None),
+            )
+            for symbol, item in positions.items()
+        )
+        sized = size_trade_plan(
+            plan,
+            instrument,
+            self.mandate,
+            equity_usdt=equity,
+            current_total_exposure_usdt=total,
+            current_position_exposure_usdt=current_position_exposure,
+            current_correlated_exposure_usdt=total,
+            margin_used_usdt=self._margin_used(positions),
+            current_portfolio_open_risk_usdt=protected_portfolio_risk,
+            cost_model=self.cost_model,
+            execution_reference_price=entry,
+        )
+        added_contracts = float(sized.contracts)
+        combined_contracts = position.contracts + added_contracts
+        combined_entry = (
+            position.entry_price * position.contracts + entry * added_contracts
+        ) / combined_contracts
+        combined_liquidation = self.cost_model.estimated_liquidation_price(
+            entry_price=combined_entry,
+            leverage=plan.leverage,
+            direction=direction,
+        )
+        if direction == "long" and proposed_stop <= combined_liquidation:
+            raise ValueError("long aggregate stop is below the post-scale liquidation price")
+        if direction == "short" and proposed_stop >= combined_liquidation:
+            raise ValueError("short aggregate stop is above the post-scale liquidation price")
+        notional = added_contracts * float(instrument.contract_value) * entry
+        entry_cost = self.cost_model.estimate(notional_usdt=notional).fee_usdt
+        position.lots.append(
+            _PositionLot(
+                opened_at=timestamp,
+                entry_price=entry,
+                contracts=added_contracts,
+                entry_fee_usdt=entry_cost,
+                entry_reason_codes=plan.reason_codes,
+            )
+        )
+        position.stop_loss = proposed_stop
+        position.liquidation_price = combined_liquidation
+        position.leverage = plan.leverage
+        position.scale_count += 1
+        return entry_cost
+
+    def _total_exposure(self, positions: Mapping[str, _OpenPosition]) -> float:
+        return sum(
+            position.contracts
+            * float(self.instruments[symbol].contract_value)
+            * position.entry_price
+            for symbol, position in positions.items()
+        )
+
+    def _margin_used(self, positions: Mapping[str, _OpenPosition]) -> float:
+        return sum(
+            position.contracts
+            * float(self.instruments[symbol].contract_value)
+            * position.entry_price
+            / max(position.leverage, 1.0)
+            for symbol, position in positions.items()
+        )
+
+    def _portfolio_open_risk(
+        self,
+        positions: Mapping[str, _OpenPosition],
+    ) -> float:
+        return sum(self._position_open_risk(position) for position in positions.values())
+
+    def _position_open_risk(
+        self,
+        position: _OpenPosition,
+        *,
+        stop_override: float | None = None,
+    ) -> float:
+        stop = position.stop_loss if stop_override is None else stop_override
+        distance = (
+            max(0.0, position.entry_price - stop)
+            if position.direction == "long"
+            else max(0.0, stop - position.entry_price)
+        )
+        instrument = self.instruments[position.instrument_id]
+        return position.contracts * float(instrument.contract_value) * distance
 
     def _gap_exit(self, position: _OpenPosition, bar: pd.Series) -> tuple[str | None, float]:
         open_price = float(bar["open"])
@@ -478,27 +669,43 @@ class PerpetualBacktester:
         instrument = self.instruments[position.instrument_id]
         side = "sell" if position.direction == "long" else "buy"
         exit_price = self.cost_model.adverse_execution_price(reference_price=reference_price, side=side)
-        base_qty = position.contracts * float(instrument.contract_value)
         direction = 1.0 if position.direction == "long" else -1.0
-        gross = (exit_price - position.entry_price) * base_qty * direction
-        hours = max(0.0, (timestamp - position.opened_at).total_seconds() / 3600.0)
+        gross = sum(
+            (exit_price - lot.entry_price)
+            * lot.contracts
+            * float(instrument.contract_value)
+            * direction
+            for lot in position.lots
+        )
         notional = position.contracts * float(instrument.contract_value) * exit_price
-        estimated = self.cost_model.estimate(notional_usdt=notional, holding_hours=hours)
         funding = self._funding_cost(
             position,
             timestamp,
             mark_price=reference_price,
-            fallback=estimated.funding_usdt,
         )
         # Slippage is already embedded in the adverse entry/exit prices.
-        fees = position.entry_fee_usdt + estimated.fee_usdt
+        exit_fee = self.cost_model.estimate(notional_usdt=notional).fee_usdt
+        fees = position.entry_fee_usdt + exit_fee
         costs = fees + funding
         slippage_ratio = self.cost_model.slippage_bps / 10_000.0
-        raw_entry = position.entry_price / (
-            1.0 + slippage_ratio if position.direction == "long" else 1.0 - slippage_ratio
+        entry_slippage = sum(
+            lot.contracts
+            * float(instrument.contract_value)
+            * abs(
+                lot.entry_price
+                - lot.entry_price
+                / (
+                    1.0 + slippage_ratio
+                    if position.direction == "long"
+                    else 1.0 - slippage_ratio
+                )
+            )
+            for lot in position.lots
         )
-        estimated_slippage = base_qty * (
-            abs(position.entry_price - raw_entry) + abs(exit_price - reference_price)
+        estimated_slippage = entry_slippage + (
+            position.contracts
+            * float(instrument.contract_value)
+            * abs(exit_price - reference_price)
         )
         return BacktestTrade(
             instrument_id=position.instrument_id,
@@ -521,24 +728,18 @@ class PerpetualBacktester:
     def _unrealized(self, position: _OpenPosition, bar: pd.Series) -> float:
         instrument = self.instruments[position.instrument_id]
         direction = 1.0 if position.direction == "long" else -1.0
-        gross = (
-            (float(bar["close"]) - position.entry_price)
-            * position.contracts
+        gross = sum(
+            (float(bar["close"]) - lot.entry_price)
+            * lot.contracts
             * float(instrument.contract_value)
             * direction
+            for lot in position.lots
         )
         timestamp = bar.name if isinstance(bar.name, pd.Timestamp) else position.opened_at
-        hours = max(0.0, (timestamp - position.opened_at).total_seconds() / 3600.0)
-        notional = position.contracts * float(instrument.contract_value) * float(bar["close"])
-        estimated_funding = self.cost_model.estimate(
-            notional_usdt=notional,
-            holding_hours=hours,
-        ).funding_usdt
         funding = self._funding_cost(
             position,
             timestamp,
             mark_price=float(bar["close"]),
-            fallback=estimated_funding,
         )
         return gross - position.entry_fee_usdt - funding
 
@@ -548,20 +749,52 @@ class PerpetualBacktester:
         timestamp: pd.Timestamp,
         *,
         mark_price: float,
-        fallback: float,
     ) -> float:
         if not self._use_actual_funding:
-            return fallback
+            instrument = self.instruments[position.instrument_id]
+            return sum(
+                self.cost_model.estimate(
+                    notional_usdt=(
+                        lot.contracts
+                        * float(instrument.contract_value)
+                        * mark_price
+                    ),
+                    holding_hours=max(
+                        0.0,
+                        (timestamp - lot.opened_at).total_seconds() / 3600.0,
+                    ),
+                ).funding_usdt
+                for lot in position.lots
+            )
         rates = self.funding_rates.get(position.instrument_id)
         if rates is None or rates.empty:
             return 0.0
-        paid = rates.loc[(rates.index > position.opened_at) & (rates.index <= timestamp)]
-        if paid.empty:
-            return 0.0
         instrument = self.instruments[position.instrument_id]
-        notional = position.contracts * float(instrument.contract_value) * mark_price
         direction = 1.0 if position.direction == "long" else -1.0
-        return notional * float(paid.sum()) * direction
+        return sum(
+            lot.contracts
+            * float(instrument.contract_value)
+            * mark_price
+            * float(
+                rates.loc[
+                    (rates.index > lot.opened_at) & (rates.index <= timestamp)
+                ].sum()
+            )
+            * direction
+            for lot in position.lots
+        )
+
+    def _recent_funding_rate(
+        self,
+        symbol: str,
+        timestamp: pd.Timestamp,
+    ) -> float | None:
+        rates = self.funding_rates.get(symbol)
+        if rates is None or rates.empty:
+            return None
+        count = int(getattr(self.strategy, "funding_rate_lookback_events", 9))
+        recent = rates.loc[rates.index <= timestamp].tail(max(1, count))
+        return float(recent.mean()) if not recent.empty else None
 
 
 def _position_view(position: _OpenPosition | None) -> PositionView | None:
@@ -576,6 +809,9 @@ def _position_view(position: _OpenPosition | None) -> PositionView | None:
         leverage=position.leverage,
         stop_loss_price=position.stop_loss,
         take_profit_price=position.take_profit,
+        opened_at=position.opened_at.isoformat(),
+        initial_stop_loss_price=position.initial_stop_loss,
+        scale_count=position.scale_count,
     )
 
 
