@@ -92,6 +92,14 @@ export interface CorrelationResponse {
   matrix: number[][];
 }
 
+export interface CorrelationAnalysisResponse {
+  correlation: CorrelationResponse | null;
+  regime: CorrelationRegimeResponse | null;
+  errors: { correlation?: string; regime?: string };
+  coverage: { requested: string[]; missing: string[]; observations: number; first_date: string | null; last_date: string | null;
+    diagnostics: Record<string, { symbol: string; market: string; source: string | null; attempts: Array<{ source: string; reason: "source_unavailable" | "fetch_failed" | "no_data" }> }> };
+}
+
 export interface RegimeEpisode {
   start: string;
   end: string | null;
@@ -420,6 +428,8 @@ function appendQueryParam(url: string, key: string, value: string): string {
 
 export const api = {
   uploadFile,
+  getCorrelationAnalysis: (codes: string, days: number, method: "pearson" | "spearman", includeRegime: boolean, signal?: AbortSignal) =>
+    request<CorrelationAnalysisResponse>(`/correlation/analysis?${new URLSearchParams({ codes, days: String(days), method, include_regime: String(includeRegime) })}`, { signal }),
   getCorrelation: (codes: string, days: number, method: "pearson" | "spearman") =>
     request<CorrelationResponse>(
       `/correlation?codes=${encodeURIComponent(codes)}&days=${encodeURIComponent(String(days))}&method=${encodeURIComponent(method)}`,
@@ -602,6 +612,9 @@ export const api = {
       body: JSON.stringify(body ?? {}),
     }),
   // Alpha Zoo API
+  getAlphaReadiness: () => request<AlphaReadiness>("/alpha/readiness", {}, METADATA_TIMEOUT_MS),
+  getAlphaBenchJob: (jobId: string) => request<AlphaJobSnapshot<AlphaBenchResult>>(`/alpha/bench/${encodeURIComponent(jobId)}`, {}, METADATA_TIMEOUT_MS),
+  getAlphaCompareJob: (jobId: string) => request<AlphaJobSnapshot<AlphaCompareResult>>(`/alpha/compare/${encodeURIComponent(jobId)}`, {}, METADATA_TIMEOUT_MS),
   listAlphas: (params: AlphaListParams = {}) => {
     const q = new URLSearchParams();
     if (params.zoo) q.set("zoo", params.zoo);
@@ -629,10 +642,11 @@ export const api = {
     withAuthTicket(`${BASE}/alpha/compare/${encodeURIComponent(jobId)}/stream`),
 
   // Options Lab
-  analyzeOptionsPayoff: (body: OptionsPayoffRequest) =>
+  analyzeOptionsPayoff: (body: OptionsPayoffRequest, signal?: AbortSignal) =>
     request<OptionsPayoffResponse>("/options/payoff", {
       method: "POST",
       body: JSON.stringify(body),
+      signal,
     }),
   getOptionsChain: (ticker: string, expiration?: number) => {
     const q = new URLSearchParams();
@@ -1654,11 +1668,21 @@ export interface AlphaDetailResponse {
 }
 
 export interface AlphaBenchRequest {
+  request_id?: string;
   zoo: string;
   universe: string;
   period: string;
   top?: number;
+  alpha_id?: string;
 }
+
+export interface AlphaReadiness {
+  universes: Record<string, { ready: boolean; reason: "public_data" | "tushare_ready" | "tushare_token_missing" | "tushare_dependency_missing" | "single_asset" }>;
+  zoo_counts: Record<string, number>;
+}
+
+export interface AlphaProgress { n_done: number; n_total: number; current_alpha_id?: string; stage?: "loading_data" | "preparing_returns" | "computing" }
+export interface AlphaJobSnapshot<T> { job_id: string; status: "queued" | "running" | "done" | "error"; progress: AlphaProgress; result: T | null; error: string | null }
 
 export interface AlphaBenchTopRow {
   id: string;
@@ -1669,7 +1693,17 @@ export interface AlphaBenchTopRow {
   category: "alive" | "reversed" | "dead";
 }
 
+export interface AlphaDataMeta {
+  fetched_instruments?: number;
+  requested_instruments?: number;
+  missing_instruments?: string[];
+  survivorship_bias?: boolean;
+  degraded?: boolean;
+}
+
 export interface AlphaBenchResult {
+  n_alphas_tested?: number;
+  meta?: AlphaDataMeta;
   alive: number;
   reversed: number;
   dead: number;
@@ -1680,6 +1714,7 @@ export interface AlphaBenchResult {
 }
 
 export interface AlphaCompareRequest {
+  request_id?: string;
   alpha_ids: string[];
   universe: string;
   period: string;
@@ -1706,6 +1741,7 @@ export interface AlphaCompareSkip {
 }
 
 export interface AlphaCompareResult {
+  meta?: AlphaDataMeta;
   universe: string;
   period: string;
   sort: string;

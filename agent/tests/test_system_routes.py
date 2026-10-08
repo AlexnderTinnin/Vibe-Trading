@@ -215,6 +215,7 @@ def test_correlation_rate_limiter_is_per_client(monkeypatch: pytest.MonkeyPatch)
     [
         ("/correlation", "backtest.correlation", "compute_correlation_matrix"),
         ("/correlation/regime", "backtest.regime", "compute_regime_timeline"),
+        ("/correlation/analysis", "backtest.correlation", "compute_correlation_analysis"),
     ],
 )
 def test_slow_analysis_does_not_block_other_api_requests(

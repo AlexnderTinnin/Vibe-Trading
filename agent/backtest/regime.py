@@ -156,6 +156,8 @@ def compute_regime_timeline(
     smooth_window: int = 5,
     enter_threshold: float = 0.65,
     exit_threshold: float = 0.45,
+    *,
+    price_series: Dict[str, pd.DataFrame] | None = None,
 ) -> Dict[str, object]:
     """Fetch price data and compute the correlation-regime timeline.
 
@@ -189,7 +191,8 @@ def compute_regime_timeline(
         datetime.now() - timedelta(days=days + corr_window + 90)
     ).strftime("%Y-%m-%d")
 
-    price_series = _fetch_price_series(codes, start_date, end_date)
+    if price_series is None:
+        price_series = _fetch_price_series(codes, start_date, end_date)
 
     if len(price_series) < 2:
         raise ValueError(

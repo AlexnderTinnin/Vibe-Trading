@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { clearAnalysisState } from "@/hooks/useAnalysisState";
 import { api } from "@/lib/api";
 import { OptionsChainTable } from "../OptionsChainTable";
 import type { OptionsChainResponse, OptionsContractRow } from "@/lib/options";
@@ -20,6 +21,7 @@ function chain(strikes: number[], atm: number | null): OptionsChainResponse {
   };
 }
 
+beforeEach(() => clearAnalysisState("options-chain"));
 afterEach(() => vi.clearAllMocks());
 
 it("marks the source-derived ATM strike instead of the simulator's default 100", async () => {

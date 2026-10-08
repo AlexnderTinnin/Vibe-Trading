@@ -17,7 +17,38 @@ requests use at most 15 seconds so an unavailable backend shows a connection
 error and a retry action promptly. Timed-out writes are never retried
 automatically: the server may still be processing them, so check the current
 state before repeating an action. These limits do not interrupt an accepted
-agent run or its SSE stream.
+agent run or its SSE stream. Factor submissions are the exception to the write
+retry rule: the Web UI reuses a request ID, and the server returns the existing
+job for an identical submission instead of starting another worker.
+
+## Specialized analysis
+
+In Factor Research, select one factor to evaluate only that factor, or several
+to compare them. The full-zoo benchmark remains available; its result display
+limit does not reduce computation. Readiness labels check configuration and
+installed dependencies, not provider availability. CSI 300 requires Tushare
+credentials and access; fundamental factors use US SEC data with point-in-time
+filing dates and require the S&P 500 universe. Results report observed coverage,
+missing symbols and current-constituent survivorship bias. A first large-universe
+download can take minutes; later evaluations reuse the existing panel cache.
+
+Analysis drafts and completed results survive navigation and reload in the same
+browser tab. Factor progress reports data loading separately from computation;
+Reconnect resumes the existing job or repeats its identical request ID. Running
+jobs remain process-local: a server restart loses them, and completed server
+snapshots expire after one hour when pruned. Completed results already stored in
+the browser tab remain readable. Correlation matrix and regime analysis share
+one price snapshot, report the actual overlapping sample and preserve either
+successful result if the other cannot run. Options analysis marks old results
+while parameters change, cancels superseded payoff requests and loads the
+contract chain only when expanded.
+
+Market-data fallback retries only symbols still missing, including empty frames
+after resampling. Unavailable results include sanitized source attempts and
+recovery actions; inspect symbol, venue, date range, interval, credentials and
+optional dependencies before retrying. Explicit-only sources retain their
+existing currency and fallback boundaries. Missing observations are never
+replaced with invented prices or financial fields.
 
 For AI-assisted or automation-assisted contributions, also see
 [`AGENT_CONTRIBUTOR_GUIDE.md`](AGENT_CONTRIBUTOR_GUIDE.md). It summarizes safe

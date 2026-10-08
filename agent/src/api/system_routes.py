@@ -272,6 +272,32 @@ def register_system_routes(
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
+    @app.get("/correlation/analysis", dependencies=[Depends(require_auth)])
+    async def correlation_analysis(
+        request: Request,
+        codes: str = Query(..., max_length=500),
+        days: int = Query(90, ge=7, le=365),
+        method: str = Query("pearson"),
+        include_regime: bool = Query(False),
+    ):
+        """Return matrix and optional regime from one price snapshot."""
+        from backtest.correlation import compute_correlation_analysis
+
+        if not _correlation_rate_limiter.allow(_client_key(request)):
+            raise HTTPException(status_code=429, detail="Rate limit exceeded, try again later")
+        code_list = [c.strip() for c in codes.split(",") if c.strip()]
+        if not 2 <= len(code_list) <= 20:
+            raise HTTPException(status_code=400, detail="Use 2 to 20 distinct assets")
+        if method not in ("pearson", "spearman"):
+            raise HTTPException(status_code=400, detail="method must be pearson or spearman")
+        try:
+            return await asyncio.to_thread(compute_correlation_analysis, codes=code_list, days=days, method=method, include_regime=include_regime)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        except Exception:
+            logger.exception("correlation analysis failed")
+            raise HTTPException(status_code=502, detail="Data request failed. Check data-source connectivity and retry.")
+
     @app.get("/correlation", dependencies=[Depends(require_auth)])
     async def get_correlation_matrix(
         request: Request,
