@@ -1241,15 +1241,53 @@ def _account_to_dict(
     }
 
 
+def _reported(row: Mapping[str, Any], name: str) -> Any:
+    """Return a position field, or ``None`` where Futu did not report it.
+
+    Futu fills an unreported field with the string ``"N/A"``. Downstream that
+    string reads as present, and a numeric reader turns it into zero, so an
+    unreported P&L would show as a flat position.
+
+    Args:
+        row: One row from ``position_list_query``.
+        name: The field to read.
+
+    Returns:
+        The reported value, or ``None``.
+    """
+    value = _first(row, (name,))
+    return None if value == _NO_DATA else value
+
+
 def _position_to_dict(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Normalize one ``position_list_query`` row.
+
+    Futu reports a position on two cost bases. ``cost_price`` is the diluted
+    cost, with realized gains subtracted, so after round-trip trading it can
+    turn negative and ``pl_ratio`` on that basis stops describing the
+    position. ``average_cost`` and ``pl_ratio_avg_cost`` are the same position
+    on its average purchase cost. ``pl_val`` adds realized and unrealized
+    P&L, so ``unrealized_pl`` and ``realized_pl`` ship alongside it to keep a
+    realized gain from hiding an unrealized loss.
+
+    Args:
+        row: One row from ``position_list_query``.
+
+    Returns:
+        The normalized position mapping.
+    """
     return {
         "code": _first(row, ("code",)),
         "qty": _first(row, ("qty",)),
         "can_sell_qty": _first(row, ("can_sell_qty",)),
         "cost_price": _first(row, ("cost_price",)),
+        "average_cost": _reported(row, "average_cost"),
         "market_val": _first(row, ("market_val",)),
         "pl_ratio": _first(row, ("pl_ratio",)),
+        "pl_ratio_avg_cost": _reported(row, "pl_ratio_avg_cost"),
         "pl_val": _first(row, ("pl_val",)),
+        "unrealized_pl": _reported(row, "unrealized_pl"),
+        "realized_pl": _reported(row, "realized_pl"),
         "position_side": str(_first(row, ("position_side",), "")),
         "market": str(_first(row, ("position_market",), "") or "").upper(),
         "currency": str(_first(row, ("currency",), "") or "").upper(),
