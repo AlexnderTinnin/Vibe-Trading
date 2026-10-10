@@ -49,6 +49,15 @@ PROFILE_ENVIRONMENTS = {
     "live": "live",
 }
 
+#: Currency the funds query requests balances in; it labels a multi-currency
+#: account's row (see ``_account_to_dict``). HKD matches the SDK's own default
+#: for this argument.
+ACCOUNT_CURRENCY = "HKD"
+
+#: Futu's placeholder for a field it does not report, currency included
+#: (``NoneDataValue`` / ``Currency.NONE``).
+_NO_DATA = "N/A"
+
 #: Maps the connector environment to the Futu ``TrdEnv`` enum member name.
 _ENV_TO_TRD_ENV = {
     "paper": "SIMULATE",
@@ -301,7 +310,9 @@ def get_account_snapshot(config: FutuConfig | None = None) -> dict[str, Any]:
     try:
         acc_id = _resolve_acc_id(cfg, trade_ctx)
         trd_env = _trd_env_enum(cfg)
-        result = trade_ctx.accinfo_query(trd_env=trd_env, acc_id=acc_id)
+        result = trade_ctx.accinfo_query(
+            trd_env=trd_env, acc_id=acc_id, currency=ACCOUNT_CURRENCY
+        )
         ret = result[0] if isinstance(result, (list, tuple)) and len(result) >= 2 else None
         futu = _require_futu()
         if ret is not None and ret != getattr(futu, "RET_OK", 0):
@@ -316,7 +327,7 @@ def get_account_snapshot(config: FutuConfig | None = None) -> dict[str, Any]:
             "profile": cfg.profile,
             "trd_env": cfg.trd_env_name,
             "acc_id": acc_id,
-            "assets": [_account_to_dict(row) for row in rows],
+            "assets": [_account_to_dict(row, ACCOUNT_CURRENCY) for row in rows],
         }
     finally:
         _close(trade_ctx)
@@ -1196,7 +1207,29 @@ def _acc_id_of(row: Mapping[str, Any]) -> int:
         return 0
 
 
-def _account_to_dict(row: Mapping[str, Any]) -> dict[str, Any]:
+def _account_to_dict(
+    row: Mapping[str, Any], requested_currency: str | None = None
+) -> dict[str, Any]:
+    """Normalize one ``accinfo_query`` row.
+
+    A multi-currency account reports ``"N/A"`` as its currency while its
+    amounts are denominated in the currency the query requested, so that
+    requested currency labels the row. A currency the broker does report is
+    kept as is. With neither, the row keeps Futu's ``"N/A"`` rather than an
+    empty value: portfolio valuation rejects ``"N/A"``, but reads an empty
+    currency as USD.
+
+    Args:
+        row: One row from ``accinfo_query``.
+        requested_currency: The ``currency`` argument the query was made
+            with, or ``None`` if unknown.
+
+    Returns:
+        The normalized account mapping.
+    """
+    currency = str(_first(row, ("currency",), "") or "").upper()
+    if currency in ("", _NO_DATA):
+        currency = (requested_currency or _NO_DATA).upper()
     return {
         "power": _first(row, ("power",)),
         "total_assets": _first(row, ("total_assets",)),
@@ -1204,7 +1237,7 @@ def _account_to_dict(row: Mapping[str, Any]) -> dict[str, Any]:
         "market_val": _first(row, ("market_val",)),
         "available_funds": _first(row, ("available_funds",)),
         "securities_assets": _first(row, ("securities_assets",)),
-        "currency": str(_first(row, ("currency",), "") or "").upper(),
+        "currency": currency,
     }
 
 
