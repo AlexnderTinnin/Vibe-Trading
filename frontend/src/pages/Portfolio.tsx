@@ -93,11 +93,11 @@ function slicePercentage(percent: number) {
   return percentage(percent / 100);
 }
 
-/** Compact USD tick label for the history axis, e.g. "$120K" / "1,2 Mio. $". */
-function compactUsd(value: number) {
+/** Compact tick label for the history axis, e.g. "$120K" / "¥12万". */
+function compactUsd(value: number, currency: string = "USD") {
   return new Intl.NumberFormat(uiLocale(), {
     style: "currency",
-    currency: "USD",
+    currency,
     notation: "compact",
     maximumFractionDigits: 1,
   }).format(value);
@@ -444,14 +444,18 @@ export function Portfolio() {
                   <tbody className="divide-y">
                     {positions.map((row) => {
                       const weight = snapshot.totals.usd > 0 ? row.market_value_usd / snapshot.totals.usd : 0;
-                      return <tr key={`${row.source_id ?? row.broker}-${row.symbol}`} className="hover:bg-muted/20"><Td><div className="font-medium">{row.source_label ?? row.broker.toUpperCase()}</div><div className="mt-1 text-xs"><BrokerBadge broker={row.broker} /></div></Td><Td><div className="font-medium">{row.symbol}</div><div className="max-w-52 truncate text-xs text-muted-foreground">{row.name}</div></Td><Td><span className="capitalize text-muted-foreground">{row.asset_type}</span></Td><Td>{quantity(row.quantity)}</Td><Td><div>{price(row.cost_price)}</div><div className="text-xs text-muted-foreground">{price(row.market_price)}</div></Td><Td><div className="font-medium">{row.priced ? money(row.market_value_usd) : "—"}</div><div className="text-xs text-muted-foreground">{row.priced ? money(row.market_value_cny, "CNY") : t("portfolio.holdings.unpriced")}</div></Td><Td>{row.priced ? percentage(weight) : "—"}</Td><Td><span className={row.unrealized_pnl_usd == null ? "text-muted-foreground" : row.unrealized_pnl_usd >= 0 ? "text-positive" : "text-danger"}>{row.unrealized_pnl_usd == null ? "—" : money(row.unrealized_pnl_usd)}</span></Td><Td><DataBadge priced={row.priced} /></Td></tr>;
+                      const fx = snapshot.fx?.usd_cny ?? (snapshot.totals.usd > 0 ? snapshot.totals.cny / snapshot.totals.usd : 7.0);
+                      const valueMain = row.priced ? (displayCurrency === "CNY" ? money(row.market_value_cny, "CNY") : money(row.market_value_usd)) : "—";
+                      const valueAlt = row.priced ? (displayCurrency === "CNY" ? money(row.market_value_usd) : money(row.market_value_cny, "CNY")) : t("portfolio.holdings.unpriced");
+                      const pnlDisplay = row.unrealized_pnl_usd == null ? null : (displayCurrency === "CNY" ? row.unrealized_pnl_usd * fx : row.unrealized_pnl_usd);
+                      return <tr key={`${row.source_id ?? row.broker}-${row.symbol}`} className="hover:bg-muted/20"><Td><div className="font-medium">{row.source_label ?? row.broker.toUpperCase()}</div><div className="mt-1 text-xs"><BrokerBadge broker={row.broker} /></div></Td><Td><div className="font-medium">{row.symbol}</div><div className="max-w-52 truncate text-xs text-muted-foreground">{row.name}</div></Td><Td><span className="capitalize text-muted-foreground">{row.asset_type}</span></Td><Td>{quantity(row.quantity)}</Td><Td><div>{price(row.cost_price)}</div><div className="text-xs text-muted-foreground">{price(row.market_price)}</div></Td><Td><div className="font-medium">{valueMain}</div><div className="text-xs text-muted-foreground">{valueAlt}</div></Td><Td>{row.priced ? percentage(weight) : "—"}</Td><Td><span className={pnlDisplay == null ? "text-muted-foreground" : pnlDisplay >= 0 ? "text-positive" : "text-danger"}>{pnlDisplay == null ? "—" : money(pnlDisplay, displayCurrency)}</span></Td><Td><DataBadge priced={row.priced} /></Td></tr>;
                     })}
                   </tbody>
                 </table>
               </div>
             </section>
 
-            <HistoryChart history={history} />
+            <HistoryChart history={history} currency={displayCurrency} />
 
             <section className="rounded-xl border bg-card p-5">
               <div className="mb-4 flex items-center gap-2"><KeyRound className="h-4 w-4 text-muted-foreground" /><h2 className="font-semibold">{t("portfolio.credentials.title")}</h2></div>
@@ -622,7 +626,7 @@ function AllocationPie({ title, data, centerLabel, onSelect }: { title: string; 
   return <div className="rounded-xl border bg-card p-5"><h2 className="font-semibold">{title}</h2><div ref={ref} className="h-80 w-full" /></div>;
 }
 
-function HistoryChart({ history }: { history: PortfolioHistoryPoint[] }) {
+function HistoryChart({ history, currency = "USD" }: { history: PortfolioHistoryPoint[]; currency?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const { t, i18n: instance } = useTranslation();
   const dark = useThemeDark();
@@ -639,16 +643,16 @@ function HistoryChart({ history }: { history: PortfolioHistoryPoint[] }) {
         backgroundColor: theme.tooltipBg,
         borderColor: theme.tooltipBorder,
         textStyle: { color: theme.tooltipText },
-        formatter: (items: Array<{ dataIndex: number; value: number }>) => { const item = items[0]; const row = rows[item.dataIndex]; return `${dateTime(row?.created_at)}<br/>${money(Number(item?.value))}`; },
+        formatter: (items: Array<{ dataIndex: number; value: number }>) => { const item = items[0]; const row = rows[item.dataIndex]; return `${dateTime(row?.created_at)}<br/>${money(Number(item?.value), currency)}`; },
       },
       xAxis: { type: "category", boundaryGap: false, data: rows.map((row) => new Date(row.created_at).toLocaleString(uiLocale(), { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })), axisLabel: { color: theme.textColor, hideOverlap: true }, axisLine: { lineStyle: { color: theme.gridColor } } },
-      yAxis: { type: "value", scale: true, axisLabel: { color: theme.textColor, formatter: compactUsd }, splitLine: { lineStyle: { color: theme.gridColor, opacity: 0.45 } } },
-      series: [{ type: "line", data: rows.map((row) => Number(row.total_usd)), smooth: true, symbol: rows.length < 30 ? "circle" : "none", lineStyle: { width: 2, color: "#4f6edb" }, itemStyle: { color: "#4f6edb" }, areaStyle: { color: "rgba(79,110,219,0.10)" } }],
+      yAxis: { type: "value", scale: true, axisLabel: { color: theme.textColor, formatter: (v: number) => compactUsd(v, currency) }, splitLine: { lineStyle: { color: theme.gridColor, opacity: 0.45 } } },
+      series: [{ type: "line", data: rows.map((row) => Number(currency === "CNY" ? row.total_cny : row.total_usd)), smooth: true, symbol: rows.length < 30 ? "circle" : "none", lineStyle: { width: 2, color: "#4f6edb" }, itemStyle: { color: "#4f6edb" }, areaStyle: { color: "rgba(79,110,219,0.10)" } }],
     });
     const resize = () => chart.resize();
     window.addEventListener("resize", resize);
     return () => { window.removeEventListener("resize", resize); chart.dispose(); };
-  }, [history, dark, instance.language]);
+  }, [history, dark, instance.language, currency]);
   return <section className="rounded-xl border bg-card p-5">
     <div className="flex items-start justify-between gap-3">
       <div><h2 className="font-semibold">{t("portfolio.history.title")}</h2><p className="mt-1 text-xs text-muted-foreground">{t("portfolio.history.hint")}</p></div>
