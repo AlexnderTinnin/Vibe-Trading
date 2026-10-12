@@ -265,8 +265,10 @@ def test_quote_waits_for_delayed_tick_arrival(monkeypatch: pytest.MonkeyPatch) -
     module.Contract = _FakeContract
     monkeypatch.setitem(sys.modules, "ib_async", module)
     monkeypatch.setattr(local, "tcp_port_open", lambda *_, **__: True)
-    monkeypatch.setattr(local._pool._local, "refcount", 0)
-    monkeypatch.setattr(local._pool._local, "ib", None)
+    # raising=False: the pool keeps per-thread state, so on a fresh thread
+    # (single-test or -k-filtered runs) these attributes do not exist yet.
+    monkeypatch.setattr(local._pool._local, "refcount", 0, raising=False)
+    monkeypatch.setattr(local._pool._local, "ib", None, raising=False)
 
     result = local.get_quote("AAPL", config=local.IBKRLocalConfig(profile="paper"))
     assert result["status"] == "ok"
@@ -306,8 +308,10 @@ def test_quote_keeps_polling_when_ticker_is_nan(monkeypatch: pytest.MonkeyPatch)
     module.Contract = _FakeContract
     monkeypatch.setitem(sys.modules, "ib_async", module)
     monkeypatch.setattr(local, "tcp_port_open", lambda *_, **__: True)
-    monkeypatch.setattr(local._pool._local, "refcount", 0)
-    monkeypatch.setattr(local._pool._local, "ib", None)
+    # raising=False: the pool keeps per-thread state, so on a fresh thread
+    # (single-test or -k-filtered runs) these attributes do not exist yet.
+    monkeypatch.setattr(local._pool._local, "refcount", 0, raising=False)
+    monkeypatch.setattr(local._pool._local, "ib", None, raising=False)
 
     result = local.get_quote("AAPL", config=local.IBKRLocalConfig(profile="paper"))
     assert result["status"] == "ok"
@@ -361,8 +365,10 @@ def _install_fake_ib(monkeypatch: pytest.MonkeyPatch, ib_cls) -> None:
     module.Contract = _FakeContract
     monkeypatch.setitem(sys.modules, "ib_async", module)
     monkeypatch.setattr(local, "tcp_port_open", lambda *_, **__: True)
-    monkeypatch.setattr(local._pool._local, "refcount", 0)
-    monkeypatch.setattr(local._pool._local, "ib", None)
+    # raising=False: the pool keeps per-thread state, so on a fresh thread
+    # (single-test or -k-filtered runs) these attributes do not exist yet.
+    monkeypatch.setattr(local._pool._local, "refcount", 0, raising=False)
+    monkeypatch.setattr(local._pool._local, "ib", None, raising=False)
 
 
 def test_default_market_data_type_is_free_delayed() -> None:
