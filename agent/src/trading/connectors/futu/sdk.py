@@ -165,9 +165,10 @@ _OVERRIDE_KEYS = ("host", "port", "profile", "security_firm", "filter_trdmarket"
 def build_config(profile_config: Mapping[str, Any] | None = None, overrides: Mapping[str, Any] | None = None) -> "FutuConfig":
     """Resolve the effective config: saved file ← profile defaults ← CLI overrides.
 
-    Gateway endpoint and account settings come from the saved
-    ``~/.vibe-trading/futu.json``; the selected connector profile supplies the
-    ``profile`` / ``filter_trdmarket`` intent; CLI/tool overrides win last.
+    Gateway endpoint and account settings, including ``filter_trdmarket``,
+    come from the saved ``~/.vibe-trading/futu.json`` (HK when that file does
+    not set a market). The selected connector profile supplies the trade
+    ``profile`` only; CLI/tool overrides win last.
 
     Args:
         profile_config: The connector profile's ``config`` dict.
