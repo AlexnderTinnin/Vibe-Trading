@@ -673,12 +673,11 @@ def _require_openapi() -> ModuleType:
 def build_sdk_config(
     openapi: Any, app_key: str, app_secret: str, access_token: str
 ) -> Any:
-    """Build a ``longbridge.openapi.Config`` on any SDK in the supported range.
+    """Build the SDK ``Config`` on any SDK in the supported range.
 
     From 4.0 the SDK refuses direct ``Config(...)`` construction and only offers
     ``Config.from_apikey``; 0.2.x has no ``from_apikey``. ``longbridge>=0.2.5``
-    admits both, so pick by capability rather than by version number. Shared by
-    this connector and the backtest loader so both follow one rule.
+    admits both, so pick by capability rather than by version number.
 
     Args:
         openapi: The SDK ``openapi`` module.
