@@ -2424,3 +2424,17 @@ MIT License — see [LICENSE](LICENSE)
 <p align="center">
   <img src="https://visitor-badge.laobi.icu/badge?page_id=HKUDS.Vibe-Trading&style=flat" alt="visitors"/>
 </p>
+
+### Custom model endpoints
+
+Settings → Custom OpenAI-compatible providers tests a chat-completions endpoint,
+saves its API key in the OS credential vault (`pip install "vibe-trading-ai[keyring]"`),
+and activates it for new runs. Testing sends a short model request and may incur
+the provider's normal API charge. Active profiles are immutable; save a changed
+endpoint under a new ID and activate it after testing. Switch back through the
+normal model provider selector. Keys are never stored in the profile JSON.
+
+The same flow is available from `vibe-trading provider custom list`,
+`vibe-trading provider custom add --id example --label Example --base-url https://api.example.com/v1 --model example-model`
+(the key is prompted privately), and `vibe-trading provider custom activate example`.
+The configured provider is used by CLI, API, Web, and agent runs alike.

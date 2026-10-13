@@ -101,7 +101,7 @@ export const MarkdownContent = memo(function MarkdownContent({
   );
 
   return (
-    <div className={proseClassName}>
+    <div className={`${proseClassName} vt-bidi`} dir="auto">
       <MarkdownErrorBoundary content={content}>
         {streaming ? structuralMarkdown : (
           <Suspense fallback={structuralMarkdown}>
@@ -163,7 +163,7 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="absolute top-2 right-2 p-1.5 rounded-md bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+      className={`absolute top-2 end-2 p-1.5 rounded-md bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity`}
       aria-label={label}
       title={label}
     >
@@ -208,7 +208,7 @@ export const MessageBubble = memo(function MessageBubble({ msg, onRetry }: Props
       ?? (meta?.attachment ? [meta.attachment] : []);
     return (
       <div className="flex justify-end group">
-        <div className="max-w-[72%] max-h-[40vh] overflow-y-auto break-words rounded-[18px] bg-muted px-4 py-3 text-[15px] text-foreground leading-relaxed whitespace-pre-wrap">
+        <div dir="auto" className="max-w-[72%] max-h-[40vh] overflow-y-auto break-words rounded-[18px] bg-muted px-4 py-3 text-[15px] text-foreground leading-relaxed whitespace-pre-wrap">
           {meta && (attachments.length > 0 || meta.swarmMode || meta.goalMode) && (
             <div className="mb-1.5 flex flex-wrap justify-end gap-1.5 text-[10px] leading-none text-muted-foreground">
               {attachments.map((attachment, index) => (
@@ -274,7 +274,7 @@ export const MessageBubble = memo(function MessageBubble({ msg, onRetry }: Props
         <div className="space-y-2">
           <div className="flex items-start gap-2 rounded-xl border border-danger/30 bg-danger/5 px-4 py-3">
             <XCircle className="h-4 w-4 text-danger shrink-0 mt-0.5" />
-            <p className="text-sm text-danger leading-relaxed">{msg.content}</p>
+            <p dir="auto" className="text-sm text-danger leading-relaxed">{msg.content}</p>
           </div>
           {onRetry && (
             <div className="space-y-1.5">
@@ -299,7 +299,7 @@ export const MessageBubble = memo(function MessageBubble({ msg, onRetry }: Props
     return (
       <div className="flex gap-3">
         <AgentAvatar />
-        <p className="text-sm text-muted-foreground leading-relaxed">{msg.content}</p>
+        <p dir="auto" className="text-sm text-muted-foreground leading-relaxed">{msg.content}</p>
       </div>
     );
   }

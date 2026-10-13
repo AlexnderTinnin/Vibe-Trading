@@ -436,6 +436,19 @@ def _build_llm_settings_response(
             authenticated, auth_status = False, ""
         api_key_configured = authenticated
         api_key_hint = auth_status if authenticated else None
+    options = LLM_PROVIDERS
+    if provider_name == "custom":
+        from src.providers.custom_profiles import CustomProviderStore
+
+        active = next((p for p in CustomProviderStore().list_public() if p["active"]), None)
+        active_model = active["model"] if active else env_values.get("LANGCHAIN_MODEL_NAME", "")
+        active_url = active["base_url"] if active else ""
+        provider = LLMProviderOption(name="custom", label="Custom (credential vault)",
+            api_key_env=None, base_url_env="OPENAI_BASE_URL", default_model=active_model,
+            default_base_url=active_url, auth_type="credential_vault", reasoning_efforts=[])
+        env_values = {**env_values, "LANGCHAIN_MODEL_NAME": active_model, "OPENAI_BASE_URL": active_url}
+        api_key_configured, api_key_hint = bool(active and active["api_key_configured"]), None
+        options = [*LLM_PROVIDERS, provider]
     return LLMSettingsResponse(
         provider=provider.name,
         model_name=env_values.get("LANGCHAIN_MODEL_NAME", provider.default_model),
@@ -450,8 +463,29 @@ def _build_llm_settings_response(
         reasoning_effort=env_values.get("LANGCHAIN_REASONING_EFFORT", "").strip().lower(),
         sse_timeout_seconds=host._coerce_int(env_values.get("VIBE_TRADING_SSE_TIMEOUT", "90"), 90),
         env_path=host._project_relative_path(host.ENV_PATH),
-        providers=LLM_PROVIDERS,
+        providers=options,
     )
+
+
+def activate_custom_provider(profile: dict[str, Any], *, store: Any) -> dict[str, Any]:
+    """Activate tested vault metadata through the canonical settings writer.
+
+    Secrets remain in the vault. The runtime resolves model, URL and key from
+    one active profile, so it never pairs another provider's ambient key with
+    the selected endpoint. The caller holds the shared store mutation lock.
+    """
+    updates = {"LANGCHAIN_PROVIDER": "custom", "LANGCHAIN_MODEL_NAME": profile["model"]}
+    previous = store._read()
+    store.activate(profile["id"])
+    try:
+        _persist_settings_updates(updates)
+    except Exception:
+        store._write(previous)
+        raise
+    for key, value in updates.items():
+        os.environ[key] = str(value)
+    reset_env_config()
+    return {"status": "ok", "active_id": profile["id"], "model": profile["model"], "base_url": profile["base_url"]}
 
 
 def _build_source_orders(env_values: Dict[str, str]) -> List[SourceOrderEntry]:
@@ -561,6 +595,9 @@ def _sync_runtime_env(provider: LLMProviderOption, updates: Dict[str, str]) -> N
         else:
             os.environ.pop(key, None)
 
+    if provider.auth_type == "credential_vault":
+        reset_env_config()
+        return
     if provider.auth_type in {"gh_cli", "claude_cli"}:
         # The Copilot SDK / Claude Code CLI own credential discovery and transport.
         os.environ.pop("OPENAI_API_KEY", None)
@@ -674,6 +711,17 @@ def register_settings_routes(
         host_ref = _host()
         provider_name = payload.provider.strip().lower()
         provider = LLM_PROVIDER_BY_NAME.get(provider_name)
+        if provider_name == "custom":
+            from src.providers.custom_profiles import active_provider_credentials
+
+            active = active_provider_credentials()
+            if (payload.model_name.strip() != active["model"]
+                    or payload.base_url not in (None, active["base_url"])
+                    or payload.api_key or payload.clear_api_key):
+                raise HTTPException(status_code=400, detail="Edit and test a custom provider in the provider manager before activating it")
+            provider = LLMProviderOption(name="custom", label="Custom (credential vault)", api_key_env=None,
+                base_url_env="OPENAI_BASE_URL", default_model=active["model"], default_base_url=active["base_url"],
+                auth_type="credential_vault", reasoning_efforts=[])
         if provider is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported LLM provider"

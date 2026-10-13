@@ -3,6 +3,7 @@ import { Database, KeyRound, Loader2, RefreshCw, RotateCcw, Save, Server, Slider
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ChannelSettings } from "@/components/settings/ChannelSettings";
+import { CustomProviderManager } from "@/components/settings/CustomProviderManager";
 import { ModelPicker } from "@/components/settings/ModelPicker";
 import { QVerisSettings } from "@/components/settings/QVerisSettings"; // QVERIS-INTEGRATION
 import { SourcePrioritySettings } from "@/components/settings/SourcePrioritySettings";
@@ -603,6 +604,10 @@ export function Settings() {
           </div>
         </section>
       </form>
+
+      <CustomProviderManager onActivated={() => {
+        void api.getLLMSettings().then((value) => { setSettings(value); setForm(toForm(value)); });
+      }} />
 
       <form onSubmit={submitDataSources} className="rounded-lg border bg-card p-5 shadow-sm">
         <div className="mb-5 space-y-1">

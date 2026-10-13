@@ -1403,6 +1403,8 @@ def _sync_provider_env() -> None:
     _ensure_dotenv()
     reset_env_config()
     provider = get_env_config().llm.langchain_provider.lower()
+    if provider == "custom":
+        return  # Vault credentials are passed directly, never exported into ambient env.
 
     if provider in {"openai-codex", "openai_codex"}:
         codex_url = get_env_config().llm.openai_codex_base_url
@@ -1721,6 +1723,8 @@ def build_llm(*, model_name: Optional[str] = None, callbacks: Any = None) -> Any
     configured_responses_api = get_env_config().llm.langchain_use_responses_api
     use_responses_api = uses_responses_api(provider, configured_responses_api)
     creds = get_llm_credentials(provider, name)
+    if provider == "custom":
+        name = model_name or creds["model"]
     api_key = creds["api_key"]
     _validate_authorization_credential(
         api_key,
@@ -1761,6 +1765,9 @@ def build_llm(*, model_name: Optional[str] = None, callbacks: Any = None) -> Any
         "vibe_provider": provider,
         "vibe_api_key": api_key,
     }
+    langchain_max_tokens = get_env_config().llm.langchain_max_tokens
+    if langchain_max_tokens:
+        kwargs["max_tokens"] = langchain_max_tokens
     if caps.default_headers:
         headers = dict(caps.default_headers)
         if caps.name in {"moonshot", "kimi-coding"}:

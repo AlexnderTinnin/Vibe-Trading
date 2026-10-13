@@ -5433,6 +5433,8 @@ def _build_parser() -> argparse.ArgumentParser:
     login_parser = provider_subparsers.add_parser("login", help="Authenticate with an OAuth provider")
     login_parser.add_argument("provider", help="OAuth provider name, e.g. openai-codex")
     provider_subparsers.add_parser("doctor", help="Print redacted provider diagnostics")
+    from cli.custom_providers import configure_parser as configure_custom_providers
+    configure_custom_providers(provider_subparsers.add_parser("custom", help="Manage tested custom model endpoints"))
 
     # QVERIS-INTEGRATION
     data_parser = subparsers.add_parser("data", help="Manage data routing mode")  # QVERIS-INTEGRATION
@@ -6565,6 +6567,9 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_provider_login(args.provider)
         if args.provider_command == "doctor":
             return cmd_provider_doctor()
+        if args.provider_command == "custom":
+            from cli.custom_providers import run as run_custom_providers
+            return run_custom_providers(args)
         console.print("[red]provider requires a subcommand.[/red] Try: vibe-trading provider doctor")
         return EXIT_USAGE_ERROR
     if args.command == "channels":

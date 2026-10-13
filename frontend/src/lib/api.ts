@@ -589,6 +589,25 @@ export const api = {
       method: "POST",
       body: JSON.stringify(settings),
     }),
+  listCustomProviders: () =>
+    request<{ status: string; providers: CustomProviderProfile[] }>("/settings/custom-providers"),
+  testCustomProvider: (settings: { base_url: string; model: string; api_key: string }) =>
+    request<CustomProviderTestResponse>("/settings/custom-providers/test", {
+      method: "POST",
+      body: JSON.stringify(settings),
+    }),
+  saveCustomProvider: (settings: CustomProviderSaveRequest) =>
+    request<{ status: string; provider: CustomProviderProfile }>("/settings/custom-providers", {
+      method: "POST",
+      body: JSON.stringify(settings),
+    }),
+  activateCustomProvider: (profileId: string) =>
+    request<{ status: string; active_id: string; model: string; base_url: string }>(
+      `/settings/custom-providers/${encodeURIComponent(profileId)}/activate`, {
+        method: "POST",
+        body: JSON.stringify({ confirm: true }),
+      },
+    ),
   getDataSourceSettings: () => request<DataSourceSettings>("/settings/data-sources"),
   updateDataSourceSettings: (settings: UpdateDataSourceSettingsRequest) =>
     request<DataSourceSettings>("/settings/data-sources", {
@@ -886,6 +905,32 @@ export interface ListLLMModelsRequest {
   base_url?: string;
   api_key?: string;
   refresh?: boolean;
+}
+
+export interface CustomProviderProfile {
+  id: string;
+  label: string;
+  base_url: string;
+  model: string;
+  api_key_configured: boolean;
+  active: boolean;
+  last_tested_at?: string | null;
+}
+
+export interface CustomProviderTestResponse {
+  status: "ok";
+  test_id: string;
+  response_preview: string;
+  latency_ms: number;
+}
+
+export interface CustomProviderSaveRequest {
+  id: string;
+  label: string;
+  base_url: string;
+  model: string;
+  api_key: string;
+  test_id: string;
 }
 
 export interface LLMModelsResponse {
