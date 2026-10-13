@@ -679,7 +679,7 @@ def register_sessions_routes(app: FastAPI) -> None:
         if req.title is not None:
             session.title = req.title
         session.updated_at = datetime.now(timezone.utc).isoformat()
-        svc.store.update_session(session)
+        svc.update_session(session)
         return {"status": "updated", "session_id": session_id}
 
     @app.post("/sessions/{session_id}/title/auto", dependencies=[Depends(require_auth)])
@@ -746,7 +746,7 @@ def register_sessions_routes(app: FastAPI) -> None:
 
         session.title = title
         session.updated_at = datetime.now(timezone.utc).isoformat()
-        svc.store.update_session(session)
+        svc.update_session(session)
         return {"status": "updated", "session_id": session_id, "title": title}
 
     @app.post("/sessions/{session_id}/messages", dependencies=[Depends(require_auth)])
