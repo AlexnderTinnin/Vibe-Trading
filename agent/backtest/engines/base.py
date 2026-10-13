@@ -2278,7 +2278,9 @@ class BaseEngine(ABC):
 
         # Equity curve
         port_ret = equity_series.pct_change().fillna(0.0)
-        peak = equity_series.cummax()
+        # Same high-water mark as calc_metrics: the account holds initial_capital
+        # before the first recorded bar, so a loss on that bar is a drawdown too.
+        peak = equity_series.cummax().clip(lower=float(self.initial_capital))
         dd = (equity_series - peak) / peak.replace(0, 1)
         eq_df = pd.DataFrame({
             "ret": port_ret,
