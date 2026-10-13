@@ -91,3 +91,52 @@ def test_a_short_parameter_label_must_not_match_inside_an_unrelated_word(tmp_pat
     )
     assert not verdict.valid
     assert any(issue.get("reason") == "operand_not_observed" for issue in verdict.issues)
+
+
+@pytest.mark.parametrize("formula", ["(125 + 75) / 10000 * 100", "((125 + 75) / 10000) × 100.0"])
+def test_explicit_percent_conversion_keeps_data_operands_grounded(tmp_path, formula):
+    verdict = _ledger(tmp_path, (125, 75, 10000)).validate_final_answer(
+        f"Ratio: 2.00%.\n```figures\n2.00% | derived | {formula} | measure\n```"
+    )
+    assert verdict.valid, verdict.issues
+
+
+@pytest.mark.parametrize("values", [(125,), (10000,), (125, 75), (75, 10000)])
+def test_percent_conversion_does_not_supply_missing_data(tmp_path, values):
+    verdict = _ledger(tmp_path, values).validate_final_answer(
+        "Ratio: 2.00%.\n```figures\n2.00% | derived | (125 + 75) / 10000 * 100 | measure\n```"
+    )
+    assert not verdict.valid
+    assert verdict.issues[0]["reason"] in {"operand_not_observed", "additive_operand_not_observed"}
+
+
+@pytest.mark.parametrize("figure", ["1.99%", "200.00%", "-2.00%"])
+def test_explicit_percent_conversion_does_not_widen_value_or_sign_matching(tmp_path, figure):
+    verdict = _ledger(tmp_path, (125, 75, 10000)).validate_final_answer(
+        f"Ratio: {figure}.\n```figures\n{figure} | derived | (125 + 75) / 10000 * 100 | measure\n```"
+    )
+    assert not verdict.valid
+    assert verdict.issues[0]["reason"] == "derivation_result_mismatch"
+
+
+def test_percent_conversion_cannot_exempt_an_inner_hundred(tmp_path):
+    verdict = _ledger(tmp_path, (125,)).validate_final_answer(
+        "Ratio: 125.00%.\n```figures\n125.00% | derived | 125 / 100 * 100 | measure\n```"
+    )
+    assert not verdict.valid
+    assert verdict.issues[0]["reason"] == "operand_not_observed"
+
+
+def test_percent_conversion_can_convert_one_observed_fraction(tmp_path):
+    verdict = _ledger(tmp_path, (0.125,)).validate_final_answer(
+        "Ratio: 12.50%.\n```figures\n12.50% | derived | 0.125 * 100 | measure\n```"
+    )
+    assert verdict.valid, verdict.issues
+
+
+def test_non_percent_claim_does_not_gain_a_free_multiplier(tmp_path):
+    verdict = _ledger(tmp_path, (125, 75, 10000)).validate_final_answer(
+        "Score: 2.00.\n```figures\n2.00 | derived | (125 + 75) / 10000 * 100 | measure\n```"
+    )
+    assert not verdict.valid
+    assert verdict.issues[0]["reason"] == "operand_not_observed"

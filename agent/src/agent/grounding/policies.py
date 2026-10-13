@@ -1803,6 +1803,7 @@ class _PolicyMixin:
         records: Sequence[EvidenceRecord],
         *,
         money: bool = False,
+        percent: bool = False,
         scalar_parameters: Sequence[float] = (),
     ) -> tuple[float, list[float]] | str | None:
         """Evaluate a declaration's note as an observation-anchored formula.
@@ -1813,6 +1814,8 @@ class _PolicyMixin:
         subtracted term still needs an observed anchor. Literal 1 is the
         multiplicative identity (also used in ratio-minus-one expressions),
         and square/cube exponents belong to the operator, not the operands.
+        A percent claim's explicit trailing *100 is normalized as a unit
+        conversion before checking the remaining data operands.
         """
         if declaration is None or not declaration.note.strip():
             return "no_formula"
@@ -1820,6 +1823,21 @@ class _PolicyMixin:
         if evaluated is None:
             return "formula_not_evaluable"
         result, operands, tree = evaluated
+        # A percent claim may spell its final unit conversion explicitly.
+        # Normalize ONLY an outer, trailing literal *100 back to a fraction;
+        # do not broaden result matching or exempt any inner data operand.
+        # Numeric magnitude elsewhere never decides whether an operand is data.
+        if (
+            percent
+            and isinstance(tree.body, ast.BinOp)
+            and isinstance(tree.body.op, ast.Mult)
+            and isinstance(tree.body.right, ast.Constant)
+            and _is_number(tree.body.right.value)
+            and tree.body.right.value == 100
+        ):
+            result /= 100
+            operands = operands[:-1]
+            tree = ast.Expression(body=tree.body.left)
         # Two instruments' bars and no resolved symbol: arithmetic anchored on
         # the session's pools, or on one instrument's prints the ref names,
         # would look anchored with nothing to anchor it to. Only evidence that
@@ -1906,7 +1924,7 @@ class _PolicyMixin:
     ) -> list[dict[str, Any]]:
         """A derived figure must be the arithmetic its note states."""
         derivation = self._derivation(
-            declaration, symbol, records, money=figure.currency,
+            declaration, symbol, records, money=figure.currency, percent=figure.percent,
             scalar_parameters=scalar_parameters,
         )
         if isinstance(derivation, str):
@@ -1997,7 +2015,7 @@ class _PolicyMixin:
                 )
             ]
         derivation = self._derivation(
-            declaration, symbol, records, money=figure.currency,
+            declaration, symbol, records, money=figure.currency, percent=figure.percent,
             scalar_parameters=scalar_parameters,
         )
         if not isinstance(derivation, str) and self._result_matches(figure, derivation[0]):
