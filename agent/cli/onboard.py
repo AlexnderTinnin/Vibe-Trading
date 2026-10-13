@@ -55,7 +55,7 @@ PROVIDERS: Final[tuple[Provider, ...]] = (
              "deepseek/deepseek-v4-pro",
              "OPENROUTER_API_KEY", "OPENROUTER_BASE_URL",
              "https://openrouter.ai/api/v1", "sk-or-",
-             ("deepseek/deepseek-v4-pro", "deepseek/deepseek-v4-flash",
+             ("deepseek/deepseek-v4-pro", "deepseek/deepseek-v4.1-flash",
               "openai/gpt-5.5-pro", "google/gemini-3.5-flash")),
     Provider("openai", "OpenAI", "GPT-5.5 direct",
              "gpt-5.5", "OPENAI_API_KEY", "OPENAI_BASE_URL",

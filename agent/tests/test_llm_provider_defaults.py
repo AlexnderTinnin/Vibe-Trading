@@ -15,6 +15,11 @@ from src.providers.capabilities import (
 
 EXPECTED_PROVIDER_DEFAULTS = {
     "openrouter": "deepseek/deepseek-v4-pro",
+    "opencode": "deepseek-v4.1-flash",
+    "kimi-coding": "kimi-for-coding",
+    "ollama": "qwen2.5:32b",
+    "copilot": "claude-sonnet-5",
+    "claude-cli": "claude-opus-5-5",
     "openai": "gpt-5.5",
     "anthropic": "claude-sonnet-4-6",
     "openai-codex": "openai-codex/gpt-6-sol",
@@ -43,6 +48,7 @@ def test_llm_provider_registry_uses_current_default_models() -> None:
     providers = json.loads(providers_path.read_text(encoding="utf-8"))
     defaults = {item["name"]: item["default_model"] for item in providers}
 
+    assert set(defaults) == set(EXPECTED_PROVIDER_DEFAULTS)
     for provider, model in EXPECTED_PROVIDER_DEFAULTS.items():
         assert defaults[provider] == model
 
@@ -218,3 +224,23 @@ def test_codex_models_offered_are_ones_the_codex_backend_publishes() -> None:
     offered = {EXPECTED_PROVIDER_DEFAULTS["openai-codex"], onboard.default_model, *onboard.suggested_models}
     for model in offered:
         assert any(re.search(pattern, model) for pattern in patterns), model
+
+
+def test_openrouter_suggests_current_flash_without_switching_default():
+    provider = next(p for p in ONBOARD_PROVIDERS if p.key == "openrouter")
+    assert provider.default_model == "deepseek/deepseek-v4-pro"
+    assert "deepseek/deepseek-v4.1-flash" in provider.suggested_models
+    assert "deepseek/deepseek-v4-flash" not in provider.suggested_models
+
+
+def test_documented_direct_deepseek_pair_matches_registry():
+    import re
+
+    text = (Path(__file__).resolve().parents[1] / ".env.example").read_text()
+    headers = list(re.finditer(r"(?m)^# --- DeepSeek ---.*$", text))
+    assert len(headers) == 1
+    block = re.split(r"(?m)^# --- ", text[headers[0].end():], maxsplit=1)[0]
+    providers = re.findall(r"(?m)^#\s*LANGCHAIN_PROVIDER=(\S+)", block)
+    models = re.findall(r"(?m)^#\s*LANGCHAIN_MODEL_NAME=(\S+)", block)
+    assert providers == ["deepseek"]
+    assert models == [EXPECTED_PROVIDER_DEFAULTS["deepseek"]]
