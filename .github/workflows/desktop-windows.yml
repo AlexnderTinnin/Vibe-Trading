@@ -100,6 +100,10 @@ jobs:
 
       - name: Build NSIS installer
         working-directory: desktop/electron
+        # runtime:win starts Windows PowerShell. Keep its parent in the same
+        # edition: inheriting pwsh's module path through npm hid Get-FileHash
+        # on windows-2025 even though the direct runtime build above succeeded.
+        shell: powershell
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run installer:win:review

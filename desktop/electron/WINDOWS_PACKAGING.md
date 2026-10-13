@@ -46,6 +46,9 @@ npm run installer:win:review
 
 `installer:win:review` also runs the backend runtime build automatically, so
 running `npm run runtime:win` separately is optional when using that command.
+Run these runtime/installer commands from Windows PowerShell (`powershell.exe`),
+as CI does. Starting them from PowerShell 7 can pass its module search path
+through npm to the Windows PowerShell child and prevent `Get-FileHash` discovery.
 
 The installer and checksum are written under `desktop/electron/release/`.
 The `installer:win:review` artifact is deliberately unsigned and must never be
