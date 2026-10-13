@@ -171,3 +171,34 @@ describe("i18n utilities", () => {
     await i18n.changeLanguage("en");
   });
 });
+
+// Key parity cannot detect a locale filled with copied English or mojibake.
+// International names and words also used verbatim in Turkish stay unchanged.
+describe("new locale content", () => {
+  it("Turkish does not ship copied English UI text", () => {
+    const sharedTerms = new Set([
+      "SDK", "Sharpe", "Model", "AppID", "AppSecret", "IMAP SSL", "IMAP STARTTLS",
+      "SMTP STARTTLS", "SMTP SSL", "Forex", "BaoStock", "OAuth", "HHI", "SHA-256",
+      "R²", "Beta", "Delta", "Pearson", "Spearman", "Spot", "Gamma", "Theta", "Vega", "Rho",
+      "Alpha Zoo", "IR", "IC>0", "n", "ID", "Qlib 158", "GTJA 191", "Momentum",
+      "Pine Script v6", "Pine Script", "Test", "Normal", "name@example.com",
+    ]);
+    const copied = Object.entries(collectStrings(locales.tr)).filter(([key, value]) => {
+      const prose = value.replace(/\{\{.*?\}\}/g, "");
+      return value === enStrings[key] && /[A-Za-z]/.test(prose) && !sharedTerms.has(value);
+    }).map(([key]) => key);
+    expect(copied).toEqual([]);
+  });
+
+  it.each(["tr", "fa"])("%s has no UTF-8 text decoded as Windows-1252", (code) => {
+    const broken = Object.entries(collectStrings(locales[code]))
+      .filter(([, value]) => /â€|Ã|Â|\uFFFD/.test(value)).map(([key]) => key);
+    expect(broken).toEqual([]);
+  });
+
+  it("Persian is RTL and Turkish is LTR", () => {
+    expect(isRtl("fa")).toBe(true);
+    expect(isRtl("fa-IR")).toBe(true);
+    expect(isRtl("tr")).toBe(false);
+  });
+});
