@@ -1378,6 +1378,11 @@ Saves write the `channels.<name>` section of `~/.vibe-trading/agent.json` atomic
 
 ### Strategy & Backtesting
 
+Standalone revalidation (`python -m backtest.validation <run_dir>`) runs all
+three validation tools using saved `config.json` validation parameters; missing
+parameters use the existing defaults. This includes simulation counts, seeds,
+bootstrap confidence, and walk-forward window count.
+
 New BaseEngine `artifacts/trades.csv` files include an `event` column:
 `entry` marks an opening row and `exit` marks a completed trade, including
 zero-PnL exits. Validation and strategy-discovery readers use this marker.
