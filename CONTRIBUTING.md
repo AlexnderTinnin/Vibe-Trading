@@ -311,3 +311,20 @@ is broken: runner geography, holidays and upstream changes need checking.
 The 14-day window is a coarse freshness alarm, not a market-calendar guarantee.
 Reports are retained for 30 days. No authenticated source or broker order path
 is exercised.
+
+
+### Grounding checks
+
+`agent/src/agent/grounding/registry.py` declares each check's stable name,
+issue codes, severity and execution phase. The gate walks identity, answer,
+declaration, per-figure role and price-provenance checks in their original
+order. All production checks currently block; `warn` and `log` findings are
+recorded without changing the verdict. Severity is separate from the repair,
+recovery and redaction decisions in `release.py`.
+
+Add a predicate and registration, then a passing/failing answer pair in
+`tests/test_grounding_registry.py`. The pair catalog is checked against the
+runtime registry. Use sparse evidence fixtures. Validation artifacts retain
+`fired_checks` and `check_findings` (name, severity, findings) from actual
+predicate execution; shared issue codes do not imply that other roles fired.
+Run the grounding suites before changing a predicate or its ordering.

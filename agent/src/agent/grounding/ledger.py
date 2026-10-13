@@ -398,11 +398,12 @@ class GroundingLedger(
         self._ingest_run_dir_ohlc_csvs()
         block = parse_figures_block(content)
         figures = scan_figures(content, block)
+        self._active_check_findings: list[dict[str, Any]] = []
         self._active_block = block
         self._active_figures = figures
         issues: list[dict[str, Any]] = []
         issues.extend(self._validate_identity(content))
-        issues.extend(GROUNDING_CHECKS.run("unsourced-symbol-figures", self, content))
+        issues.extend(GROUNDING_CHECKS.run_phase("answer", self, content))
         issues.extend(self._validate_figures(content, block, figures))
         issues = self._dedupe_issues(issues)
         result = ValidationResult(
@@ -420,11 +421,10 @@ class GroundingLedger(
                 "content_sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
                 "valid": result.valid,
                 "issues": issues,
-                # Names let a run card say which declared checks fired without
-                # re-running the gate; inline rules carry codes only until migrated.
-                "fired_checks": GROUNDING_CHECKS.names_for_codes(
-                    {str(issue.get("code") or "") for issue in issues}
-                ),
+                # Attribute the predicates that actually returned a finding;
+                # role checks share issue codes and must not implicate each other.
+                "fired_checks": list(dict.fromkeys(row["name"] for row in self._active_check_findings)),
+                "check_findings": self._active_check_findings,
                 "figures_block": block.raw,
             }
         )

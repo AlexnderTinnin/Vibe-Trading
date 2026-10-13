@@ -7,6 +7,9 @@ from pathlib import Path
 
 import pytest
 
+from tests.test_grounding_figures_contract import HDR, HDR_ROW, _block, _ledger
+from tests.test_grounding_role_hardening import MARKET_A, MARKET_C, _ledger as _multi_ledger
+
 from src.agent.grounding.ledger import GroundingLedger
 from src.agent.grounding.registry import GROUNDING_CHECKS, GroundingCheck, GroundingRegistry
 
@@ -22,7 +25,7 @@ def test_registry_rejects_duplicate_names() -> None:
 def test_registry_walk_order_and_describe_are_stable() -> None:
     registry = GroundingRegistry()
     for name in ("b-check", "a-check"):
-        registry.register(GroundingCheck(name=name, code=f"{name}_code", description="d", predicate=lambda l, c: []))
+        registry.register(GroundingCheck(name=name, code=f"{name}_code", description="d", predicate=lambda ledger, content: []))
     assert [c.name for c, _ in registry.walk(None, "")] == ["b-check", "a-check"]
     assert [d["name"] for d in registry.describe()] == ["b-check", "a-check"]
 
@@ -103,11 +106,11 @@ def test_fired_checks_name_the_declared_check_that_fired(tmp_path: Path) -> None
     assert _recorded_validations(tmp_path)[-1]["fired_checks"] == ["listed-identity-relabelled-private"]
 
 
-def test_fired_checks_stay_empty_when_only_inline_rules_fire(tmp_path: Path) -> None:
+def test_fired_checks_name_the_previously_inline_undeclared_rule(tmp_path: Path) -> None:
     ledger = _ledger_with_locked_listed_identity(tmp_path)
     result = ledger.validate_final_answer("GLD 现价 999.99 美元，建议买入。")
     assert result.issues
-    assert _recorded_validations(tmp_path)[-1]["fired_checks"] == []
+    assert _recorded_validations(tmp_path)[-1]["fired_checks"] == ["undeclared-figure"]
 
 
 def test_fired_checks_empty_for_a_clean_answer(tmp_path: Path) -> None:
@@ -135,6 +138,9 @@ def test_declared_checks_cover_identity_and_figure_slices_in_order() -> None:
         "identity-not-locked",
         "figures-block-malformed",
         "unsourced-symbol-figures",
+        "figure-symbol", "undeclared-figure", "figure-price-column",
+        "figure-count", "figure-observed", "figure-derived", "figure-proposed", "figure-cited",
+        "canonical-symbol-surfaced", "data-source-surfaced", "quote-currency-surfaced",
     ]
 
 
@@ -190,3 +196,76 @@ def test_fired_checks_name_the_identity_and_figure_slices(tmp_path: Path) -> Non
         (tmp_path / "figs" / "artifacts" / "grounding_evidence.json").read_text(encoding="utf-8")
     )
     assert artifact["validations"][-1]["fired_checks"] == ["figures-block-malformed"]
+
+
+# One positive/negative answer pair for every catalog entry. Numeric fixtures
+# use only the sparse two-bar ledger: dense frames can accidentally anchor bugs.
+
+PAIRS = {
+    "listed-identity-relabelled-private": ("listed", "GLD is a listed fund.", "GLD is a private company."),
+    "identity-not-locked": ("identity", "GLD is a listed fund.", "机器人ETF 可以买入。"),
+    "figures-block-malformed": ("market", HDR, HDR + "\n```figures\nbad row\n```"),
+    "unsourced-symbol-figures": ("market", HDR, HDR + " 000858.SZ costs 15.20 CNY."),
+    "figure-symbol": ("multi", "510300.SH akshare CNY close 3.912." + _block("3.912 | observed | 510300.SH close | c3"),
+                      "159516.SZ akshare CNY close 3.912." + _block("3.912 | observed | 510300.SH close | c3")),
+    "undeclared-figure": ("market", HDR + _block(HDR_ROW), HDR + " Value 0.777." + _block(HDR_ROW)),
+    "figure-price-column": ("market", HDR + "\n| Close |\n|---|\n|0.666|" + _block(HDR_ROW),
+                            HDR + "\n| Close |\n|---|\n|0.666|" + _block("0.666 | proposed | entry")),
+    "figure-count": ("market", HDR + " Count 3.0." + _block(HDR_ROW, "3.0 | count | names"),
+                     HDR + " Count 3.0 CNY." + _block(HDR_ROW, "3.0 | count | names")),
+    "figure-observed": ("market", HDR + _block(HDR_ROW), HDR + " Price 0.777." + _block(HDR_ROW, "0.777 | observed | close | c1")),
+    "figure-derived": ("market", HDR + " Result 0.099." + _block(HDR_ROW, "0.099 | derived | 0.666 - 0.567 | c1"),
+                       HDR + " Result 0.123." + _block(HDR_ROW, "0.123 | derived | 0.666 - 0.567 | c1")),
+    "figure-proposed": ("market", HDR + " Entry 0.950." + _block(HDR_ROW, "0.950 | proposed | entry"),
+                        HDR + " Entry 9.950." + _block(HDR_ROW, "9.950 | proposed | entry")),
+    "figure-cited": ("market", HDR + " Study score 1.8." + _block(HDR_ROW, "1.8 | cited | Study"),
+                     HDR + " Score 1.8." + _block(HDR_ROW, "1.8 | cited | Study")),
+    "canonical-symbol-surfaced": ("market", HDR, "akshare CNY close 0.666."),
+    "data-source-surfaced": ("market", HDR, "159516.SZ CNY close 0.666."),
+    "quote-currency-surfaced": ("market", HDR, "159516.SZ akshare close 0.666."),
+}
+
+
+def test_every_declared_check_has_a_fixture_pair():
+    assert set(PAIRS) == {row["name"] for row in GROUNDING_CHECKS.describe()}
+    assert {row["severity"] for row in GROUNDING_CHECKS.describe()} == {"block"}
+
+
+@pytest.mark.parametrize("name", PAIRS)
+def test_declared_check_fixture_pair(tmp_path, name):
+    kind, good, bad = PAIRS[name]
+    for failing, answer in [(False, good), (True, bad)]:
+        path = tmp_path / str(failing)
+        if kind == "identity" and failing:
+            ledger = _ledger_with_invalidated_identity(path)
+        elif kind in {"identity", "listed"}:
+            ledger = _ledger_with_locked_listed_identity(path)
+        elif kind == "multi":
+            ledger = _multi_ledger(path, MARKET_A, MARKET_C)
+        else:
+            ledger = _ledger(path)
+        verdict = ledger.validate_final_answer(answer)
+        recorded = _recorded_validations(path)[-1]
+        assert (name in recorded["fired_checks"]) is failing, recorded
+        if not failing:
+            assert verdict.valid, verdict.issues
+        assert all(row["severity"] == "block" for row in recorded["check_findings"])
+
+
+def test_shared_issue_codes_do_not_implicate_other_roles(tmp_path):
+    ledger = _ledger(tmp_path)
+    ledger.validate_final_answer(PAIRS["figure-derived"][2])
+    assert _recorded_validations(tmp_path)[-1]["fired_checks"] == ["figure-derived"]
+    ledger.validate_final_answer(HDR)
+    assert _recorded_validations(tmp_path)[-1]["check_findings"] == []
+
+
+def test_warning_and_log_findings_are_audited_without_blocking():
+    from types import SimpleNamespace
+    ledger = SimpleNamespace(_active_check_findings=[])
+    registry = GroundingRegistry()
+    for severity in ("warn", "log", "block"):
+        registry.register(GroundingCheck(name=severity, code="fixture", description="d", severity=severity,
+                                        predicate=lambda ledger, content: [{"code": "fixture"}]))
+    assert registry.run_phase("manual", ledger, "answer") == [{"code": "fixture"}]
+    assert [row["severity"] for row in ledger._active_check_findings] == ["warn", "log", "block"]

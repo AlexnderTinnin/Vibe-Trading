@@ -23,7 +23,7 @@ _PRIVATE_ASSERTION_RE = re.compile(
 
 
 @grounding_check(
-    name="listed-identity-relabelled-private",
+    name="listed-identity-relabelled-private", phase="identity", order=1,
     code="listed_identity_relabelled_private",
     description=(
         "A locked listed identity (security or fund) was relabelled as "
@@ -57,7 +57,7 @@ def _listed_identity_relabelled_private(ledger: Any, content: str) -> list[dict[
 
 
 @grounding_check(
-    name="identity-not-locked",
+    name="identity-not-locked", phase="identity", order=0,
     code="identity_not_locked",
     description=(
         "A run that named an instrument concluded while its identity stayed unresolved, conflicting, or invalidated."

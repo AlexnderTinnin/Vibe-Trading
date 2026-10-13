@@ -24,7 +24,7 @@ def _active_block(ledger: Any) -> FiguresBlock:
 
 
 @grounding_check(
-    name="figures-block-malformed",
+    name="figures-block-malformed", phase="declarations", order=0,
     code="figures_block_malformed",
     description="A figures block line could not be read as `value | role | note | ref`.",
 )
@@ -46,7 +46,7 @@ def _figures_block_malformed(ledger: Any, content: str) -> list[dict[str, Any]]:
 
 
 @grounding_check(
-    name="unsourced-symbol-figures",
+    name="unsourced-symbol-figures", phase="answer", order=0,
     code="unsourced_symbol_figures",
     description=(
         "A line pairs a symbol no tool call in this session passed in or "
