@@ -49,6 +49,15 @@ PROFILE_ENVIRONMENTS = {
     "live": "live",
 }
 
+#: Currency the funds query requests balances in; it labels a multi-currency
+#: account's row (see ``_account_to_dict``). HKD matches the SDK's own default
+#: for this argument.
+ACCOUNT_CURRENCY = "HKD"
+
+#: Futu's placeholder for a field it does not report, currency included
+#: (``NoneDataValue`` / ``Currency.NONE``).
+_NO_DATA = "N/A"
+
 #: Maps the connector environment to the Futu ``TrdEnv`` enum member name.
 _ENV_TO_TRD_ENV = {
     "paper": "SIMULATE",
@@ -302,7 +311,9 @@ def get_account_snapshot(config: FutuConfig | None = None) -> dict[str, Any]:
     try:
         acc_id = _resolve_acc_id(cfg, trade_ctx)
         trd_env = _trd_env_enum(cfg)
-        result = trade_ctx.accinfo_query(trd_env=trd_env, acc_id=acc_id)
+        result = trade_ctx.accinfo_query(
+            trd_env=trd_env, acc_id=acc_id, currency=ACCOUNT_CURRENCY
+        )
         ret = result[0] if isinstance(result, (list, tuple)) and len(result) >= 2 else None
         futu = _require_futu()
         if ret is not None and ret != getattr(futu, "RET_OK", 0):
@@ -317,7 +328,7 @@ def get_account_snapshot(config: FutuConfig | None = None) -> dict[str, Any]:
             "profile": cfg.profile,
             "trd_env": cfg.trd_env_name,
             "acc_id": acc_id,
-            "assets": [_account_to_dict(row) for row in rows],
+            "assets": [_account_to_dict(row, ACCOUNT_CURRENCY) for row in rows],
         }
     finally:
         _close(trade_ctx)
@@ -1197,7 +1208,29 @@ def _acc_id_of(row: Mapping[str, Any]) -> int:
         return 0
 
 
-def _account_to_dict(row: Mapping[str, Any]) -> dict[str, Any]:
+def _account_to_dict(
+    row: Mapping[str, Any], requested_currency: str | None = None
+) -> dict[str, Any]:
+    """Normalize one ``accinfo_query`` row.
+
+    A multi-currency account reports ``"N/A"`` as its currency while its
+    amounts are denominated in the currency the query requested, so that
+    requested currency labels the row. A currency the broker does report is
+    kept as is. With neither, the row keeps Futu's ``"N/A"`` rather than an
+    empty value: portfolio valuation rejects ``"N/A"``, but reads an empty
+    currency as USD.
+
+    Args:
+        row: One row from ``accinfo_query``.
+        requested_currency: The ``currency`` argument the query was made
+            with, or ``None`` if unknown.
+
+    Returns:
+        The normalized account mapping.
+    """
+    currency = str(_first(row, ("currency",), "") or "").upper()
+    if currency in ("", _NO_DATA):
+        currency = (requested_currency or _NO_DATA).upper()
     return {
         "power": _first(row, ("power",)),
         "total_assets": _first(row, ("total_assets",)),
@@ -1205,19 +1238,57 @@ def _account_to_dict(row: Mapping[str, Any]) -> dict[str, Any]:
         "market_val": _first(row, ("market_val",)),
         "available_funds": _first(row, ("available_funds",)),
         "securities_assets": _first(row, ("securities_assets",)),
-        "currency": str(_first(row, ("currency",), "") or "").upper(),
+        "currency": currency,
     }
 
 
+def _reported(row: Mapping[str, Any], name: str) -> Any:
+    """Return a position field, or ``None`` where Futu did not report it.
+
+    Futu fills an unreported field with the string ``"N/A"``. Downstream that
+    string reads as present, and a numeric reader turns it into zero, so an
+    unreported P&L would show as a flat position.
+
+    Args:
+        row: One row from ``position_list_query``.
+        name: The field to read.
+
+    Returns:
+        The reported value, or ``None``.
+    """
+    value = _first(row, (name,))
+    return None if value == _NO_DATA else value
+
+
 def _position_to_dict(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Normalize one ``position_list_query`` row.
+
+    Futu reports a position on two cost bases. ``cost_price`` is the diluted
+    cost, with realized gains subtracted, so after round-trip trading it can
+    turn negative and ``pl_ratio`` on that basis stops describing the
+    position. ``average_cost`` and ``pl_ratio_avg_cost`` are the same position
+    on its average purchase cost. ``pl_val`` adds realized and unrealized
+    P&L, so ``unrealized_pl`` and ``realized_pl`` ship alongside it to keep a
+    realized gain from hiding an unrealized loss.
+
+    Args:
+        row: One row from ``position_list_query``.
+
+    Returns:
+        The normalized position mapping.
+    """
     return {
         "code": _first(row, ("code",)),
         "qty": _first(row, ("qty",)),
         "can_sell_qty": _first(row, ("can_sell_qty",)),
         "cost_price": _first(row, ("cost_price",)),
+        "average_cost": _reported(row, "average_cost"),
         "market_val": _first(row, ("market_val",)),
         "pl_ratio": _first(row, ("pl_ratio",)),
+        "pl_ratio_avg_cost": _reported(row, "pl_ratio_avg_cost"),
         "pl_val": _first(row, ("pl_val",)),
+        "unrealized_pl": _reported(row, "unrealized_pl"),
+        "realized_pl": _reported(row, "realized_pl"),
         "position_side": str(_first(row, ("position_side",), "")),
         "market": str(_first(row, ("position_market",), "") or "").upper(),
         "currency": str(_first(row, ("currency",), "") or "").upper(),
