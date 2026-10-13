@@ -340,3 +340,34 @@ def test_cscv_logits_and_pbo_agree():
     result = probability_of_backtest_overfitting(data, n_splits=6)
     assert result.pbo == pytest.approx((result.logits <= 0).mean())
     assert result.logits.size == result.n_splits
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["observed_sharpe", "n_observations", "benchmark_sharpe", "skew", "kurtosis"],
+)
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
+def test_psr_rejects_non_finite_summary_inputs(field, bad):
+    """A NaN benchmark returned NaN as 'confidence'; an infinite one returned
+    a clean 0.0 or 1.0. Undefined inputs are named, not reported."""
+    params = dict(
+        observed_sharpe=0.1,
+        n_observations=500,
+        benchmark_sharpe=0.0,
+        skew=0.0,
+        kurtosis=3.0,
+    )
+    params[field] = bad
+    with pytest.raises(ValueError, match=f"{field} must be finite"):
+        probabilistic_sharpe_ratio(**params)
+
+
+@pytest.mark.parametrize("field", ["n_trials", "trial_sharpe_std"])
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
+def test_expected_maximum_sharpe_rejects_non_finite_inputs(field, bad):
+    """NaN and inf sail through the comparisons below into a NaN or infinite
+    bar, which deflated_sharpe_ratio then reports as an ordinary verdict."""
+    params = dict(n_trials=100, trial_sharpe_std=0.1)
+    params[field] = bad
+    with pytest.raises(ValueError, match=f"{field} must be finite"):
+        expected_maximum_sharpe(**params)
