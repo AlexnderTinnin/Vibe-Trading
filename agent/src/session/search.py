@@ -16,10 +16,12 @@ import re
 import sqlite3
 import threading as _threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from functools import wraps
 from pathlib import Path
-from typing import List, Optional
+from typing import Any
 
 from src.config.paths import get_runtime_root
 
@@ -41,7 +43,11 @@ def _prepare_search_text(text: str) -> str:
 def _search_snippet(content: str, query: str) -> str:
     """Highlight query terms in the original text, never in expanded tokens."""
     terms = sorted(set(_QUERY_TERM.findall(query)), key=len, reverse=True)
-    pattern = re.compile("|".join(re.escape(term) for term in terms), re.IGNORECASE) if terms else None
+    pattern = (
+        re.compile("|".join(re.escape(term) for term in terms), re.IGNORECASE)
+        if terms
+        else None
+    )
     first = pattern.search(content) if pattern else None
     start = max(0, first.start() - 100) if first else 0
     end = min(len(content), start + 400)
@@ -82,6 +88,17 @@ class SearchMatch:
         }
 
 
+def _serialized_operation(fn: Callable[..., Any]) -> Callable[..., Any]:
+    """Keep each shared-connection operation and its cursor consumption together."""
+
+    @wraps(fn)
+    def wrapped(self: SessionSearchIndex, *args: Any, **kwargs: Any) -> Any:
+        with self._operation_lock:
+            return fn(self, *args, **kwargs)
+
+    return wrapped
+
+
 class SessionSearchIndex:
     """SQLite FTS5 index for cross-session search.
 
@@ -97,9 +114,10 @@ class SessionSearchIndex:
         Args:
             db_path: Path to SQLite database file.
         """
+        self._operation_lock = _threading.RLock()
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn: Optional[sqlite3.Connection] = None
+        self._conn: sqlite3.Connection | None = None
         self._init_db()
 
     def _get_conn(self) -> sqlite3.Connection:
@@ -135,7 +153,9 @@ class SessionSearchIndex:
         """)
         # Serialize upgrade across processes. Keep original messages for readable
         # snippets; rebuild the derived index once, including historical rows.
-        conn.create_function("prepare_session_text", 1, _prepare_search_text, deterministic=True)
+        conn.create_function(
+            "prepare_session_text", 1, _prepare_search_text, deterministic=True
+        )
         with conn:
             conn.execute("BEGIN IMMEDIATE")
             columns = {row[1] for row in conn.execute("PRAGMA table_info(messages)")}
@@ -143,28 +163,39 @@ class SessionSearchIndex:
             if migrating:
                 for name in ("messages_ai", "messages_ad", "messages_au"):
                     conn.execute(f"DROP TRIGGER IF EXISTS {name}")
-                conn.execute("ALTER TABLE messages ADD COLUMN search_content TEXT NOT NULL DEFAULT ''")
-                conn.execute("UPDATE messages SET search_content = prepare_session_text(content)")
+                conn.execute(
+                    "ALTER TABLE messages ADD COLUMN search_content TEXT NOT NULL DEFAULT ''"
+                )
+                conn.execute(
+                    "UPDATE messages SET search_content = prepare_session_text(content)"
+                )
                 conn.execute("DROP TABLE IF EXISTS messages_fts")
             conn.execute("""
                 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts
                 USING fts5(search_content, content=messages, content_rowid=id)
             """)
-            conn.execute("""CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
+            conn.execute(
+                """CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
                 INSERT INTO messages_fts(rowid, search_content) VALUES (new.id, new.search_content);
-            END""")
-            conn.execute("""CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
+            END"""
+            )
+            conn.execute(
+                """CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
                 INSERT INTO messages_fts(messages_fts, rowid, search_content)
                 VALUES ('delete', old.id, old.search_content);
-            END""")
+            END"""
+            )
             if migrating:
-                conn.execute("INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')")
+                conn.execute(
+                    "INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')"
+                )
 
+    @_serialized_operation
     def index_session(
         self,
         session_id: str,
         title: str = "",
-        ts: Optional[float] = None,
+        ts: float | None = None,
     ) -> None:
         """Upsert a session record.
 
@@ -193,8 +224,10 @@ class SessionSearchIndex:
         )
         conn.commit()
 
-    def index_message(self, session_id: str, role: str, content: str,
-                      tool_name: Optional[str] = None) -> None:
+    @_serialized_operation
+    def index_message(
+        self, session_id: str, role: str, content: str, tool_name: str | None = None
+    ) -> None:
         """Index a single message.
 
         Args:
@@ -234,10 +267,13 @@ class SessionSearchIndex:
         Returns:
             FTS5-safe MATCH expression.
         """
-        tokens = [_prepare_search_text(term).strip() for term in _QUERY_TERM.findall(query)]
+        tokens = [
+            _prepare_search_text(term).strip() for term in _QUERY_TERM.findall(query)
+        ]
         return " OR ".join(f'"{token}"' for token in tokens) if tokens else '""'
 
-    def search(self, query: str, max_sessions: int = 3) -> List[SearchMatch]:
+    @_serialized_operation
+    def search(self, query: str, max_sessions: int = 3) -> list[SearchMatch]:
         """Full-text search across all sessions.
 
         Args:
@@ -302,14 +338,18 @@ class SessionSearchIndex:
         if not store_base_dir.exists():
             return 0
 
-        conn = self._get_conn()
-        conn.execute("DELETE FROM messages")
-        conn.execute("DELETE FROM sessions")
-        try:
-            conn.execute("INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')")
-        except sqlite3.OperationalError:
-            pass
-        conn.commit()
+        # Only SQLite work is serialized; source-file reads remain outside.
+        with self._operation_lock:
+            conn = self._get_conn()
+            conn.execute("DELETE FROM messages")
+            conn.execute("DELETE FROM sessions")
+            try:
+                conn.execute(
+                    "INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')"
+                )
+            except sqlite3.OperationalError:
+                pass
+            conn.commit()
 
         count = 0
         for session_dir in store_base_dir.iterdir():
@@ -328,14 +368,18 @@ class SessionSearchIndex:
                 title = session_data.get("title", "")
 
                 try:
-                    ts = datetime.fromisoformat(session_data.get("created_at", "")).timestamp()
+                    ts = datetime.fromisoformat(
+                        session_data.get("created_at", "")
+                    ).timestamp()
                 except (ValueError, TypeError):
                     ts = time.time()
 
                 self.index_session(sid, title, ts=ts)
 
                 if messages_file.exists():
-                    for line in messages_file.read_text(encoding="utf-8").strip().splitlines():
+                    for line in (
+                        messages_file.read_text(encoding="utf-8").strip().splitlines()
+                    ):
                         if not line.strip():
                             continue
                         try:
@@ -347,7 +391,8 @@ class SessionSearchIndex:
                                 count += 1
                         except json.JSONDecodeError:
                             continue
-            except Exception as exc:
+            # One corrupt session must not abort the remaining reindex.
+            except Exception as exc:  # noqa: BLE001
                 logger.warning("Failed to index session %s: %s", session_dir.name, exc)
 
         return count
@@ -360,6 +405,7 @@ class SessionSearchIndex:
         except (OSError, ValueError):
             return "unknown"
 
+    @_serialized_operation
     def close(self) -> None:
         """Close the database connection."""
         if self._conn:
@@ -367,7 +413,7 @@ class SessionSearchIndex:
             self._conn = None
 
 
-_shared_index: Optional[SessionSearchIndex] = None
+_shared_index: SessionSearchIndex | None = None
 _shared_lock = _threading.Lock()
 
 
