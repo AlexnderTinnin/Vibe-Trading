@@ -34,7 +34,7 @@
     "sidebar": "Vibe-Trading sidebar",
     "mainNavigation": "Main navigation",
     "about": "Hakkında",
-    "sessionsLoadFailed": "Cannot load conversations.",
+    "sessionsLoadFailed": "Konuşmalar yüklenemiyor.",
     "pixelOffice": "Piksel Ofis"
   },
   "runtime": {
@@ -205,44 +205,44 @@
     "verdictNoCalls": "No calls",
     "verdictDelta": "{{was}} â†’ {{now}}",
     "verdictRecorded": "as of {{when}}",
-    "saveChanges": "Save changes",
-    "cancelEdit": "Cancel editing",
-    "editingHint": "Editing this scheduled run. Saving keeps its identity and execution history.",
-    "edit": "Edit",
-    "editAria": "Edit scheduled run: {{prompt}}",
-    "editRunningDisabled": "Wait for this run or its delivery to finish before editing it.",
-    "deliveryInApp": "Keep in Vibe only (do not send)",
-    "deliveryNoChannels": "No enabled delivery channels are configured. Configure one in Settings → Channels.",
-    "deliveryChannelsLoadFailed": "Could not load configured delivery channels.",
-    "deliveryChannelUnavailable": "{{channel}} (currently unavailable)",
-    "deliveryTargetKind_destination": "Destination",
-    "deliveryTargetKind_email_address": "Recipient email address",
-    "deliveryTargetKind_chat": "Chat",
-    "deliveryTargetKind_channel": "Channel",
-    "deliveryTargetDisabled": "Choose a delivery channel first.",
+    "saveChanges": "Değişiklikleri kaydet",
+    "cancelEdit": "Düzenlemeyi iptal et",
+    "editingHint": "Bu zamanlanmış çalıştırma düzenleniyor. Kaydetmek kimliğini ve yürütme geçmişini korur.",
+    "edit": "Düzenle",
+    "editAria": "Zamanlanmış çalıştırmayı düzenle: {{prompt}}",
+    "editRunningDisabled": "Düzenlemeden önce çalıştırmanın veya gönderimin bitmesini bekleyin.",
+    "deliveryInApp": "Yalnızca Vibe’da tut (gönderme)",
+    "deliveryNoChannels": "Etkin gönderim kanalı yapılandırılmamış. Ayarlar → Kanallar’dan birini yapılandırın.",
+    "deliveryChannelsLoadFailed": "Yapılandırılmış gönderim kanalları yüklenemedi.",
+    "deliveryChannelUnavailable": "{{channel}} (şu anda kullanılamıyor)",
+    "deliveryTargetKind_destination": "Hedef",
+    "deliveryTargetKind_email_address": "Alıcının e-posta adresi",
+    "deliveryTargetKind_chat": "Sohbet",
+    "deliveryTargetKind_channel": "Kanal",
+    "deliveryTargetDisabled": "Önce gönderim kanalını seçin.",
     "deliverySummary": "{{channel}} → {{target}}",
-    "deliveryUnknownTarget": "Configured destination",
-    "deliveryFormatLabel": "Email report format",
-    "deliveryFormatDefault": "Channel default (plain text)",
-    "deliveryFormatHtml": "HTML email",
-    "deliveryFormatPdf": "PDF attachment",
-    "proposalPdfProtection": "PDF password protection",
-    "proposalPdfProtectionOn": "On",
-    "proposalPdfProtectionOff": "Off",
-    "deliveryFormatDefaultHint": "Keeps the existing plain-text delivery behavior.",
-    "deliveryFormatHtmlHint": "Shows the full report as sanitized HTML in the email body.",
-    "deliveryFormatPdfHint": "Attaches the full report as PDF and keeps only a short notice in the body.",
-    "deliveryKnownTargetLabel": "Known destination",
-    "deliveryKnownTargetPlaceholder": "Choose a known destination…",
-    "deliverySuggestionKind_private_chat": "Private chat",
+    "deliveryUnknownTarget": "Yapılandırılmış hedef",
+    "deliveryFormatLabel": "E-posta rapor biçimi",
+    "deliveryFormatDefault": "Kanal varsayılanı (düz metin)",
+    "deliveryFormatHtml": "HTML e-posta",
+    "deliveryFormatPdf": "PDF eki",
+    "proposalPdfProtection": "PDF parola koruması",
+    "proposalPdfProtectionOn": "Açık",
+    "proposalPdfProtectionOff": "Kapalı",
+    "deliveryFormatDefaultHint": "Mevcut düz metin gönderim davranışını korur.",
+    "deliveryFormatHtmlHint": "Tam raporu e-posta gövdesinde temizlenmiş HTML olarak gösterir.",
+    "deliveryFormatPdfHint": "Tam raporu PDF olarak ekler ve gövdede yalnızca kısa bir bildirim bırakır.",
+    "deliveryKnownTargetLabel": "Bilinen hedef",
+    "deliveryKnownTargetPlaceholder": "Bilinen bir hedef seçin…",
+    "deliverySuggestionKind_private_chat": "Özel sohbet",
     "deliveryTargetPlaceholder_email_address": "name@example.com",
-    "deliveryTargetPlaceholder_chat": "Chat, group, or user ID",
-    "deliveryTargetPlaceholder_channel": "Channel ID",
-    "deliveryTargetPlaceholder_destination": "Chat, group, user, address, or channel ID",
-    "deliveryTargetPlaceholder_slack_destination": "#channel, @user, or conversation ID",
-    "deliveryTargetKind_slack_destination": "Destination",
-    "deliveryProtectPdf": "Protect PDF with password",
-    "deliveryProtectPdfUnavailable": "No PDF password is configured. Set one in Settings > Channels > Email to enable protection."
+    "deliveryTargetPlaceholder_chat": "Sohbet, grup veya kullanıcı kimliği",
+    "deliveryTargetPlaceholder_channel": "Kanal kimliği",
+    "deliveryTargetPlaceholder_destination": "Sohbet, grup, kullanıcı, adres veya kanal kimliği",
+    "deliveryTargetPlaceholder_slack_destination": "#channel, @user veya konuşma kimliği",
+    "deliveryTargetKind_slack_destination": "Hedef",
+    "deliveryProtectPdf": "PDF’yi parolayla koru",
+    "deliveryProtectPdfUnavailable": "PDF parolası yapılandırılmamış. Korumayı etkinleştirmek için Ayarlar > Kanallar > E-posta’da bir parola belirleyin."
   },
   "reports": {
     "badge": "Raporlar",
@@ -277,10 +277,10 @@
     "reconnecting": "Reconnectingâ€¦",
     "disconnected": "Bağlantı kesildi. Yeniden bağlanmak için sayfayı yenileyin.",
     "reload": "Yeniden Yükle",
-    "retry": "Retry connection",
-    "requestFailed": "Cannot reach the API server. Check that it is running and that your network connection is available.",
-    "requestTimeout": "The request timed out. Check the server connection, then try again.",
-    "requestTimeoutMutation": "The request timed out. The server may still be processing it; check the current state before trying again."
+    "retry": "Bağlantıyı yeniden dene",
+    "requestFailed": "API sunucusuna ulaşılamıyor. Sunucunun çalıştığını ve ağ bağlantınızı kontrol edin.",
+    "requestTimeout": "İstek zaman aşımına uğradı. Sunucu bağlantısını kontrol edip yeniden deneyin.",
+    "requestTimeoutMutation": "İstek zaman aşımına uğradı. Sunucu hâlâ işliyor olabilir; yeniden denemeden önce mevcut durumu kontrol edin."
   },
   "welcome": {
     "categories": {
@@ -376,13 +376,13 @@
       "night3": "One more idea before you wrap up?"
     },
     "tasks": {
-      "research": "Research a stock",
-      "backtest": "Test a strategy",
-      "portfolio": "Review my holdings",
-      "hint": "Examples fill the message box. Edit the symbol or strategy before sending.",
-      "researchPrompt": "Research AAPL: summarize its business, recent financial performance, and key risks using current data. State the sources and dates, and flag missing information.",
-      "backtestPrompt": "Backtest a 20/60-day moving-average strategy on AAPL over the past year. Compare returns and drawdowns with buy-and-hold, and include trading costs. Keep this research-only.",
-      "portfolioPrompt": "Summarize my connected accounts and holdings, including concentration and portfolio risks. If no account is connected, explain how to set one up first. Do not place or modify orders."
+      "research": "Bir hisseyi araştır",
+      "backtest": "Bir stratejiyi test et",
+      "portfolio": "Varlıklarımı incele",
+      "hint": "Örnekler mesaj kutusunu doldurur. Göndermeden önce sembolü veya stratejiyi düzenleyin.",
+      "researchPrompt": "AAPL’ı araştır: Güncel verilerle işini, son finansal performansını ve temel risklerini özetle. Kaynakları ve tarihleri belirt; eksik bilgileri işaretle.",
+      "backtestPrompt": "AAPL üzerinde son bir yıl için 20/60 günlük hareketli ortalama stratejisini geriye dönük test et. Getiri ve düşüşleri al-tut ile karşılaştır, işlem maliyetlerini dahil et. Yalnızca araştırma yap.",
+      "portfolioPrompt": "Bağlı hesaplarımı ve varlıklarımı, yoğunlaşma ve portföy riskleriyle birlikte özetle. Bağlı hesap yoksa önce kurulumunu açıkla. Emir verme veya değiştirme."
     }
   },
   "settings": {
@@ -513,10 +513,10 @@
         "sdkMissingNoHint": "Runtime SDK not installed; the channel can be configured but may not start.",
         "noFields": "This channel has no configurable fields.",
         "loadFailed": "Could not load channel configuration.",
-        "appliedInPlace": "Settings saved without reconnecting the channel.",
-        "appliedReset": "Settings saved. Channel connections were restarted.",
-        "appliedOnStart": "Settings saved. Changes will apply when channels start.",
-        "appliedReconnect": "Settings saved. This channel was reconnected."
+        "appliedInPlace": "Ayarlar kanala yeniden bağlanmadan kaydedildi.",
+        "appliedReset": "Ayarlar kaydedildi. Kanal bağlantıları yeniden başlatıldı.",
+        "appliedOnStart": "Ayarlar kaydedildi. Değişiklikler kanallar başladığında uygulanacak.",
+        "appliedReconnect": "Ayarlar kaydedildi. Bu kanala yeniden bağlanıldı."
       },
       "fields": {
         "dingtalk": {
@@ -585,356 +585,356 @@
         },
         "email": {
           "consent_granted": {
-            "label": "Consent granted",
-            "help": "Master permission switch. The channel reads and sends email only after you explicitly grant consent here."
+            "label": "İzin verildi",
+            "help": "Ana izin anahtarı. Kanal yalnızca burada açıkça izin verdikten sonra e-posta okur ve gönderir."
           },
           "imap_host": {
-            "label": "IMAP host",
-            "help": "Inbound mail server host, e.g. imap.gmail.com. Incoming mail is polled from this server."
+            "label": "IMAP sunucusu",
+            "help": "Gelen posta sunucusu, ör. imap.gmail.com. Gelen postalar bu sunucudan kontrol edilir."
           },
           "imap_port": {
-            "label": "IMAP port",
-            "help": "Inbound port (default 993 with SSL)."
+            "label": "IMAP portu",
+            "help": "Gelen posta portu (SSL ile varsayılan 993)."
           },
           "imap_username": {
-            "label": "IMAP username",
-            "help": "Mailbox account used to sign in over IMAP, usually the full email address."
+            "label": "IMAP kullanıcı adı",
+            "help": "IMAP oturumu açmak için kullanılan posta hesabı; genellikle tam e-posta adresi."
           },
           "imap_password": {
-            "label": "IMAP password",
-            "help": "Mailbox password or app password for IMAP. Stored server-side and never sent back to the browser."
+            "label": "IMAP parolası",
+            "help": "IMAP için posta kutusu veya uygulama parolası. Sunucuda saklanır ve tarayıcıya geri gönderilmez."
           },
           "imap_mailbox": {
-            "label": "IMAP mailbox",
-            "help": "Mailbox folder polled for new mail (default INBOX)."
+            "label": "IMAP posta kutusu",
+            "help": "Yeni posta için kontrol edilen klasör (varsayılan INBOX)."
           },
           "imap_use_ssl": {
             "label": "IMAP SSL",
-            "help": "Connect to IMAP over SSL (on by default; required for port 993)."
+            "help": "IMAP’a SSL ile bağlan (varsayılan açık; 993 portu için gerekli)."
           },
           "imap_use_tls": {
             "label": "IMAP STARTTLS",
-            "help": "When IMAP SSL is off, upgrade the connection with STARTTLS before logging in (on by default; typical for port 143). Turn it off only for a server that offers no TLS on a network you trust — the password is then sent in plain text."
+            "help": "IMAP SSL kapalıyken oturum açmadan önce bağlantıyı STARTTLS ile yükselt (varsayılan açık; genellikle 143 portu). Yalnızca güvendiğiniz ağdaki TLS sunmayan bir sunucu için kapatın; bu durumda parola düz metin olarak gönderilir."
           },
           "smtp_host": {
-            "label": "SMTP host",
-            "help": "Outbound mail server host, e.g. smtp.gmail.com. Replies are sent through this server."
+            "label": "SMTP sunucusu",
+            "help": "Giden posta sunucusu, ör. smtp.gmail.com. Yanıtlar bu sunucudan gönderilir."
           },
           "smtp_port": {
-            "label": "SMTP port",
-            "help": "Outbound port (default 587 with STARTTLS; use 465 for implicit SSL)."
+            "label": "SMTP portu",
+            "help": "Giden posta portu (STARTTLS ile varsayılan 587; doğrudan SSL için 465 kullanın)."
           },
           "smtp_username": {
-            "label": "SMTP username",
-            "help": "Account used to authenticate with the SMTP server, usually the full email address."
+            "label": "SMTP kullanıcı adı",
+            "help": "SMTP sunucusunda kimlik doğrulamak için kullanılan hesap; genellikle tam e-posta adresi."
           },
           "smtp_password": {
-            "label": "SMTP password",
-            "help": "Password or app password for SMTP. Stored server-side and never sent back to the browser."
+            "label": "SMTP parolası",
+            "help": "SMTP için parola veya uygulama parolası. Sunucuda saklanır ve tarayıcıya geri gönderilmez."
           },
           "smtp_use_tls": {
             "label": "SMTP STARTTLS",
-            "help": "Upgrade the SMTP connection with STARTTLS (on by default; typical for port 587). In practice this is mutually exclusive with SMTP SSL."
+            "help": "SMTP bağlantısını STARTTLS ile yükselt (varsayılan açık; genellikle 587 portu). SMTP SSL ile birlikte kullanılmaz."
           },
           "smtp_use_ssl": {
             "label": "SMTP SSL",
-            "help": "Connect to SMTP over implicit TLS, e.g. port 465 (off by default). In practice this is mutually exclusive with STARTTLS."
+            "help": "SMTP’ye doğrudan TLS ile bağlan, ör. 465 portu (varsayılan kapalı). STARTTLS ile birlikte kullanılmaz."
           },
           "verify_tls": {
-            "label": "Verify TLS certificate",
-            "help": "Verify the mail server's TLS certificate and hostname (recommended). Disable only for self-signed or internal-CA servers."
+            "label": "TLS sertifikasını doğrula",
+            "help": "Posta sunucusunun TLS sertifikasını ve sunucu adını doğrula (önerilir). Yalnızca kendinden imzalı veya kurum içi sertifika yetkilisi kullanan sunucularda kapatın."
           },
           "from_address": {
-            "label": "From address",
-            "help": "Address replies are sent from. Empty reuses the SMTP username."
+            "label": "Gönderen adresi",
+            "help": "Yanıtların gönderildiği adres. Boşsa SMTP kullanıcı adı kullanılır."
           },
           "auto_reply_enabled": {
-            "label": "Automatic replies",
-            "help": "Reply automatically to inbound email. Proactive sends started by the agent are unaffected."
+            "label": "Otomatik yanıtlar",
+            "help": "Gelen e-postaları otomatik yanıtla. Aracının başlattığı gönderimler etkilenmez."
           },
           "poll_interval_seconds": {
-            "label": "Poll interval (seconds)",
-            "help": "How often the IMAP mailbox is checked for new mail (default 30, floor 5)."
+            "label": "Kontrol aralığı (saniye)",
+            "help": "IMAP posta kutusunun yeni posta için kontrol sıklığı (varsayılan 30, en az 5)."
           },
           "mark_seen": {
-            "label": "Mark as seen",
-            "help": "Mark processed emails as read in the mailbox."
+            "label": "Okundu olarak işaretle",
+            "help": "İşlenen e-postaları posta kutusunda okundu olarak işaretle."
           },
           "post_action": {
-            "label": "After processing",
-            "help": "What happens to processed emails: delete, move them to another mailbox, or leave empty to keep them."
+            "label": "İşlemden sonra",
+            "help": "İşlenen e-postalara yapılacak işlem: sil, başka posta kutusuna taşı veya korumak için boş bırak."
           },
           "post_action_move_mailbox": {
-            "label": "Move to mailbox",
-            "help": "Target mailbox used when After processing is set to move."
+            "label": "Taşınacak posta kutusu",
+            "help": "İşlem sonrası eylem taşıma olduğunda kullanılacak hedef posta kutusu."
           },
           "post_action_expunge": {
-            "label": "Expunge after delete",
-            "help": "Permanently expunge deleted emails instead of leaving them flagged in the mailbox."
+            "label": "Silmeden sonra kalıcı olarak temizle",
+            "help": "Silinen e-postaları posta kutusunda işaretli bırakmak yerine kalıcı olarak temizle."
           },
           "post_action_ignore_skipped": {
-            "label": "Skip self and filtered mail",
-            "help": "Leave skipped emails (your own messages and senders filtered by the allowlist) untouched by the post-action (on by default)."
+            "label": "Kendi iletilerini ve filtrelenen postaları atla",
+            "help": "Atlanan e-postalara (kendi iletileriniz ve izin listesiyle filtrelenen gönderenler) işlem sonrası eylemi uygulama (varsayılan açık)."
           },
           "max_body_chars": {
-            "label": "Max body chars",
-            "help": "Truncate each email body to this many characters (default 12000)."
+            "label": "En fazla gövde karakteri",
+            "help": "Her e-posta gövdesini bu karakter sayısıyla sınırla (varsayılan 12000)."
           },
           "subject_prefix": {
-            "label": "Reply subject prefix",
-            "help": "Prefix added to reply subjects (default \"Re: \")."
+            "label": "Yanıt konusu öneki",
+            "help": "Yanıt konularına eklenecek önek (varsayılan «Re: »)."
           },
           "allow_from": {
-            "label": "Allowed senders",
-            "help": "Optional allowlist of email addresses that may talk to the agent (\"*\" allows everyone). Unpaired senders receive a pairing code in a reply."
+            "label": "İzin verilen gönderenler",
+            "help": "Aracıyla konuşabilecek e-posta adreslerinin isteğe bağlı listesi («*» herkese izin verir). Eşleştirilmemiş gönderenler yanıtta eşleştirme kodu alır."
           },
           "verify_dkim": {
-            "label": "Verify DKIM",
-            "help": "Require an Authentication-Results header with dkim=pass. Disabling both DKIM and SPF accepts spoofed From headers."
+            "label": "DKIM doğrula",
+            "help": "dkim=pass içeren Authentication-Results başlığını zorunlu kıl. DKIM ve SPF birlikte kapatılırsa sahte From başlıkları kabul edilir."
           },
           "verify_spf": {
-            "label": "Verify SPF",
-            "help": "Require an Authentication-Results header with spf=pass. Disabling both DKIM and SPF accepts spoofed From headers."
+            "label": "SPF doğrula",
+            "help": "spf=pass içeren Authentication-Results başlığını zorunlu kıl. DKIM ve SPF birlikte kapatılırsa sahte From başlıkları kabul edilir."
           },
           "allowed_attachment_types": {
-            "label": "Allowed attachment types",
-            "help": "MIME allowlist for inbound attachments, e.g. application/pdf or image/*. Leave empty to disable attachments."
+            "label": "İzin verilen ek türleri",
+            "help": "Gelen ekler için MIME izin listesi, ör. application/pdf veya image/*. Ekleri kapatmak için boş bırakın."
           },
           "max_attachment_size": {
-            "label": "Max attachment size (bytes)",
-            "help": "Largest single attachment accepted, in bytes (default 2000000 = 2 MB)."
+            "label": "En fazla ek boyutu (bayt)",
+            "help": "Kabul edilen en büyük tek ek, bayt olarak (varsayılan 2000000 = 2 MB)."
           },
           "max_attachments_per_email": {
-            "label": "Max attachments per email",
-            "help": "How many attachments are accepted from one email (default 5)."
+            "label": "E-posta başına en fazla ek",
+            "help": "Bir e-postadan kabul edilen ek sayısı (varsayılan 5)."
           },
           "trusted_authserv_id": {
-            "label": "Trusted authentication server",
-            "help": "Receiver authserv-id, e.g. mx.google.com. Your mail provider must strip incoming forged Authentication-Results headers bearing this ID. Required when SPF or DKIM verification is enabled; blank rejects inbound mail."
+            "label": "Güvenilen kimlik doğrulama sunucusu",
+            "help": "Alıcının authserv-id değeri, ör. mx.google.com. Posta sağlayıcınız bu kimliği taşıyan sahte gelen Authentication-Results başlıklarını kaldırmalıdır. SPF veya DKIM doğrulaması açıkken zorunludur; boş değer gelen postayı reddeder."
           },
           "pdf_password": {
-            "label": "PDF report password",
-            "help": "Optional password for scheduled PDF reports that explicitly request protection. Stored server-side and never included in scheduled jobs or returned to the browser."
+            "label": "PDF raporu parolası",
+            "help": "Açıkça koruma isteyen zamanlanmış PDF raporları için isteğe bağlı parola. Sunucuda saklanır; zamanlanmış işlere eklenmez ve tarayıcıya gönderilmez."
           }
         },
         "websocket": {
           "host": {
-            "label": "Bind host",
-            "help": "Local address the WebSocket server binds to (default 127.0.0.1, local-only). A wildcard host such as 0.0.0.0 or :: exposes the server on every interface and is rejected unless a token or token-issue secret is set."
+            "label": "Dinleme adresi",
+            "help": "WebSocket sunucusunun bağlandığı yerel adres (varsayılan 127.0.0.1, yalnızca yerel). 0.0.0.0 veya :: gibi tüm arayüzleri açan adresler, token veya token verme sırrı ayarlanmadıkça reddedilir."
           },
           "port": {
-            "label": "Bind port",
-            "help": "Local port the WebSocket server listens on (default 8765). Ignored when a Unix socket path is set."
+            "label": "Dinleme portu",
+            "help": "WebSocket sunucusunun dinlediği yerel port (varsayılan 8765). Unix soketi yolu ayarlanırsa kullanılmaz."
           },
           "unix_socket_path": {
-            "label": "Unix socket path",
-            "help": "Optional absolute path. When set, the server listens on this Unix socket instead of the host and port."
+            "label": "Unix soketi yolu",
+            "help": "İsteğe bağlı mutlak yol. Ayarlandığında sunucu, adres ve port yerine bu Unix soketinde dinler."
           },
           "path": {
-            "label": "Upgrade path",
-            "help": "WebSocket upgrade path clients connect to (default /). Must start with \"/\"."
+            "label": "Bağlantı yükseltme yolu",
+            "help": "İstemcilerin bağlandığı WebSocket yükseltme yolu (varsayılan /). «/» ile başlamalıdır."
           },
           "token": {
-            "label": "Static token",
-            "help": "Shared secret checked as the token query parameter during the handshake. Stored server-side and never sent back to the browser."
+            "label": "Sabit token",
+            "help": "Bağlantı kurulurken token sorgu parametresi olarak denetlenen ortak sır. Sunucuda saklanır ve tarayıcıya gönderilmez."
           },
           "token_issue_path": {
-            "label": "Token issue path",
-            "help": "HTTP GET route that hands out short-lived one-time tokens as JSON. Must differ from the upgrade path."
+            "label": "Token verme yolu",
+            "help": "Kısa ömürlü, tek kullanımlık tokenları JSON olarak veren HTTP GET yolu. Bağlantı yükseltme yolundan farklı olmalıdır."
           },
           "token_issue_secret": {
-            "label": "Token issue secret",
-            "help": "Bearer secret the token-issue route requires (Authorization: Bearer or X-Vibe-Trading-Auth). Stored server-side and never sent back to the browser."
+            "label": "Token verme sırrı",
+            "help": "Token verme yolunun gerektirdiği Bearer sırrı (Authorization: Bearer veya X-Vibe-Trading-Auth). Sunucuda saklanır ve tarayıcıya gönderilmez."
           },
           "token_ttl_s": {
-            "label": "Issued token TTL (s)",
-            "help": "Lifetime of a token handed out by the token-issue route, in seconds (30-86400, default 300)."
+            "label": "Verilen tokenın ömrü (sn)",
+            "help": "Token verme yolundan alınan tokenın ömrü, saniye olarak (30–86400, varsayılan 300)."
           },
           "websocket_requires_token": {
-            "label": "Require token",
-            "help": "Reject handshakes that do not present a valid static or issued token (on by default)."
+            "label": "Token zorunlu olsun",
+            "help": "Geçerli sabit veya verilmiş token sunmayan bağlantıları reddet (varsayılan açık)."
           },
           "allow_from": {
-            "label": "Allowed clients",
-            "help": "Optional allowlist of client IDs that may connect (\"*\" allows everyone, the default)."
+            "label": "İzin verilen istemciler",
+            "help": "Bağlanabilecek istemci kimliklerinin isteğe bağlı listesi («*» herkese izin verir ve varsayılandır)."
           },
           "streaming": {
-            "label": "Stream output",
-            "help": "Stream model output deltas to connected clients as they are generated."
+            "label": "Akışlı çıktı",
+            "help": "Model çıktısının parçalarını üretildikçe bağlı istemcilere gönder."
           },
           "max_message_bytes": {
-            "label": "Max message bytes",
-            "help": "Largest inbound frame accepted, in bytes (default 37748736; range 1024-41943040)."
+            "label": "En fazla mesaj boyutu (bayt)",
+            "help": "Kabul edilen en büyük gelen çerçeve, bayt olarak (varsayılan 37748736; aralık 1024–41943040)."
           },
           "ping_interval_s": {
-            "label": "Ping interval (s)",
-            "help": "Seconds between keepalive pings (5-300, default 20)."
+            "label": "Ping aralığı (sn)",
+            "help": "Bağlantıyı açık tutan pingler arasındaki saniye sayısı (5–300, varsayılan 20)."
           },
           "ping_timeout_s": {
-            "label": "Ping timeout (s)",
-            "help": "Seconds to wait for a ping reply before dropping the connection (5-300, default 20)."
+            "label": "Ping zaman aşımı (sn)",
+            "help": "Bağlantıyı kesmeden önce ping yanıtını bekleme süresi, saniye olarak (5–300, varsayılan 20)."
           },
           "ssl_certfile": {
-            "label": "TLS certificate path",
-            "help": "PEM certificate path on the server for WSS. Set both certificate and key, or neither; these are file paths on the server, not uploaded material."
+            "label": "TLS sertifikası yolu",
+            "help": "WSS için sunucudaki PEM sertifikası yolu. Sertifika ve anahtarı birlikte ayarlayın veya ikisini de boş bırakın; bunlar yüklenen dosyalar değil, sunucudaki dosya yollarıdır."
           },
           "ssl_keyfile": {
-            "label": "TLS key path",
-            "help": "PEM private key path on the server for WSS. Set both certificate and key, or neither; these are file paths on the server, not uploaded material."
+            "label": "TLS anahtarı yolu",
+            "help": "WSS için sunucudaki PEM özel anahtar yolu. Sertifika ve anahtarı birlikte ayarlayın veya ikisini de boş bırakın; bunlar yüklenen dosyalar değil, sunucudaki dosya yollarıdır."
           }
         },
         "feishu": {
           "app_id": {
-            "label": "App ID",
-            "help": "The app's App ID from the Feishu / Lark developer console (starts with cli_)."
+            "label": "Uygulama kimliği",
+            "help": "Feishu / Lark geliştirici konsolundaki App ID (cli_ ile başlar)."
           },
           "app_secret": {
-            "label": "App Secret",
-            "help": "The app's App Secret. Stored server-side and never sent back to the browser."
+            "label": "Uygulama sırrı",
+            "help": "Uygulamanın App Secret değeri. Sunucuda saklanır ve tarayıcıya gönderilmez."
           },
           "encrypt_key": {
-            "label": "Encrypt Key",
-            "help": "The Encrypt Key from the Event Subscription settings. Optional for long-connection mode."
+            "label": "Şifreleme anahtarı",
+            "help": "Olay aboneliği ayarlarındaki Encrypt Key. Kalıcı bağlantı modunda isteğe bağlıdır."
           },
           "verification_token": {
-            "label": "Verification Token",
-            "help": "The Verification Token from the Event Subscription settings. Optional for long-connection mode."
+            "label": "Doğrulama tokenı",
+            "help": "Olay aboneliği ayarlarındaki Verification Token. Kalıcı bağlantı modunda isteğe bağlıdır."
           },
           "allow_from": {
-            "label": "Allowed senders",
-            "help": "Optional allowlist of Feishu sender IDs that may talk to the agent. Leave empty to allow everyone the bot can see."
+            "label": "İzin verilen gönderenler",
+            "help": "Aracıyla konuşabilecek Feishu gönderen kimliklerinin isteğe bağlı listesi. Botun görebildiği herkese izin vermek için boş bırakın."
           },
           "react_emoji": {
-            "label": "Working emoji",
-            "help": "Emoji reacted on an incoming message while the agent works (default THUMBSUP)."
+            "label": "Çalışma emojisi",
+            "help": "Aracı çalışırken gelen mesaja verilen emoji tepkisi (varsayılan THUMBSUP)."
           },
           "done_emoji": {
-            "label": "Done emoji",
-            "help": "Emoji reacted when the task completes. Leave empty for none."
+            "label": "Tamamlandı emojisi",
+            "help": "Görev tamamlandığında verilen emoji tepkisi. Kullanılmaması için boş bırakın."
           },
           "tool_hint_prefix": {
-            "label": "Tool hint prefix",
-            "help": "Prefix shown before inline tool hints in the reply."
+            "label": "Araç ipucu öneki",
+            "help": "Yanıttaki satır içi araç ipuçlarının önünde gösterilen önek."
           },
           "group_policy": {
-            "label": "Group policy",
-            "help": "\"mention\" replies only when the bot is @mentioned in groups, \"open\" replies to all group messages."
+            "label": "Grup politikası",
+            "help": "«mention» yalnızca grupta bota @ ile seslenildiğinde, «open» tüm grup mesajlarına yanıt verir."
           },
           "reply_to_message": {
-            "label": "Quote the original message",
-            "help": "Quote-reply to the original message when answering."
+            "label": "Asıl mesajı alıntıla",
+            "help": "Yanıt verirken asıl mesajı alıntıla."
           },
           "streaming": {
-            "label": "Streaming replies",
-            "help": "Stream the reply with CardKit live card edits."
+            "label": "Akışlı yanıtlar",
+            "help": "Yanıtı CardKit kartını canlı güncelleyerek akış halinde gönder."
           },
           "domain": {
-            "label": "Domain",
-            "help": "\"feishu\" for Feishu China (open.feishu.cn), \"lark\" for international Lark (open.larksuite.com)."
+            "label": "Alan adı",
+            "help": "Çin’deki Feishu için «feishu» (open.feishu.cn), uluslararası Lark için «lark» (open.larksuite.com)."
           },
           "topic_isolation": {
-            "label": "Per-topic sessions",
-            "help": "Give each group topic its own agent session instead of sharing one session per group."
+            "label": "Konu başına oturum",
+            "help": "Grubun ortak oturumu yerine her grup konusuna ayrı bir aracı oturumu ver."
           }
         },
         "slack": {
           "bot_token": {
-            "label": "Bot token (xoxb-)",
-            "help": "The Slack bot user OAuth token (starts with xoxb-). Stored server-side and never sent back to the browser."
+            "label": "Bot tokenı (xoxb-)",
+            "help": "Slack bot kullanıcısının OAuth tokenı (xoxb- ile başlar). Sunucuda saklanır ve tarayıcıya gönderilmez."
           },
           "app_token": {
-            "label": "App token (xapp-)",
-            "help": "The Slack app-level token (starts with xapp-) with the connections:write scope, required for Socket Mode. Stored server-side and never sent back to the browser."
+            "label": "Uygulama tokenı (xapp-)",
+            "help": "Socket Mode için gereken, connections:write yetkisine sahip Slack uygulama tokenı (xapp- ile başlar). Sunucuda saklanır ve tarayıcıya gönderilmez."
           },
           "user_token_read_only": {
-            "label": "User token read-only",
-            "help": "A behavior flag, not a credential: keeps user-token access read-only."
+            "label": "Kullanıcı tokenı salt okunur olsun",
+            "help": "Kimlik bilgisi değil, davranış ayarıdır; kullanıcı tokenıyla erişimi salt okunur tutar."
           },
           "reply_in_thread": {
-            "label": "Reply in thread",
-            "help": "Reply in a thread under the original message instead of posting directly to the channel."
+            "label": "Mesaj dizisinde yanıtla",
+            "help": "Doğrudan kanala göndermek yerine asıl mesajın dizisinde yanıtla."
           },
           "react_emoji": {
-            "label": "Working emoji",
-            "help": "Emoji reacted on an incoming message while the agent works (default eyes)."
+            "label": "Çalışma emojisi",
+            "help": "Aracı çalışırken gelen mesaja verilen emoji tepkisi (varsayılan eyes)."
           },
           "done_emoji": {
-            "label": "Done emoji",
-            "help": "Emoji reacted when the task completes (default white_check_mark). Leave empty for none."
+            "label": "Tamamlandı emojisi",
+            "help": "Görev tamamlandığında verilen emoji tepkisi (varsayılan white_check_mark). Kullanılmaması için boş bırakın."
           },
           "include_thread_context": {
-            "label": "Include thread context",
-            "help": "Prepend earlier replies from the thread as context the first time the bot is pulled into it."
+            "label": "Mesaj dizisi bağlamını ekle",
+            "help": "Bot bir mesaj dizisine ilk kez katıldığında önceki yanıtları bağlam olarak ekle."
           },
           "thread_context_limit": {
-            "label": "Thread context limit",
-            "help": "Maximum number of thread messages included as context (default 20)."
+            "label": "Mesaj dizisi bağlam sınırı",
+            "help": "Bağlama eklenecek en fazla dizi mesajı sayısı (varsayılan 20)."
           },
           "allow_from": {
-            "label": "Allowed senders",
-            "help": "Allowlist of Slack user IDs permitted to talk to the agent. DM and channel access are further controlled by the DM policy and the group policy."
+            "label": "İzin verilen gönderenler",
+            "help": "Aracıyla konuşabilecek Slack kullanıcı kimliklerinin izin listesi. Özel mesaj ve kanal erişimi ayrıca özel mesaj ve grup politikalarıyla denetlenir."
           },
           "group_policy": {
-            "label": "Group policy",
-            "help": "\"mention\" replies only when the bot is @mentioned in a channel, \"open\" replies to all channel messages, \"allowlist\" replies only in the channels listed below."
+            "label": "Grup politikası",
+            "help": "«mention» yalnızca kanalda bota @ ile seslenildiğinde, «open» tüm kanal mesajlarına, «allowlist» yalnızca aşağıdaki kanallarda yanıt verir."
           },
           "group_allow_from": {
-            "label": "Allowed channels",
-            "help": "Channel IDs the bot responds in when the group policy is \"allowlist\"."
+            "label": "İzin verilen kanallar",
+            "help": "Grup politikası «allowlist» iken botun yanıt vereceği kanal kimlikleri."
           },
           "group_require_mention": {
-            "label": "Require mention in allowed channels",
-            "help": "With the \"allowlist\" policy, also require an @mention before replying in approved channels. No effect for \"mention\" or \"open\"."
+            "label": "İzin verilen kanallarda etiketleme zorunlu olsun",
+            "help": "«allowlist» politikasında onaylı kanallarda yanıt için ayrıca @ ile etiketleme iste. «mention» veya «open» için etkisi yoktur."
           }
         },
         "discord": {
           "token": {
-            "label": "Bot token",
-            "help": "The bot token from the Discord Developer Portal — not a user or OAuth token. Stored server-side and never sent back to the browser."
+            "label": "Bot tokenı",
+            "help": "Discord Developer Portal’daki bot tokenı; kullanıcı veya OAuth tokenı değildir. Sunucuda saklanır ve tarayıcıya gönderilmez."
           },
           "allow_from": {
-            "label": "Allowed senders",
-            "help": "Optional allowlist of Discord user IDs that may talk to the agent. Leave empty to allow everyone."
+            "label": "İzin verilen gönderenler",
+            "help": "Aracıyla konuşabilecek Discord kullanıcı kimliklerinin isteğe bağlı listesi. Herkese izin vermek için boş bırakın."
           },
           "allow_channels": {
-            "label": "Allowed channels",
-            "help": "Optional allowlist of Discord channel IDs the bot responds in. Leave empty to allow every channel."
+            "label": "İzin verilen kanallar",
+            "help": "Botun yanıt vereceği Discord kanal kimliklerinin isteğe bağlı listesi. Tüm kanallara izin vermek için boş bırakın."
           },
           "intents": {
-            "label": "Gateway intents",
-            "help": "Gateway intent bitfield as an integer (default 37377 = GUILDS | GUILD_MESSAGES | DIRECT_MESSAGES | MESSAGE_CONTENT). MESSAGE CONTENT is a privileged intent that must be enabled in the Developer Portal or the bot fails to connect."
+            "label": "Gateway yetkileri",
+            "help": "Gateway intent bit alanı, tam sayı olarak (varsayılan 37377: GUILDS, GUILD_MESSAGES, DIRECT_MESSAGES ve MESSAGE_CONTENT). Ayrıcalıklı MESSAGE CONTENT yetkisi Developer Portal’da etkinleştirilmelidir; aksi halde bot bağlanamaz."
           },
           "group_policy": {
-            "label": "Group policy",
-            "help": "\"mention\" replies only when the bot is @mentioned in a server channel, \"open\" replies to all channel messages (still subject to the allowlists)."
+            "label": "Grup politikası",
+            "help": "«mention» yalnızca sunucu kanalında bota @ ile seslenildiğinde, «open» tüm kanal mesajlarına yanıt verir (izin listeleri yine geçerlidir)."
           },
           "read_receipt_emoji": {
-            "label": "Read receipt emoji",
-            "help": "Emoji reacted on an incoming message right away to acknowledge it (default 👀); removed once the reply arrives."
+            "label": "Alındı emojisi",
+            "help": "Gelen mesajı hemen onaylayan emoji tepkisi (varsayılan 👀); yanıt gönderilince kaldırılır."
           },
           "working_emoji": {
-            "label": "Working emoji",
-            "help": "Emoji reacted while the agent is still working (default 🔧), added after the working emoji delay."
+            "label": "Çalışma emojisi",
+            "help": "Aracı hâlâ çalışırken verilen emoji tepkisi (varsayılan 🔧); çalışma emojisi gecikmesinden sonra eklenir."
           },
           "working_emoji_delay": {
-            "label": "Working emoji delay (s)",
-            "help": "Seconds to wait before adding the working emoji, so quick replies never show it (default 2.0)."
+            "label": "Çalışma emojisi gecikmesi (sn)",
+            "help": "Çalışma emojisini eklemeden önce beklenecek saniye; hızlı yanıtlarda hiç gösterilmez (varsayılan 2.0)."
           },
           "streaming": {
-            "label": "Streaming replies",
-            "help": "Stream the reply by progressively editing one Discord message instead of sending a single final message."
+            "label": "Akışlı yanıtlar",
+            "help": "Tek bir son mesaj göndermek yerine bir Discord mesajını aşamalı düzenleyerek yanıtı akış halinde gönder."
           },
           "proxy": {
-            "label": "Proxy URL",
-            "help": "Optional HTTP proxy the gateway connection and API calls go through, e.g. http://host:port."
+            "label": "Vekil sunucu URL’si",
+            "help": "Gateway bağlantısı ve API çağrıları için isteğe bağlı HTTP vekil sunucusu, ör. http://host:port."
           },
           "proxy_username": {
-            "label": "Proxy username",
-            "help": "Username for the proxy; set it together with the proxy password or not at all — a half-specified pair is ignored with a warning. Stored server-side and never sent back to the browser."
+            "label": "Vekil sunucu kullanıcı adı",
+            "help": "Vekil sunucu kullanıcı adı; parolayla birlikte ayarlayın veya ikisini de boş bırakın. Eksik çift uyarıyla yok sayılır. Sunucuda saklanır ve tarayıcıya gönderilmez."
           },
           "proxy_password": {
-            "label": "Proxy password",
-            "help": "Password for the proxy; set it together with the proxy username or not at all — a half-specified pair is ignored with a warning. Stored server-side and never sent back to the browser."
+            "label": "Vekil sunucu parolası",
+            "help": "Vekil sunucu parolası; kullanıcı adıyla birlikte ayarlayın veya ikisini de boş bırakın. Eksik çift uyarıyla yok sayılır. Sunucuda saklanır ve tarayıcıya gönderilmez."
           }
         }
       },
@@ -960,44 +960,44 @@
           "docsLabel": "Open the QQ Open Platform"
         },
         "email": {
-          "title": "Email setup guide",
-          "intro": "The email channel polls a mailbox over IMAP for incoming mail and replies over SMTP, so no public callback URL is needed.",
-          "step1": "Get the IMAP and SMTP host names and ports from your mail provider (usually imap.<provider> on 993 and smtp.<provider> on 587).",
-          "step2": "Enable IMAP and SMTP access in your mailbox settings and, if the provider requires one (Gmail, QQ Mail and other 2FA providers), create an app password.",
-          "step3": "Fill in the IMAP and SMTP credentials above, set From address, and add your own address to Allowed senders.",
-          "step4": "Click Test connection — it probes the IMAP login, the mailbox folder, and the SMTP login.",
-          "step5": "Tick Consent granted, then enable the channel; automatic replies then reach senders whose mail passes the DKIM/SPF checks.",
-          "docsLabel": "Open the Vibe-Trading docs"
+          "title": "E-posta kurulum rehberi",
+          "intro": "E-posta kanalı gelen postaları IMAP ile kontrol eder ve SMTP ile yanıtlar; herkese açık geri çağrı URL’si gerekmez.",
+          "step1": "E-posta sağlayıcınızdan IMAP ve SMTP sunucu adlarını ve portlarını alın (genellikle 993’te imap.<provider>, 587’de smtp.<provider>).",
+          "step2": "Posta kutusu ayarlarında IMAP ve SMTP erişimini etkinleştirin; sağlayıcı gerektiriyorsa (Gmail, QQ Mail ve diğer 2FA sağlayıcıları) uygulama parolası oluşturun.",
+          "step3": "Yukarıdaki IMAP ve SMTP kimlik bilgilerini doldurun, gönderen adresini ayarlayın ve kendi adresinizi izin verilen gönderenlere ekleyin.",
+          "step4": "Bağlantıyı test et’e tıklayın; IMAP girişi, posta klasörü ve SMTP girişi kontrol edilir.",
+          "step5": "Onay verildi kutusunu işaretleyip kanalı etkinleştirin; otomatik yanıtlar DKIM/SPF kontrollerini geçen iletilerin gönderenlerine ulaşır.",
+          "docsLabel": "Vibe-Trading belgelerini aç"
         },
         "websocket": {
-          "title": "WebSocket setup guide",
-          "intro": "The WebSocket channel runs its own local server that clients connect to directly over a WebSocket URL, so no public callback URL is needed.",
-          "step1": "Choose a bind address: keep 127.0.0.1 for local-only use, or set 0.0.0.0 / :: to expose the server — a wildcard host requires a token or a token-issue secret.",
-          "step2": "Set a static token, or a token-issue path plus its bearer secret so clients can request short-lived tokens.",
-          "step3": "Connect clients with ws://host:port/path?client_id=...&token=...",
-          "step4": "Saving while the channel is running hot-swaps the server: connected clients (including this Web UI chat) briefly disconnect and reconnect.",
-          "step5": "Click Test connection — it validates the SSL certificate/key material and the address availability locally.",
-          "docsLabel": "Open the Vibe-Trading docs"
+          "title": "WebSocket kurulum rehberi",
+          "intro": "WebSocket kanalı, istemcilerin doğrudan WebSocket URL’siyle bağlandığı yerel sunucusunu çalıştırır; herkese açık geri çağrı URL’si gerekmez.",
+          "step1": "Bağlanma adresini seçin: Yalnızca yerel kullanım için 127.0.0.1’i koruyun; dış erişim için 0.0.0.0 veya :: kullanın. Genel dinleme adresi bir belirteç veya belirteç üretim sırrı gerektirir.",
+          "step2": "İstemcilerin kısa ömürlü belirteç isteyebilmesi için statik belirteç veya belirteç üretim yolu ile bearer sırrını ayarlayın.",
+          "step3": "İstemcileri ws://host:port/path?client_id=...&token=... ile bağlayın.",
+          "step4": "Kanal çalışırken kaydetmek sunucuyu anında değiştirir; bağlı istemciler (bu web sohbeti dahil) kısa süreliğine kopup yeniden bağlanır.",
+          "step5": "Bağlantıyı test et’e tıklayın; SSL sertifika/anahtar verileri ve adres kullanılabilirliği yerel olarak doğrulanır.",
+          "docsLabel": "Vibe-Trading belgelerini aç"
         },
         "feishu": {
-          "title": "Feishu / Lark bot setup",
-          "intro": "Feishu bots connect over a WebSocket long connection, so no public IP or webhook URL is needed.",
-          "step1": "Create a Custom App on the Feishu Open Platform (open.feishu.cn), or scan-to-create it from the terminal with vibe-trading channels login feishu, which saves the App ID and App Secret automatically.",
-          "step2": "Add the Bot capability to the app.",
-          "step3": "Under Event Subscription, subscribe to receiving messages (im.message.receive_v1) and choose Long Connection mode.",
-          "step4": "Copy the App ID and App Secret from Credentials & Basic Info and paste them into the fields above.",
-          "step5": "Create a version and publish the app (admin approval if your tenant requires it), then enable the channel here — it hot-applies with no restart. For international Lark tenants, set domain to \"lark\".",
-          "docsLabel": "Open the Feishu Open Platform"
+          "title": "Feishu / Lark bot kurulumu",
+          "intro": "Feishu botları kalıcı WebSocket bağlantısı kullanır; genel IP veya webhook URL’si gerekmez.",
+          "step1": "Feishu Open Platform’da (open.feishu.cn) bir Custom App oluşturun veya terminalde vibe-trading channels login feishu ile tarayarak oluşturun; App ID ve App Secret otomatik kaydedilir.",
+          "step2": "Uygulamaya Bot özelliğini ekleyin.",
+          "step3": "Event Subscription’da mesaj alma olayına (im.message.receive_v1) abone olun ve Long Connection modunu seçin.",
+          "step4": "Credentials & Basic Info’dan App ID ve App Secret değerlerini kopyalayıp yukarıdaki alanlara yapıştırın.",
+          "step5": "Bir sürüm oluşturup uygulamayı yayımlayın (kurumunuz gerektiriyorsa yönetici onayıyla), ardından kanalı burada etkinleştirin; yeniden başlatmadan uygulanır. Uluslararası Lark kurumları için domain değerini \"lark\" yapın.",
+          "docsLabel": "Feishu Open Platform’u aç"
         },
         "discord": {
-          "title": "Discord setup guide",
-          "intro": "Discord bots connect over the gateway with a bot token, so no public IP or webhook URL is needed.",
-          "step1": "Create an application in the Discord Developer Portal (discord.com/developers).",
-          "step2": "Open the Bot page, reset the token, and copy it.",
-          "step3": "Under Privileged Gateway Intents, enable MESSAGE CONTENT INTENT — the default intents require it.",
-          "step4": "Generate an OAuth2 invite URL with the bot (and applications.commands) scope and add the bot to your server.",
-          "step5": "Paste the token here, click Test connection, then enable the channel.",
-          "docsLabel": "Open the Discord developer documentation"
+          "title": "Discord kurulum rehberi",
+          "intro": "Discord botları bot belirteciyle ağ geçidine bağlanır; genel IP veya webhook URL’si gerekmez.",
+          "step1": "Discord Developer Portal’da (discord.com/developers) bir uygulama oluşturun.",
+          "step2": "Bot sayfasını açın, belirteci sıfırlayıp kopyalayın.",
+          "step3": "Privileged Gateway Intents altında MESSAGE CONTENT INTENT’i etkinleştirin; varsayılan intent’ler bunu gerektirir.",
+          "step4": "bot (ve applications.commands) kapsamıyla OAuth2 davet URL’si üretip botu sunucunuza ekleyin.",
+          "step5": "Belirteci buraya yapıştırın, Bağlantıyı test et’e tıklayın ve kanalı etkinleştirin.",
+          "docsLabel": "Discord geliştirici belgelerini aç"
         }
       }
     },
@@ -1032,10 +1032,10 @@
         "fund": "Funds",
         "macro": "Macro",
         "forex": "Forex",
-        "ar_equity": "Argentina Equities",
-        "br_equity": "Brazil Equities",
-        "uk_equity": "UK Equities",
-        "index": "Indices"
+        "ar_equity": "Arjantin hisseleri",
+        "br_equity": "Brezilya hisseleri",
+        "uk_equity": "Birleşik Krallık hisseleri",
+        "index": "Endeksler"
       }
     },
     "tushareToken": "Tushare token",
@@ -1074,9 +1074,9 @@
     "authentication": "Authentication",
     "apiKey": "API key",
     "tushareTokenDesc": "Used for China A-share, futures, fund, and macro data. If unset, the project falls back to AKShare where available.",
-    "gildataTokenDesc": "Optional Gildata (Hundsun Juyuan) feed for China A-shares. When set, it joins the tail of the A-share fallback chain with forward-adjusted daily bars.",
-    "reasoningEffortXhigh": "Extra high",
-    "reasoningEffortReset": "The selected model does not support {{level}}; reset to provider default."
+    "gildataTokenDesc": "İsteğe bağlı Gildata verileri: düzeltilmiş A hissesi günlük fiyatları, ham Hong Kong/endeks fiyatları, borsa dışı fonların net varlık değerleri ve Çin makroekonomi, duyuru ve araştırma araçları.",
+    "reasoningEffortXhigh": "Çok yüksek",
+    "reasoningEffortReset": "Seçilen model {{level}} düzeyini desteklemiyor; sağlayıcı varsayılanına sıfırlandı."
   },
   "qveris": {
     "title": "QVeris Tool Marketplace",
@@ -1196,7 +1196,7 @@
     "resumeConnectorTitle": "Clear the kill switch and re-enable connector activity",
     "connectorResumed": "Connector resumed",
     "failedToResumeConnector": "Failed to resume connector.",
-    "messageTooLong": "Message exceeds {{limit}} characters including attachments and team instructions. Shorten it before sending."
+    "messageTooLong": "Mesaj, ekler ve ekip talimatlarıyla birlikte {{limit}} karakteri aşıyor. Göndermeden önce kısaltın."
   },
   "runDetail": {
     "title": "Run Detail",
@@ -1334,10 +1334,10 @@
         "futures": "Futures",
         "forex": "Forex",
         "other": "Other",
-        "ar_equity": "Argentina equity",
-        "br_equity": "Brazil equity",
-        "uk_equity": "UK equity",
-        "vietnam_equity": "Vietnam equity"
+        "ar_equity": "Arjantin hisseleri",
+        "br_equity": "Brezilya hisseleri",
+        "uk_equity": "Birleşik Krallık hisseleri",
+        "vietnam_equity": "Vietnam hisseleri"
       }
     },
     "attribution": "Attribution",
@@ -1375,30 +1375,30 @@
     "attrError": "Failed to load attribution.",
     "attrNoData": "No attribution data is available for this run.",
     "trust": {
-      "executionRecords": "Execution records",
-      "executionDescription": "Recorded execution stages and the hashes of their inputs and results.",
-      "noExecutionRecords": "Execution records were not recorded for this run.",
-      "startedAt": "Started (UTC)",
-      "endedAt": "Ended (UTC)",
-      "argsHash": "Arguments SHA-256",
-      "resultHash": "Result SHA-256",
-      "metricEvidence": "Metric evidence",
-      "evidenceDescription": "References to saved metric data. Checksums identify the recorded files; this view does not independently verify them.",
-      "noMetricEvidence": "Metric evidence was not recorded for this run.",
-      "metric": "Metric",
-      "artifact": "Artifact",
-      "column": "Column",
-      "row": "Data row (1-based, excluding header)",
-      "artifactHash": "Artifact SHA-256",
+      "executionRecords": "Yürütme kayıtları",
+      "executionDescription": "Kaydedilen yürütme aşamaları ile girdilerinin ve sonuçlarının karmaları.",
+      "noExecutionRecords": "Bu çalıştırma için yürütme kaydı tutulmamış.",
+      "startedAt": "Başlangıç (UTC)",
+      "endedAt": "Bitiş (UTC)",
+      "argsHash": "Argümanların SHA-256 değeri",
+      "resultHash": "Sonucun SHA-256 değeri",
+      "metricEvidence": "Metrik kanıtları",
+      "evidenceDescription": "Kaydedilen metrik verilerine referanslar. Sağlama toplamları kayıtlı dosyaları tanımlar; bu görünüm bunları bağımsız olarak doğrulamaz.",
+      "noMetricEvidence": "Bu çalıştırma için metrik kanıtı kaydedilmemiş.",
+      "metric": "Metrik",
+      "artifact": "Çıktı dosyası",
+      "column": "Sütun",
+      "row": "Veri satırı (1’den başlar, başlık hariç)",
+      "artifactHash": "Çıktı dosyasının SHA-256 değeri",
       "tools": {
-        "backtest": "Backtest",
-        "load_data": "Load data",
-        "generate_signals": "Generate signals"
+        "backtest": "Geriye dönük test",
+        "load_data": "Verileri yükle",
+        "generate_signals": "Sinyal üret"
       },
       "status": {
-        "ok": "Completed",
-        "error": "Failed",
-        "cancelled": "Cancelled"
+        "ok": "Tamamlandı",
+        "error": "Başarısız",
+        "cancelled": "İptal edildi"
       }
     }
   },
@@ -2116,8 +2116,8 @@
       "errorReconnectTimeout": "Browser authorization timed out. Reconnect and complete the broker authorization promptly.",
       "errorSaveSettings": "Unable to save portfolio settings",
       "errorExport": "Export failed",
-      "exportResearch": "Export research snapshot",
-      "researchSnapshotHint": "Export this exact observation without credentials or account numbers. Reuse its snapshot ID in portfolio_summary."
+      "exportResearch": "Araştırma anlık görüntüsünü dışa aktar",
+      "researchSnapshotHint": "Bu gözlemi kimlik bilgileri veya hesap numaraları olmadan dışa aktarın. Anlık görüntü kimliğini portfolio_summary’de yeniden kullanın."
     },
     "metrics": {
       "total": "Total assets",
@@ -2268,121 +2268,121 @@
     }
   },
   "navigation": {
-    "menu": "Browse features",
-    "close": "Close feature menu",
+    "menu": "Özelliklere göz at",
+    "close": "Özellik menüsünü kapat",
     "groups": {
-      "research": "Everyday research",
-      "analysis": "Specialized analysis",
-      "automation": "Automation & setup"
+      "research": "Günlük araştırma",
+      "analysis": "Uzmanlık analizleri",
+      "automation": "Otomasyon ve kurulum"
     },
-    "howTo": "How to use {{feature}}",
-    "startResearch": "Start with the research assistant",
+    "howTo": "{{feature}} nasıl kullanılır",
+    "startResearch": "Araştırma asistanıyla başlayın",
     "descriptions": {
-      "agent": "Ask a research question or describe a strategy in your own words.",
-      "reports": "Review and compare completed backtests.",
-      "portfolio": "See balances and holdings across connected accounts.",
-      "alphaZoo": "Explore stock-selection signals and evaluate their historical performance.",
-      "optionsLab": "Build option strategies, explore payoff and risk, and browse US option chains.",
-      "correlation": "Compare how assets move together.",
-      "scheduled": "Repeat a research task on a schedule.",
-      "runtime": "Check broker connections and trading runtime status.",
-      "settings": "Configure models, data sources, and broker connections.",
+      "agent": "Araştırma sorunuzu sorun veya stratejinizi kendi sözcüklerinizle anlatın.",
+      "reports": "Tamamlanan geriye dönük testleri inceleyin ve karşılaştırın.",
+      "portfolio": "Bağlı hesapların bakiyelerini ve varlıklarını görün.",
+      "alphaZoo": "Hisse seçim sinyallerini inceleyin ve geçmiş performanslarını değerlendirin.",
+      "optionsLab": "Opsiyon stratejileri oluşturun, getiri ve riski inceleyin ve ABD opsiyon zincirlerine göz atın.",
+      "correlation": "Varlıkların birlikte nasıl hareket ettiğini karşılaştırın.",
+      "scheduled": "Bir araştırma görevini zamanlayarak tekrarlayın.",
+      "runtime": "Aracı kurum bağlantılarını ve işlem çalışma durumunu kontrol edin.",
+      "settings": "Modelleri, veri kaynaklarını ve aracı kurum bağlantılarını yapılandırın.",
       "pixelOffice": "Araştırma görevlerini planlayın ve atayın. Atama yürütmeyi başlatmaz; rütbeler yalnızca etikettir ve işlem yetkisi vermez."
     },
     "instructions": {
-      "reports": "Ask the research assistant to backtest a strategy first, then open its results here. Download PDFs and other chat-generated documents from the original conversation.",
-      "portfolio": "Add and enable an account source, then refresh its holdings. This page provides a read-only account overview.",
-      "alphaZoo": "Read a factor definition, then choose a market and date range to evaluate or compare signals. Validate candidates with a backtest.",
-      "optionsLab": "Choose a preset or add option legs, then adjust price, expiry, and volatility; results update automatically. The stock symbol for the live chain is separate from the simulation inputs.",
-      "correlation": "Enter at least two asset symbols, choose a lookback window, then select Compute.",
-      "scheduled": "Enter a research instruction, choose its cadence, and save. The local scheduler must be enabled for jobs to run; delivery also needs a configured channel.",
-      "runtime": "Configure a broker connection in Settings or Portfolio first. Available trading actions depend on that broker's capabilities and your authorization.",
-      "settings": "Configure a model to start. Add data sources or broker connections as your task needs them; public-market research does not require a broker account.",
+      "reports": "Önce araştırma asistanından bir stratejiyi geriye dönük test etmesini isteyin, ardından sonuçları burada açın. PDF ve diğer sohbet belgelerini özgün konuşmadan indirin.",
+      "portfolio": "Bir hesap kaynağı ekleyip etkinleştirin, ardından varlıklarını yenileyin. Bu sayfa salt okunur bir hesap özeti sunar.",
+      "alphaZoo": "Faktör tanımını okuyun, ardından sinyalleri değerlendirmek veya karşılaştırmak için piyasa ve tarih aralığı seçin. Adayları geriye dönük testle doğrulayın.",
+      "optionsLab": "Bir hazır strateji seçin veya opsiyon bacakları ekleyin; fiyatı, vadeyi ve oynaklığı ayarladığınızda sonuçlar güncellenir. Canlı zincirin hisse sembolü, simülasyon girdilerinden ayrıdır.",
+      "correlation": "En az iki varlık sembolü girin, geçmiş pencereyi seçin ve Hesapla’ya basın.",
+      "scheduled": "Araştırma talimatını girin, sıklığını seçip kaydedin. Çalıştırma için yerel zamanlayıcı etkin olmalıdır; gönderim için de yapılandırılmış bir kanal gerekir.",
+      "runtime": "Önce Ayarlar veya Portföy’de bir aracı kurum bağlantısı kurun. Kullanılabilir işlemler, kurumun yeteneklerine ve verdiğiniz yetkiye bağlıdır.",
+      "settings": "Başlamak için bir model yapılandırın. Gerektikçe veri kaynakları veya aracı kurum bağlantıları ekleyin; kamuya açık piyasa araştırması için aracı kurum hesabı gerekmez.",
       "pixelOffice": "Araştırma görevlerini planlayın ve atayın. Atama yürütmeyi başlatmaz; rütbeler yalnızca etikettir ve işlem yetkisi vermez."
     }
   },
   "analysis": {
-    "updated": "Updated",
-    "updating": "Calculating…",
-    "editing": "Parameters changed",
-    "invalid": "Enter valid parameters to calculate",
-    "failed": "Analysis failed",
-    "previousResult": "Showing the previous parameters’ result",
-    "lastComputed": "Calculated at {{time}}",
-    "advancedParameters": "Advanced parameters",
-    "chainOnDemand": "Load market quotes when needed; payoff calculation uses the premiums you enter.",
-    "allStrikes": "Show all strikes",
-    "nearAtm": "Show near ATM",
-    "chainQuote": "{{ticker}} underlying quote: {{price}}",
-    "lastFetched": "Fetched at {{time}}",
-    "assetsValidation": "Enter 2–20 distinct assets, separated by commas, spaces or semicolons.",
-    "windowObservations": "Return observations",
-    "coverage": "{{count}} aligned observations · {{start}} to {{end}}",
-    "usedAssets": "Assets used: {{assets}}",
-    "missingAssets": "Missing prices: {{assets}}",
-    "regimeMethod": "Regimes use Pearson correlation; the selected method applies to the matrix.",
-    "evaluateFactor": "Evaluate this factor",
-    "evaluateSelected": "Evaluate selected ({{count}})",
-    "factorSelectionHint": "Select one factor to evaluate, or a few to compare. A full zoo takes longer.",
-    "resultLimit": "Rows to display (does not reduce computation)",
-    "evaluationScope": "Will evaluate {{count}} factor(s) across a stock universe.",
-    "checkingData": "Checking data requirements…",
-    "ready_public_data": "Uses public data. Availability is checked when the task runs.",
-    "ready_tushare_ready": "Tushare is configured. CSI 300 also needs daily, adjustment-factor and historical constituent permissions.",
-    "ready_tushare_token_missing": "CSI 300 needs a Tushare token and data permissions. Configure it in Settings or use S&P 500.",
-    "ready_tushare_dependency_missing": "Install the Tushare dependency, or use S&P 500.",
-    "ready_single_asset": "BTC-USDT is one asset; cross-sectional IC needs a stock universe. Choose CSI 300 or S&P 500.",
-    "stage_loading_data": "Loading universe and price history…",
-    "stage_preparing_returns": "Preparing forward returns…",
-    "stage_computing": "Computing factor scores…",
-    "backgroundJob": "You can leave this page and return to this task while the server stays running.",
-    "resumeJob": "Reconnect to task",
-    "streamInterrupted": "Connection interrupted. Reconnect to retrieve progress and results.",
-    "jobExpired": "Task expired or the server restarted. Start a new evaluation.",
-    "source_unavailable": "Source unavailable or not configured",
-    "fetch_failed": "Request failed",
-    "no_data": "No bars for this symbol and date range",
-    "factorCoverage": "Prices fetched for {{count}} of {{total}} requested stocks.",
-    "survivorshipBias": "Current index constituents are used; historical results have survivorship bias.",
-    "degradedUniverse": "The index roster could not be obtained; this run uses a smaller disclosed fallback universe.",
-    "selectedFactor": "Selected factor: {{id}}. Only this factor will be evaluated.",
-    "fundamentalsRequirement": "Fundamental factors need PIT SEC financial statements and a US stock universe (S&P 500).",
-    "noEvaluableFactors": "No factors could be evaluated. Try a longer history and check the factor’s required fields and stock universe."
+    "updated": "Güncellendi",
+    "updating": "Hesaplanıyor…",
+    "editing": "Parametreler değişti",
+    "invalid": "Hesaplamak için geçerli parametreler girin",
+    "failed": "Analiz başarısız",
+    "previousResult": "Önceki parametrelerin sonucu gösteriliyor",
+    "lastComputed": "{{time}} tarihinde hesaplandı",
+    "advancedParameters": "Gelişmiş parametreler",
+    "chainOnDemand": "Piyasa fiyatlarını gerektiğinde yükleyin; getiri hesabı girdiğiniz primleri kullanır.",
+    "allStrikes": "Tüm kullanım fiyatlarını göster",
+    "nearAtm": "Dayanak fiyatına yakın olanları göster",
+    "chainQuote": "{{ticker}} dayanak varlık fiyatı: {{price}}",
+    "lastFetched": "{{time}} tarihinde alındı",
+    "assetsValidation": "Virgül, boşluk veya noktalı virgülle ayrılmış 2–20 farklı varlık girin.",
+    "windowObservations": "Getiri gözlemleri",
+    "coverage": "{{count}} hizalanmış gözlem · {{start}} – {{end}}",
+    "usedAssets": "Kullanılan varlıklar: {{assets}}",
+    "missingAssets": "Eksik fiyatlar: {{assets}}",
+    "regimeMethod": "Rejimler Pearson korelasyonunu kullanır; seçilen yöntem matrise uygulanır.",
+    "evaluateFactor": "Bu faktörü değerlendir",
+    "evaluateSelected": "Seçilenleri değerlendir ({{count}})",
+    "factorSelectionHint": "Değerlendirmek için bir, karşılaştırmak için birkaç faktör seçin. Tüm koleksiyon daha uzun sürer.",
+    "resultLimit": "Gösterilecek satır sayısı (hesaplamayı azaltmaz)",
+    "evaluationScope": "Bir hisse evreninde {{count}} faktör değerlendirilecek.",
+    "checkingData": "Veri gereksinimleri kontrol ediliyor…",
+    "ready_public_data": "Kamuya açık veri kullanır. Kullanılabilirlik görev çalışırken kontrol edilir.",
+    "ready_tushare_ready": "Tushare yapılandırılmış. CSI 300 ayrıca günlük veri, düzeltme faktörü ve tarihsel bileşen izinleri gerektirir.",
+    "ready_tushare_token_missing": "CSI 300 için Tushare belirteci ve veri izinleri gerekir. Ayarlar’da yapılandırın veya S&P 500 kullanın.",
+    "ready_tushare_dependency_missing": "Tushare bağımlılığını yükleyin veya S&P 500 kullanın.",
+    "ready_single_asset": "BTC-USDT tek bir varlıktır; kesitsel IC bir hisse evreni gerektirir. CSI 300 veya S&P 500 seçin.",
+    "stage_loading_data": "Hisse evreni ve fiyat geçmişi yükleniyor…",
+    "stage_preparing_returns": "İleri dönem getiriler hazırlanıyor…",
+    "stage_computing": "Faktör puanları hesaplanıyor…",
+    "backgroundJob": "Sunucu çalıştığı sürece bu sayfadan ayrılıp göreve geri dönebilirsiniz.",
+    "resumeJob": "Göreve yeniden bağlan",
+    "streamInterrupted": "Bağlantı kesildi. İlerlemeyi ve sonuçları almak için yeniden bağlanın.",
+    "jobExpired": "Görevin süresi doldu veya sunucu yeniden başlatıldı. Yeni bir değerlendirme başlatın.",
+    "source_unavailable": "Kaynak kullanılamıyor veya yapılandırılmamış",
+    "fetch_failed": "İstek başarısız",
+    "no_data": "Bu sembol ve tarih aralığı için fiyat çubuğu yok",
+    "factorCoverage": "İstenen {{total}} hissenin {{count}} tanesinin fiyatları alındı.",
+    "survivorshipBias": "Güncel endeks bileşenleri kullanılır; tarihsel sonuçlar hayatta kalma yanlılığı içerir.",
+    "degradedUniverse": "Endeks listesi alınamadı; bu çalıştırma açıklanmış daha küçük bir yedek evren kullanır.",
+    "selectedFactor": "Seçilen faktör: {{id}}. Yalnızca bu faktör değerlendirilecek.",
+    "fundamentalsRequirement": "Temel faktörler, o tarihte erişilebilir SEC finansal tablolarını ve bir ABD hisse evrenini (S&P 500) gerektirir.",
+    "noEvaluableFactors": "Hiçbir faktör değerlendirilemedi. Daha uzun geçmiş deneyin; faktörün gerekli alanlarını ve hisse evrenini kontrol edin."
   },
   "customProviders": {
-    "loadFailed": "Failed to load custom providers",
-    "testPassed": "Provider test passed",
-    "testFailed": "Provider test failed",
-    "saved": "Provider saved in the local credential vault",
-    "saveFailed": "Provider save failed",
-    "activationFailed": "Provider activation failed",
-    "title": "Custom OpenAI-compatible providers",
-    "description": "Add any provider with a compatible chat-completions API. The key is tested before saving, then kept in the OS credential vault.",
-    "keyPrivate": "Key never displayed",
-    "active": "Active",
-    "keyStored": "Key stored",
-    "activate": "Activate",
-    "empty": "No custom providers yet. Add one below and test it before saving.",
-    "add": "Add provider",
-    "id": "Provider ID",
-    "idHint": "Lowercase letters, numbers, dots, dashes, or underscores.",
-    "label": "Display name",
-    "labelPlaceholder": "My provider",
-    "baseUrl": "API Base URL",
-    "urlHint": "Use the API root. Do not include an API key in the URL.",
+    "loadFailed": "Özel sağlayıcılar yüklenemedi",
+    "testPassed": "Sağlayıcı testi başarılı",
+    "testFailed": "Sağlayıcı testi başarısız",
+    "saved": "Sağlayıcı yerel kimlik bilgisi kasasına kaydedildi",
+    "saveFailed": "Sağlayıcı kaydedilemedi",
+    "activationFailed": "Sağlayıcı etkinleştirilemedi",
+    "title": "OpenAI uyumlu özel sağlayıcılar",
+    "description": "Uyumlu sohbet tamamlama API’si sunan bir sağlayıcı ekleyin. Test modele kısa bir istek gönderir; başarılı olursa anahtar işletim sisteminin kimlik bilgisi kasasında saklanır.",
+    "keyPrivate": "Anahtar hiçbir zaman gösterilmez",
+    "active": "Etkin",
+    "keyStored": "Anahtar kayıtlı",
+    "activate": "Etkinleştir",
+    "empty": "Henüz özel sağlayıcı yok. Aşağıdan ekleyin ve kaydetmeden önce test edin.",
+    "add": "Sağlayıcı ekle",
+    "id": "Sağlayıcı kimliği",
+    "idHint": "Küçük harf, rakam, nokta, tire veya alt çizgi kullanın.",
+    "label": "Görünen ad",
+    "labelPlaceholder": "Sağlayıcım",
+    "baseUrl": "API temel URL’si",
+    "urlHint": "API kök adresini kullanın. URL’ye API anahtarı eklemeyin.",
     "model": "Model",
-    "key": "API key",
-    "keyPlaceholder": "Enter key for one-time test",
-    "testing": "Testing…",
-    "test": "Test connection",
-    "saving": "Saving…",
-    "save": "Save tested provider",
-    "saveHint": "Save unlocks only after a successful test. Activation is a separate confirmed action.",
-    "confirm": "Activate {{label}} for new agent requests?",
-    "activated": "{{label}} is now active",
-    "preview": "Test passed: {{preview}}",
-    "error": "Provider test failed: {{error}}",
-    "waiting": "The provider is taking longer than usual ({{seconds}}s). The request will continue until the server timeout."
+    "key": "API anahtarı",
+    "keyPlaceholder": "Bu test için anahtarı girin",
+    "testing": "Test ediliyor…",
+    "test": "Bağlantıyı test et",
+    "saving": "Kaydediliyor…",
+    "save": "Test edilen sağlayıcıyı kaydet",
+    "saveHint": "Yalnızca başarılı testten sonra kaydedilebilir. Etkinleştirme ayrıca onaylanır.",
+    "confirm": "Yeni ajan istekleri için {{label}} etkinleştirilsin mi?",
+    "activated": "{{label}} artık etkin",
+    "preview": "Test başarılı: {{preview}}",
+    "error": "Sağlayıcı testi başarısız: {{error}}",
+    "waiting": "Sağlayıcı normalden uzun sürüyor ({{seconds}} sn). İstek sunucu zaman aşımına kadar devam edecek."
   },
   "pixelOffice": {
     "title": "Piksel Ofis",

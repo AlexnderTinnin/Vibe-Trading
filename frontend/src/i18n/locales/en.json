@@ -1110,7 +1110,7 @@
     "authentication": "Authentication",
     "apiKey": "API key",
     "tushareTokenDesc": "Used for China A-share, futures, fund, and macro data. If unset, the project falls back to AKShare where available.",
-    "gildataTokenDesc": "Optional Gildata (Hundsun Juyuan) feed for China A-shares. When set, it joins the tail of the A-share fallback chain with forward-adjusted daily bars."
+    "gildataTokenDesc": "Optional Gildata data: adjusted A-share daily bars, raw HK/index bars, OTC fund NAVs, and China macro, announcement and research tools."
   },
   "qveris": {
     "title": "QVeris Tool Marketplace",
@@ -2357,7 +2357,7 @@
     "saveFailed": "Provider save failed",
     "activationFailed": "Provider activation failed",
     "title": "Custom OpenAI-compatible providers",
-    "description": "Add any provider with a compatible chat-completions API. The key is tested before saving, then kept in the OS credential vault.",
+    "description": "Add a provider with a compatible chat-completions API. The test sends a short model request; after it succeeds, the key is saved in the OS credential vault.",
     "keyPrivate": "Key never displayed",
     "active": "Active",
     "keyStored": "Key stored",

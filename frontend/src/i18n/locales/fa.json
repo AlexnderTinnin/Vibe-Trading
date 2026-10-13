@@ -8,36 +8,36 @@
     "noEquityData": "هنوز منحنی ارزش حسابی وجود ندارد — ابتدا یک بک‌تست اجرا کنید"
   },
   "navigation": {
-    "menu": "Browse features",
-    "close": "Close feature menu",
+    "menu": "مرور قابلیت‌ها",
+    "close": "بستن فهرست قابلیت‌ها",
     "groups": {
-      "research": "Everyday research",
-      "analysis": "Specialized analysis",
-      "automation": "Automation & setup"
+      "research": "پژوهش روزانه",
+      "analysis": "تحلیل تخصصی",
+      "automation": "خودکارسازی و تنظیمات"
     },
-    "howTo": "How to use {{feature}}",
-    "startResearch": "Start with the research assistant",
+    "howTo": "روش استفاده از {{feature}}",
+    "startResearch": "با دستیار پژوهش شروع کنید",
     "descriptions": {
-      "agent": "Ask a research question or describe a strategy in your own words.",
-      "reports": "Review and compare completed backtests.",
-      "portfolio": "See balances and holdings across connected accounts.",
-      "alphaZoo": "Explore stock-selection signals and evaluate their historical performance.",
-      "optionsLab": "Build option strategies, explore payoff and risk, and browse US option chains.",
-      "correlation": "Compare how assets move together.",
-      "scheduled": "Repeat a research task on a schedule.",
-      "runtime": "Check broker connections and trading runtime status.",
-      "settings": "Configure models, data sources, and broker connections.",
+      "agent": "پرسش پژوهشی یا راهبرد خود را با بیان خودتان مطرح کنید.",
+      "reports": "پس‌آزمایی‌های تکمیل‌شده را بررسی و مقایسه کنید.",
+      "portfolio": "مانده‌ها و دارایی‌های حساب‌های متصل را ببینید.",
+      "alphaZoo": "سیگنال‌های انتخاب سهام و عملکرد تاریخی آن‌ها را بررسی کنید.",
+      "optionsLab": "راهبردهای اختیار معامله بسازید، سود و زیان و ریسک را بررسی کنید و زنجیره اختیارهای آمریکا را ببینید.",
+      "correlation": "حرکت هم‌زمان دارایی‌ها را مقایسه کنید.",
+      "scheduled": "یک کار پژوهشی را طبق زمان‌بندی تکرار کنید.",
+      "runtime": "اتصال کارگزاران و وضعیت اجرای معاملات را بررسی کنید.",
+      "settings": "مدل‌ها، منابع داده و اتصال کارگزاران را تنظیم کنید.",
       "pixelOffice": "کارهای پژوهشی را برنامه‌ریزی و واگذار کنید. واگذاری باعث شروع اجرا نمی‌شود؛ رتبه‌ها فقط برچسب هستند و مجوز معامله نمی‌دهند."
     },
     "instructions": {
-      "reports": "Ask the research assistant to backtest a strategy first, then open its results here. Download PDFs and other chat-generated documents from the original conversation.",
-      "portfolio": "Add and enable an account source, then refresh its holdings. This page provides a read-only account overview.",
-      "alphaZoo": "Read a factor definition, then choose a market and date range to evaluate or compare signals. Validate candidates with a backtest.",
-      "optionsLab": "Choose a preset or add option legs, then adjust price, expiry, and volatility; results update automatically. The stock symbol for the live chain is separate from the simulation inputs.",
-      "correlation": "Enter at least two asset symbols, choose a lookback window, then select Compute.",
-      "scheduled": "Enter a research instruction, choose its cadence, and save. The local scheduler must be enabled for jobs to run; delivery also needs a configured channel.",
-      "runtime": "Configure a broker connection in Settings or Portfolio first. Available trading actions depend on that broker's capabilities and your authorization.",
-      "settings": "Configure a model to start. Add data sources or broker connections as your task needs them; public-market research does not require a broker account.",
+      "reports": "ابتدا از دستیار پژوهش بخواهید راهبردی را پس‌آزمایی کند، سپس نتیجه را اینجا باز کنید. PDFها و سایر اسناد ساخته‌شده در گفتگو را از همان گفتگو دریافت کنید.",
+      "portfolio": "یک منبع حساب اضافه و فعال کنید، سپس دارایی‌هایش را تازه‌سازی کنید. این صفحه نمایی فقط‌خواندنی از حساب ارائه می‌کند.",
+      "alphaZoo": "تعریف عامل را بخوانید، سپس بازار و بازه زمانی را برای ارزیابی یا مقایسه سیگنال‌ها انتخاب کنید. گزینه‌ها را با پس‌آزمایی اعتبارسنجی کنید.",
+      "optionsLab": "یک الگو انتخاب کنید یا پایه‌های اختیار را اضافه کنید و قیمت، سررسید و نوسان را تغییر دهید؛ نتایج خودکار به‌روز می‌شوند. نماد زنجیره زنده مستقل از ورودی‌های شبیه‌سازی است.",
+      "correlation": "دست‌کم دو نماد دارایی وارد کنید، پنجره تاریخی را انتخاب کنید و محاسبه را بزنید.",
+      "scheduled": "دستور پژوهش و تناوب اجرا را وارد و ذخیره کنید. زمان‌بند محلی باید برای اجرای کار فعال باشد؛ ارسال نیز به کانال تنظیم‌شده نیاز دارد.",
+      "runtime": "ابتدا در تنظیمات یا سبد دارایی یک اتصال کارگزاری بسازید. عملیات قابل استفاده به قابلیت‌های کارگزار و مجوز شما بستگی دارد.",
+      "settings": "برای شروع یک مدل تنظیم کنید. منابع داده یا اتصال کارگزاران را بر اساس نیاز اضافه کنید؛ پژوهش با داده‌های عمومی به حساب کارگزاری نیاز ندارد.",
       "pixelOffice": "کارهای پژوهشی را برنامه‌ریزی و واگذار کنید. واگذاری باعث شروع اجرا نمی‌شود؛ رتبه‌ها فقط برچسب هستند و مجوز معامله نمی‌دهند."
     }
   },
@@ -68,7 +68,7 @@
     "sidebar": "نوار کناری Vibe-Trading",
     "mainNavigation": "ناوبری اصلی",
     "about": "درباره",
-    "sessionsLoadFailed": "Cannot load conversations.",
+    "sessionsLoadFailed": "گفتگوها بارگذاری نمی‌شوند.",
     "pixelOffice": "دفتر پیکسلی"
   },
   "runtime": {
@@ -184,9 +184,9 @@
     "advancedHint": "یک عبارت cron پنج‌فیلدی در منطقه زمانی انتخابی ارزیابی می‌شود (دقیقه، ساعت، روز، ماه، روزِ هفته؛ لیست و بازه مجاز است)، یا یک بازه ساده به میلی‌ثانیه.",
     "timezoneLabel": "منطقه زمانی",
     "create": "زمان‌بندی اجرا",
-    "saveChanges": "Save changes",
-    "cancelEdit": "Cancel editing",
-    "editingHint": "Editing this scheduled run. Saving keeps its identity and execution history.",
+    "saveChanges": "ذخیره تغییرات",
+    "cancelEdit": "لغو ویرایش",
+    "editingHint": "در حال ویرایش این اجرای زمان‌بندی‌شده هستید. ذخیره، شناسه و سابقه اجرای آن را حفظ می‌کند.",
     "promptRequired": "پیش از زمان‌بندی، پرامپت پژوهش را وارد کنید.",
     "invalidTime": "زمان معتبری با قالب HH:MM وارد کنید.",
     "executorHint": "اجراها فقط زمانی انجام می‌شوند که سرور با فعال‌بودن VIBE_TRADING_ENABLE_SCHEDULER راه‌اندازی شده باشد.",
@@ -221,40 +221,40 @@
     "proposalConfirmCancel": "تأیید لغو",
     "nextRun": "اجرای بعدی: {{when}}",
     "lastError": "آخرین خطا: {{error}}",
-    "edit": "Edit",
-    "editAria": "Edit scheduled run: {{prompt}}",
-    "editRunningDisabled": "Wait for this run or its delivery to finish before editing it.",
+    "edit": "ویرایش",
+    "editAria": "ویرایش اجرای زمان‌بندی‌شده: {{prompt}}",
+    "editRunningDisabled": "پیش از ویرایش، منتظر پایان اجرا یا ارسال آن بمانید.",
     "delete": "حذف",
     "deleteAria": "حذف اجرای زمان‌بندی‌شده: {{prompt}}",
     "confirmDelete": "تأیید حذف",
     "confirmDeleteAria": "تأیید حذف اجرای زمان‌بندی‌شده: {{prompt}}",
     "deliveryChannelLabel": "تحویل به کانال",
     "deliveryChannelPlaceholder": "تلگرام، فیشیو، … (خالی بگذارید تا نتیجه فقط در برنامه بماند)",
-    "deliveryInApp": "Keep in Vibe only (do not send)",
-    "deliveryNoChannels": "No enabled delivery channels are configured. Configure one in Settings → Channels.",
-    "deliveryChannelsLoadFailed": "Could not load configured delivery channels.",
-    "deliveryChannelUnavailable": "{{channel}} (currently unavailable)",
+    "deliveryInApp": "فقط در Vibe نگه دار (ارسال نشود)",
+    "deliveryNoChannels": "کانال ارسال فعالی تنظیم نشده است. در تنظیمات ← کانال‌ها یکی را تنظیم کنید.",
+    "deliveryChannelsLoadFailed": "بارگذاری کانال‌های ارسال تنظیم‌شده ممکن نشد.",
+    "deliveryChannelUnavailable": "{{channel}} (اکنون در دسترس نیست)",
     "deliveryTargetLabel": "مقصد کانال",
-    "deliveryTargetKind_destination": "Destination",
-    "deliveryTargetKind_email_address": "Recipient email address",
-    "deliveryTargetKind_chat": "Chat",
-    "deliveryTargetKind_channel": "Channel",
+    "deliveryTargetKind_destination": "مقصد",
+    "deliveryTargetKind_email_address": "نشانی ایمیل گیرنده",
+    "deliveryTargetKind_chat": "گفتگو",
+    "deliveryTargetKind_channel": "کانال",
     "deliveryTargetPlaceholder": "شناسه چت / گروه / کاربر",
-    "deliveryTargetDisabled": "Choose a delivery channel first.",
+    "deliveryTargetDisabled": "ابتدا کانال ارسال را انتخاب کنید.",
     "deliveryHint": "به‌طور پیش‌فرض خاموش است. بریفینگ یک‌بار پس از پایان اجرا ارسال می‌شود، نه هنگام زمان‌بندی.",
     "deliveryTargetRequired": "برای این کانال مقصدی انتخاب کنید یا کانال را پاک کنید.",
     "deliverySummary": "{{channel}} → {{target}}",
-    "deliveryUnknownTarget": "Configured destination",
-    "deliveryFormatLabel": "Email report format",
-    "deliveryFormatDefault": "Channel default (plain text)",
-    "deliveryFormatHtml": "HTML email",
-    "deliveryFormatPdf": "PDF attachment",
-    "proposalPdfProtection": "PDF password protection",
-    "proposalPdfProtectionOn": "On",
-    "proposalPdfProtectionOff": "Off",
-    "deliveryFormatDefaultHint": "Keeps the existing plain-text delivery behavior.",
-    "deliveryFormatHtmlHint": "Shows the full report as sanitized HTML in the email body.",
-    "deliveryFormatPdfHint": "Attaches the full report as PDF and keeps only a short notice in the body.",
+    "deliveryUnknownTarget": "مقصد تنظیم‌شده",
+    "deliveryFormatLabel": "قالب گزارش ایمیلی",
+    "deliveryFormatDefault": "پیش‌فرض کانال (متن ساده)",
+    "deliveryFormatHtml": "ایمیل HTML",
+    "deliveryFormatPdf": "پیوست PDF",
+    "proposalPdfProtection": "محافظت PDF با گذرواژه",
+    "proposalPdfProtectionOn": "روشن",
+    "proposalPdfProtectionOff": "خاموش",
+    "deliveryFormatDefaultHint": "روش فعلی ارسال متن ساده حفظ می‌شود.",
+    "deliveryFormatHtmlHint": "گزارش کامل را به صورت HTML پاک‌سازی‌شده در بدنه ایمیل نمایش می‌دهد.",
+    "deliveryFormatPdfHint": "گزارش کامل را به صورت PDF پیوست می‌کند و فقط یادداشتی کوتاه در بدنه می‌گذارد.",
     "delivery_none": "تحویل به {{channel}} پس از اجرای بعدی",
     "delivery_pending": "بریفینگ در انتظار ارسال به {{channel}}",
     "delivery_sending": "در حال ارسال بریفینگ به {{channel}}",
@@ -266,17 +266,17 @@
     "verdictNoCalls": "بدون فراخوان",
     "verdictDelta": "{{was}} → {{now}}",
     "verdictRecorded": "تا {{when}}",
-    "deliveryKnownTargetLabel": "Known destination",
-    "deliveryKnownTargetPlaceholder": "Choose a known destination…",
-    "deliverySuggestionKind_private_chat": "Private chat",
+    "deliveryKnownTargetLabel": "مقصد شناخته‌شده",
+    "deliveryKnownTargetPlaceholder": "یک مقصد شناخته‌شده انتخاب کنید…",
+    "deliverySuggestionKind_private_chat": "گفتگوی خصوصی",
     "deliveryTargetPlaceholder_email_address": "name@example.com",
-    "deliveryTargetPlaceholder_chat": "Chat, group, or user ID",
-    "deliveryTargetPlaceholder_channel": "Channel ID",
-    "deliveryTargetPlaceholder_destination": "Chat, group, user, address, or channel ID",
-    "deliveryTargetPlaceholder_slack_destination": "#channel, @user, or conversation ID",
-    "deliveryTargetKind_slack_destination": "Destination",
-    "deliveryProtectPdf": "Protect PDF with password",
-    "deliveryProtectPdfUnavailable": "No PDF password is configured. Set one in Settings > Channels > Email to enable protection."
+    "deliveryTargetPlaceholder_chat": "شناسه گفتگو، گروه یا کاربر",
+    "deliveryTargetPlaceholder_channel": "شناسه کانال",
+    "deliveryTargetPlaceholder_destination": "شناسه گفتگو، گروه، کاربر، نشانی یا کانال",
+    "deliveryTargetPlaceholder_slack_destination": "#channel، @user یا شناسه گفتگو",
+    "deliveryTargetKind_slack_destination": "مقصد",
+    "deliveryProtectPdf": "محافظت از PDF با گذرواژه",
+    "deliveryProtectPdfUnavailable": "گذرواژه PDF تنظیم نشده است. برای فعال‌سازی حفاظت، آن را در تنظیمات > کانال‌ها > ایمیل تعیین کنید."
   },
   "reports": {
     "badge": "گزارش‌ها",
@@ -311,20 +311,20 @@
     "reconnecting": "در حال اتصال دوباره…",
     "disconnected": "اتصال قطع شد. برای اتصال دوباره صفحه را بازخوانی کنید.",
     "reload": "بازخوانی",
-    "retry": "Retry connection",
-    "requestFailed": "Cannot reach the API server. Check that it is running and that your network connection is available.",
-    "requestTimeout": "The request timed out. Check the server connection, then try again.",
-    "requestTimeoutMutation": "The request timed out. The server may still be processing it; check the current state before trying again."
+    "retry": "تلاش دوباره برای اتصال",
+    "requestFailed": "سرور API در دسترس نیست. روشن بودن سرور و اتصال شبکه را بررسی کنید.",
+    "requestTimeout": "مهلت درخواست پایان یافت. اتصال سرور را بررسی و دوباره تلاش کنید.",
+    "requestTimeoutMutation": "مهلت درخواست پایان یافت. ممکن است سرور هنوز آن را پردازش کند؛ پیش از تکرار، وضعیت فعلی را بررسی کنید."
   },
   "welcome": {
     "tasks": {
-      "research": "Research a stock",
-      "backtest": "Test a strategy",
-      "portfolio": "Review my holdings",
-      "hint": "Examples fill the message box. Edit the symbol or strategy before sending.",
-      "researchPrompt": "Research AAPL: summarize its business, recent financial performance, and key risks using current data. State the sources and dates, and flag missing information.",
-      "backtestPrompt": "Backtest a 20/60-day moving-average strategy on AAPL over the past year. Compare returns and drawdowns with buy-and-hold, and include trading costs. Keep this research-only.",
-      "portfolioPrompt": "Summarize my connected accounts and holdings, including concentration and portfolio risks. If no account is connected, explain how to set one up first. Do not place or modify orders."
+      "research": "پژوهش درباره یک سهم",
+      "backtest": "آزمون یک راهبرد",
+      "portfolio": "بررسی دارایی‌های من",
+      "hint": "نمونه‌ها کادر پیام را پر می‌کنند. پیش از ارسال، نماد یا راهبرد را ویرایش کنید.",
+      "researchPrompt": "درباره AAPL پژوهش کن: کسب‌وکار، عملکرد مالی اخیر و ریسک‌های اصلی را با داده‌های به‌روز خلاصه کن. منابع و تاریخ‌ها را ذکر و اطلاعات ناموجود را مشخص کن.",
+      "backtestPrompt": "راهبرد میانگین متحرک ۲۰/۶۰ روزه را برای AAPL در سال گذشته پس‌آزمایی کن. بازده و افت سرمایه را با خرید و نگهداری مقایسه و هزینه معاملات را لحاظ کن. فقط پژوهش انجام بده.",
+      "portfolioPrompt": "حساب‌ها و دارایی‌های متصل من، از جمله تمرکز و ریسک‌های سبد را خلاصه کن. اگر حسابی متصل نیست، ابتدا روش راه‌اندازی را توضیح بده. هیچ سفارشی ثبت یا تغییر نده."
     },
     "categories": {
       "multiMarketBacktest": "بک‌تست سهام A",
@@ -446,10 +446,10 @@
     "reasoningEffortLow": "کم",
     "reasoningEffortMedium": "متوسط",
     "reasoningEffortHigh": "زیاد",
-    "reasoningEffortXhigh": "Extra high",
+    "reasoningEffortXhigh": "بسیار زیاد",
     "reasoningEffortMax": "بیشینه",
     "reasoningEffortDesc": "عمق استدلال را روی مدل‌های پشتیبان‌شده کنترل می‌کند. سطوح بالاتر ممکن است تحلیل پیچیده را بهتر کنند اما زمان بیشتری می‌برند؛ ارائه‌دهندگان پشتیبان‌نشده ممکن است این تنظیم را نادیده بگیرند. «بدون (صریح)» این فیلد را با استدلال غیرفعال می‌فرستد — برخی مدل‌های OpenAI برای استفاده از ابزارها به آن نیاز دارند.",
-    "reasoningEffortReset": "The selected model does not support {{level}}; reset to provider default.",
+    "reasoningEffortReset": "مدل انتخابی از {{level}} پشتیبانی نمی‌کند؛ به پیش‌فرض ارائه‌دهنده بازگردانده شد.",
     "useDefaultModel": "استفاده از مدل پیش‌فرض",
     "useDefaultUrl": "استفاده از URL پیش‌فرض",
     "dataSourcesDesc": "منابع داده خارجی برای موتور بک‌تست را پیکربندی کنید.",
@@ -512,528 +512,528 @@
       "startFailed": "راه‌اندازی کانال‌های IM ناموفق بود",
       "stopFailed": "توقف کانال‌های IM ناموفق بود",
       "config": {
-        "toggleConfig": "Configure {{name}}",
-        "keepCurrent": "Keep current ({{masked}})",
-        "secretNotSet": "Not set",
-        "clearSecret": "Clear",
-        "required": "Required",
-        "listPlaceholder": "Type a value and press Enter",
-        "removeValue": "Remove {{value}}",
-        "save": "Save configuration",
-        "hotApply": "Saving applies immediately — no restart needed.",
-        "saved": "Channel configuration saved",
-        "appliedInPlace": "Settings saved without reconnecting the channel.",
-        "appliedReset": "Settings saved. Channel connections were restarted.",
-        "appliedOnStart": "Settings saved. Changes will apply when channels start.",
-        "appliedReconnect": "Settings saved. This channel was reconnected.",
-        "saveFailed": "Failed to save the channel configuration: {{message}}",
-        "test": "Test connection",
-        "testing": "Testing…",
-        "testOk": "Connection verified",
-        "testFailed": "Connection test failed: {{message}}",
-        "testCodeOk": "The provider accepted these credentials.",
-        "testCodeInvalidCredentials": "The provider rejected these credentials.",
-        "testCodeNetwork": "The provider could not be reached.",
-        "testCodeUnsupported": "This channel does not support connection tests.",
-        "testedSavedConfig": "Tested the saved configuration.",
-        "testedDraftConfig": "Tested the values currently in the form (not saved yet).",
-        "enable": "Enable channel",
-        "enableHint": "Disabling keeps the stored credentials — you can re-enable at any time.",
-        "enabledToast": "Channel enabled",
-        "disabledToast": "Channel disabled",
-        "enableFailed": "Failed to enable the channel: {{message}}",
-        "disableFailed": "Failed to disable the channel: {{message}}",
-        "enableRejected": "The provider rejected these credentials, so the channel was not enabled.",
-        "enableRejectedDetail": "Provider response: {{detail}}",
-        "enableAnyway": "Enable anyway",
-        "enableAnywayHint": "Enabling anyway skips the credential check — the channel may fail to connect.",
-        "notWritable": "Channel configuration is stored in a YAML file ({{path}}), which the web UI cannot edit. Edit that file directly to change credentials.",
-        "notWritableChip": "Read-only (YAML)",
-        "sdkMissing": "Runtime SDK not installed — {{hint}}",
-        "sdkMissingNoHint": "Runtime SDK not installed; the channel can be configured but may not start.",
-        "noFields": "This channel has no configurable fields.",
-        "loadFailed": "Could not load channel configuration."
+        "toggleConfig": "تنظیم {{name}}",
+        "keepCurrent": "حفظ مقدار فعلی ({{masked}})",
+        "secretNotSet": "تنظیم نشده",
+        "clearSecret": "پاک کردن",
+        "required": "الزامی",
+        "listPlaceholder": "مقداری وارد کنید و Enter بزنید",
+        "removeValue": "حذف {{value}}",
+        "save": "ذخیره تنظیمات",
+        "hotApply": "ذخیره فوراً اعمال می‌شود؛ نیازی به راه‌اندازی مجدد نیست.",
+        "saved": "تنظیمات کانال ذخیره شد",
+        "appliedInPlace": "تنظیمات بدون اتصال مجدد کانال ذخیره شد.",
+        "appliedReset": "تنظیمات ذخیره شد. اتصال‌های کانال دوباره راه‌اندازی شدند.",
+        "appliedOnStart": "تنظیمات ذخیره شد. تغییرات هنگام شروع کانال‌ها اعمال می‌شوند.",
+        "appliedReconnect": "تنظیمات ذخیره شد. این کانال دوباره متصل شد.",
+        "saveFailed": "ذخیره تنظیمات کانال ناموفق بود: {{message}}",
+        "test": "آزمون اتصال",
+        "testing": "در حال آزمون…",
+        "testOk": "اتصال تأیید شد",
+        "testFailed": "آزمون اتصال ناموفق بود: {{message}}",
+        "testCodeOk": "ارائه‌دهنده این اعتبارنامه‌ها را پذیرفت.",
+        "testCodeInvalidCredentials": "ارائه‌دهنده این اعتبارنامه‌ها را رد کرد.",
+        "testCodeNetwork": "ارائه‌دهنده در دسترس نبود.",
+        "testCodeUnsupported": "این کانال از آزمون اتصال پشتیبانی نمی‌کند.",
+        "testedSavedConfig": "تنظیمات ذخیره‌شده آزموده شد.",
+        "testedDraftConfig": "مقادیر فعلی فرم آزموده شد (هنوز ذخیره نشده‌اند).",
+        "enable": "فعال‌سازی کانال",
+        "enableHint": "غیرفعال‌سازی اعتبارنامه‌ها را حفظ می‌کند؛ هر زمان می‌توانید دوباره فعال کنید.",
+        "enabledToast": "کانال فعال شد",
+        "disabledToast": "کانال غیرفعال شد",
+        "enableFailed": "فعال‌سازی کانال ناموفق بود: {{message}}",
+        "disableFailed": "غیرفعال‌سازی کانال ناموفق بود: {{message}}",
+        "enableRejected": "ارائه‌دهنده اعتبارنامه‌ها را رد کرد؛ کانال فعال نشد.",
+        "enableRejectedDetail": "پاسخ ارائه‌دهنده: {{detail}}",
+        "enableAnyway": "با این حال فعال کن",
+        "enableAnywayHint": "فعال‌سازی با این روش بررسی اعتبارنامه‌ها را رد می‌کند؛ ممکن است کانال متصل نشود.",
+        "notWritable": "تنظیمات کانال در فایل YAML ‏({{path}}) ذخیره شده و رابط وب نمی‌تواند آن را ویرایش کند. برای تغییر اعتبارنامه‌ها همان فایل را ویرایش کنید.",
+        "notWritableChip": "فقط‌خواندنی (YAML)",
+        "sdkMissing": "SDK اجرا نصب نیست — {{hint}}",
+        "sdkMissingNoHint": "SDK اجرا نصب نیست؛ می‌توان کانال را تنظیم کرد، اما ممکن است شروع نشود.",
+        "noFields": "این کانال فیلد قابل تنظیمی ندارد.",
+        "loadFailed": "تنظیمات کانال بارگذاری نشد."
       },
       "fields": {
         "dingtalk": {
           "client_id": {
-            "label": "Client ID (AppKey)",
-            "help": "The app's AppKey from the Credentials page of the DingTalk developer console."
+            "label": "شناسه کلاینت (AppKey)",
+            "help": "AppKey برنامه از صفحه اعتبارنامه‌های کنسول توسعه‌دهندگان DingTalk."
           },
           "client_secret": {
-            "label": "Client Secret (AppSecret)",
-            "help": "The app's AppSecret. Stored server-side and never sent back to the browser."
+            "label": "کلید محرمانه کلاینت (AppSecret)",
+            "help": "AppSecret برنامه؛ در سرور ذخیره می‌شود و هرگز به مرورگر برگردانده نمی‌شود."
           },
           "allow_from": {
-            "label": "Allowed senders",
-            "help": "Optional allowlist of DingTalk sender IDs that may talk to the agent (\"*\" allows everyone). Unpaired senders receive a pairing code in a direct message."
+            "label": "فرستندگان مجاز",
+            "help": "فهرست اختیاری شناسه‌های فرستنده DingTalk که می‌توانند با عامل گفتگو کنند («*» به همه اجازه می‌دهد). فرستندگان جفت‌نشده کد جفت‌سازی را در پیام خصوصی دریافت می‌کنند."
           },
           "allow_remote_media_redirects": {
-            "label": "Allow remote media redirects",
-            "help": "Follow provider redirects when downloading message media. Off by default."
+            "label": "اجازه تغییر مسیر رسانه‌های راه دور",
+            "help": "هنگام دریافت رسانه پیام، تغییر مسیر ارائه‌دهنده دنبال شود. پیش‌فرض خاموش است."
           },
           "remote_media_redirect_allowed_hosts": {
-            "label": "Allowed redirect hosts",
-            "help": "Hosts allowed when remote media redirects are enabled. An empty list blocks every cross-host redirect."
+            "label": "میزبان‌های مجاز تغییر مسیر",
+            "help": "میزبان‌های مجاز هنگام فعال بودن تغییر مسیر رسانه. فهرست خالی همه تغییر مسیرها به میزبان دیگر را مسدود می‌کند."
           },
           "group_user_isolation": {
-            "label": "Per-user group sessions",
-            "help": "Give each member of a group chat their own agent session instead of sharing one."
+            "label": "نشست جداگانه برای هر عضو گروه",
+            "help": "هر عضو گفتگوی گروهی نشست عامل جداگانه‌ای داشته باشد."
           },
           "force_ipv4": {
-            "label": "Force IPv4",
-            "help": "Bind DingTalk API calls to IPv4. Useful when the app's egress-IP whitelist holds a stable IPv4 address while the IPv6 prefix keeps rotating."
+            "label": "اجبار IPv4",
+            "help": "فراخوانی‌های API ‏DingTalk را به IPv4 محدود کنید؛ برای زمانی مناسب است که فهرست IP مجاز برنامه یک IPv4 ثابت دارد اما پیشوند IPv6 تغییر می‌کند."
           }
         },
         "qq": {
           "app_id": {
             "label": "AppID",
-            "help": "The bot's AppID from the QQ Open Platform (q.qq.com) app settings."
+            "help": "AppID ربات از تنظیمات برنامه در پلتفرم باز QQ ‏(q.qq.com)."
           },
           "secret": {
             "label": "AppSecret",
-            "help": "The bot's AppSecret. Stored server-side and never sent back to the browser."
+            "help": "AppSecret ربات؛ در سرور ذخیره می‌شود و هرگز به مرورگر برگردانده نمی‌شود."
           },
           "allow_from": {
-            "label": "Allowed senders",
-            "help": "Optional allowlist of QQ sender openids that may talk to the agent (\"*\" allows everyone). Unpaired senders receive a pairing code in a direct message."
+            "label": "فرستندگان مجاز",
+            "help": "فهرست اختیاری openid فرستندگان QQ که می‌توانند با عامل گفتگو کنند («*» به همه اجازه می‌دهد). فرستندگان جفت‌نشده کد جفت‌سازی را در پیام خصوصی دریافت می‌کنند."
           },
           "msg_format": {
-            "label": "Message format",
-            "help": "Reply format: plain or markdown."
+            "label": "قالب پیام",
+            "help": "قالب پاسخ: متن ساده یا Markdown."
           },
           "ack_message": {
-            "label": "Ack message",
-            "help": "Immediate acknowledgement sent when a message arrives. Leave empty to disable."
+            "label": "پیام تأیید دریافت",
+            "help": "پیامی که بلافاصله پس از دریافت پیام ارسال می‌شود. برای غیرفعال‌سازی خالی بگذارید."
           },
           "media_dir": {
-            "label": "Media directory",
-            "help": "Where inbound attachments are saved. Empty uses ~/.vibe-trading/media/qq."
+            "label": "پوشه رسانه",
+            "help": "محل ذخیره پیوست‌های ورودی؛ اگر خالی باشد از ~/.vibe-trading/media/qq استفاده می‌شود."
           },
           "download_chunk_size": {
-            "label": "Download chunk size",
-            "help": "Bytes per chunk when downloading attachments (default 262144)."
+            "label": "اندازه قطعه دانلود",
+            "help": "تعداد بایت هر قطعه هنگام دانلود پیوست‌ها (پیش‌فرض 262144)."
           },
           "download_max_bytes": {
-            "label": "Max download size (bytes)",
-            "help": "Safety cap for a single attachment download (default 209715200 = 200 MB)."
+            "label": "بیشینه اندازه دانلود (بایت)",
+            "help": "سقف ایمنی دانلود یک پیوست (پیش‌فرض 209715200 برابر با 200 مگابایت)."
           }
         },
         "email": {
           "consent_granted": {
-            "label": "Consent granted",
-            "help": "Master permission switch. The channel reads and sends email only after you explicitly grant consent here."
+            "label": "رضایت داده شده",
+            "help": "کلید اصلی مجوز؛ کانال فقط پس از رضایت صریح شما در اینجا ایمیل می‌خواند و می‌فرستد."
           },
           "imap_host": {
-            "label": "IMAP host",
-            "help": "Inbound mail server host, e.g. imap.gmail.com. Incoming mail is polled from this server."
+            "label": "میزبان IMAP",
+            "help": "میزبان ایمیل ورودی، مانند imap.gmail.com؛ ایمیل‌های ورودی از این سرور بررسی می‌شوند."
           },
           "imap_port": {
-            "label": "IMAP port",
-            "help": "Inbound port (default 993 with SSL)."
+            "label": "درگاه IMAP",
+            "help": "درگاه ورودی (پیش‌فرض 993 با SSL)."
           },
           "imap_username": {
-            "label": "IMAP username",
-            "help": "Mailbox account used to sign in over IMAP, usually the full email address."
+            "label": "نام کاربری IMAP",
+            "help": "حساب ورود به صندوق پستی از طریق IMAP، معمولاً نشانی کامل ایمیل."
           },
           "imap_password": {
-            "label": "IMAP password",
-            "help": "Mailbox password or app password for IMAP. Stored server-side and never sent back to the browser."
+            "label": "گذرواژه IMAP",
+            "help": "گذرواژه صندوق پستی یا گذرواژه برنامه برای IMAP؛ در سرور ذخیره می‌شود و هرگز به مرورگر برگردانده نمی‌شود."
           },
           "imap_mailbox": {
-            "label": "IMAP mailbox",
-            "help": "Mailbox folder polled for new mail (default INBOX)."
+            "label": "صندوق IMAP",
+            "help": "پوشه‌ای که برای ایمیل جدید بررسی می‌شود (پیش‌فرض INBOX)."
           },
           "imap_use_ssl": {
-            "label": "IMAP SSL",
-            "help": "Connect to IMAP over SSL (on by default; required for port 993)."
+            "label": "SSL برای IMAP",
+            "help": "اتصال IMAP با SSL (پیش‌فرض روشن؛ برای درگاه 993 الزامی است)."
           },
           "imap_use_tls": {
-            "label": "IMAP STARTTLS",
-            "help": "When IMAP SSL is off, upgrade the connection with STARTTLS before logging in (on by default; typical for port 143). Turn it off only for a server that offers no TLS on a network you trust — the password is then sent in plain text."
+            "label": "STARTTLS برای IMAP",
+            "help": "وقتی SSL خاموش است، پیش از ورود اتصال را با STARTTLS امن کنید (پیش‌فرض روشن؛ معمولاً درگاه 143). فقط برای سروری بدون TLS در شبکه مورد اعتماد خاموش کنید؛ در آن حالت گذرواژه به صورت متن ساده ارسال می‌شود."
           },
           "smtp_host": {
-            "label": "SMTP host",
-            "help": "Outbound mail server host, e.g. smtp.gmail.com. Replies are sent through this server."
+            "label": "میزبان SMTP",
+            "help": "میزبان ایمیل خروجی، مانند smtp.gmail.com؛ پاسخ‌ها از این سرور ارسال می‌شوند."
           },
           "smtp_port": {
-            "label": "SMTP port",
-            "help": "Outbound port (default 587 with STARTTLS; use 465 for implicit SSL)."
+            "label": "درگاه SMTP",
+            "help": "درگاه خروجی (پیش‌فرض 587 با STARTTLS؛ برای SSL ضمنی از 465 استفاده کنید)."
           },
           "smtp_username": {
-            "label": "SMTP username",
-            "help": "Account used to authenticate with the SMTP server, usually the full email address."
+            "label": "نام کاربری SMTP",
+            "help": "حساب احراز هویت سرور SMTP، معمولاً نشانی کامل ایمیل."
           },
           "smtp_password": {
-            "label": "SMTP password",
-            "help": "Password or app password for SMTP. Stored server-side and never sent back to the browser."
+            "label": "گذرواژه SMTP",
+            "help": "گذرواژه یا گذرواژه برنامه برای SMTP؛ در سرور ذخیره می‌شود و هرگز به مرورگر برگردانده نمی‌شود."
           },
           "smtp_use_tls": {
-            "label": "SMTP STARTTLS",
-            "help": "Upgrade the SMTP connection with STARTTLS (on by default; typical for port 587). In practice this is mutually exclusive with SMTP SSL."
+            "label": "STARTTLS برای SMTP",
+            "help": "اتصال SMTP را با STARTTLS امن کنید (پیش‌فرض روشن؛ معمولاً درگاه 587). در عمل هم‌زمان با SSL برای SMTP قابل استفاده نیست."
           },
           "smtp_use_ssl": {
-            "label": "SMTP SSL",
-            "help": "Connect to SMTP over implicit TLS, e.g. port 465 (off by default). In practice this is mutually exclusive with STARTTLS."
+            "label": "SSL برای SMTP",
+            "help": "اتصال SMTP با TLS از ابتدا، مانند درگاه 465 (پیش‌فرض خاموش). در عمل هم‌زمان با STARTTLS قابل استفاده نیست."
           },
           "verify_tls": {
-            "label": "Verify TLS certificate",
-            "help": "Verify the mail server's TLS certificate and hostname (recommended). Disable only for self-signed or internal-CA servers."
+            "label": "بررسی گواهی TLS",
+            "help": "گواهی TLS و نام میزبان سرور ایمیل را بررسی کنید (توصیه‌شده). فقط برای سرور با گواهی خودامضا یا مرجع صدور داخلی غیرفعال کنید."
           },
           "from_address": {
-            "label": "From address",
-            "help": "Address replies are sent from. Empty reuses the SMTP username."
+            "label": "نشانی فرستنده",
+            "help": "نشانی ارسال پاسخ‌ها؛ اگر خالی باشد نام کاربری SMTP استفاده می‌شود."
           },
           "auto_reply_enabled": {
-            "label": "Automatic replies",
-            "help": "Reply automatically to inbound email. Proactive sends started by the agent are unaffected."
+            "label": "پاسخ خودکار",
+            "help": "به ایمیل‌های ورودی خودکار پاسخ دهید. ارسال‌های آغازشده توسط عامل تغییری نمی‌کنند."
           },
           "poll_interval_seconds": {
-            "label": "Poll interval (seconds)",
-            "help": "How often the IMAP mailbox is checked for new mail (default 30, floor 5)."
+            "label": "فاصله بررسی (ثانیه)",
+            "help": "فاصله بررسی صندوق IMAP برای ایمیل جدید (پیش‌فرض 30، حداقل 5)."
           },
           "mark_seen": {
-            "label": "Mark as seen",
-            "help": "Mark processed emails as read in the mailbox."
+            "label": "علامت‌گذاری به‌عنوان خوانده‌شده",
+            "help": "ایمیل‌های پردازش‌شده را در صندوق پستی خوانده‌شده علامت بزنید."
           },
           "post_action": {
-            "label": "After processing",
-            "help": "What happens to processed emails: delete, move them to another mailbox, or leave empty to keep them."
+            "label": "پس از پردازش",
+            "help": "عمل پس از پردازش ایمیل: حذف، انتقال به صندوق دیگر، یا خالی برای نگه‌داشتن."
           },
           "post_action_move_mailbox": {
-            "label": "Move to mailbox",
-            "help": "Target mailbox used when After processing is set to move."
+            "label": "انتقال به صندوق",
+            "help": "صندوق مقصد هنگامی که عمل پس از پردازش روی انتقال تنظیم شده است."
           },
           "post_action_expunge": {
-            "label": "Expunge after delete",
-            "help": "Permanently expunge deleted emails instead of leaving them flagged in the mailbox."
+            "label": "حذف دائمی پس از حذف",
+            "help": "ایمیل‌های حذف‌شده را به جای نگه داشتن با علامت حذف، برای همیشه پاک کنید."
           },
           "post_action_ignore_skipped": {
-            "label": "Skip self and filtered mail",
-            "help": "Leave skipped emails (your own messages and senders filtered by the allowlist) untouched by the post-action (on by default)."
+            "label": "نادیده‌گیری ایمیل‌های خود و فیلترشده",
+            "help": "عمل پس از پردازش را روی ایمیل‌های ردشده (پیام‌های خودتان و فرستندگان خارج از فهرست مجاز) اجرا نکنید (پیش‌فرض روشن)."
           },
           "max_body_chars": {
-            "label": "Max body chars",
-            "help": "Truncate each email body to this many characters (default 12000)."
+            "label": "بیشینه نویسه‌های متن",
+            "help": "متن هر ایمیل را به این تعداد نویسه محدود کنید (پیش‌فرض 12000)."
           },
           "subject_prefix": {
-            "label": "Reply subject prefix",
-            "help": "Prefix added to reply subjects (default \"Re: \")."
+            "label": "پیشوند موضوع پاسخ",
+            "help": "پیشوند افزوده‌شده به موضوع پاسخ (پیش‌فرض «Re: »)."
           },
           "allow_from": {
-            "label": "Allowed senders",
-            "help": "Optional allowlist of email addresses that may talk to the agent (\"*\" allows everyone). Unpaired senders receive a pairing code in a reply."
+            "label": "فرستندگان مجاز",
+            "help": "فهرست اختیاری نشانی‌های ایمیل که می‌توانند با عامل گفتگو کنند («*» به همه اجازه می‌دهد). فرستندگان جفت‌نشده کد جفت‌سازی را در پاسخ دریافت می‌کنند."
           },
           "verify_dkim": {
-            "label": "Verify DKIM",
-            "help": "Require an Authentication-Results header with dkim=pass. Disabling both DKIM and SPF accepts spoofed From headers."
+            "label": "بررسی DKIM",
+            "help": "وجود سرآیند Authentication-Results با dkim=pass الزامی باشد. غیرفعال کردن DKIM و SPF با هم، سرآیند From جعلی را می‌پذیرد."
           },
           "verify_spf": {
-            "label": "Verify SPF",
-            "help": "Require an Authentication-Results header with spf=pass. Disabling both DKIM and SPF accepts spoofed From headers."
+            "label": "بررسی SPF",
+            "help": "وجود سرآیند Authentication-Results با spf=pass الزامی باشد. غیرفعال کردن DKIM و SPF با هم، سرآیند From جعلی را می‌پذیرد."
           },
           "allowed_attachment_types": {
-            "label": "Allowed attachment types",
-            "help": "MIME allowlist for inbound attachments, e.g. application/pdf or image/*. Leave empty to disable attachments."
+            "label": "انواع مجاز پیوست",
+            "help": "فهرست مجاز MIME برای پیوست‌های ورودی، مانند application/pdf یا image/*. برای غیرفعال کردن پیوست‌ها خالی بگذارید."
           },
           "max_attachment_size": {
-            "label": "Max attachment size (bytes)",
-            "help": "Largest single attachment accepted, in bytes (default 2000000 = 2 MB)."
+            "label": "بیشینه اندازه پیوست (بایت)",
+            "help": "بزرگ‌ترین پیوست قابل پذیرش به بایت (پیش‌فرض 2000000 برابر با 2 مگابایت)."
           },
           "max_attachments_per_email": {
-            "label": "Max attachments per email",
-            "help": "How many attachments are accepted from one email (default 5)."
+            "label": "بیشینه پیوست در هر ایمیل",
+            "help": "تعداد پیوست‌های قابل پذیرش از یک ایمیل (پیش‌فرض 5)."
           },
           "trusted_authserv_id": {
-            "label": "Trusted authentication server",
-            "help": "Receiver authserv-id, e.g. mx.google.com. Your mail provider must strip incoming forged Authentication-Results headers bearing this ID. Required when SPF or DKIM verification is enabled; blank rejects inbound mail."
+            "label": "سرور احراز هویت مورد اعتماد",
+            "help": "authserv-id گیرنده، مانند mx.google.com. ارائه‌دهنده ایمیل شما باید سرآیندهای جعلی ورودی Authentication-Results با این شناسه را حذف کند. هنگام فعال بودن SPF یا DKIM الزامی است؛ مقدار خالی ایمیل ورودی را رد می‌کند."
           },
           "pdf_password": {
-            "label": "PDF report password",
-            "help": "Optional password for scheduled PDF reports that explicitly request protection. Stored server-side and never included in scheduled jobs or returned to the browser."
+            "label": "گذرواژه گزارش PDF",
+            "help": "گذرواژه اختیاری گزارش‌های PDF زمان‌بندی‌شده که صریحاً حفاظت می‌خواهند. در سرور ذخیره می‌شود و هرگز در کار زمان‌بندی‌شده یا پاسخ مرورگر قرار نمی‌گیرد."
           }
         },
         "websocket": {
           "host": {
-            "label": "Bind host",
-            "help": "Local address the WebSocket server binds to (default 127.0.0.1, local-only). A wildcard host such as 0.0.0.0 or :: exposes the server on every interface and is rejected unless a token or token-issue secret is set."
+            "label": "نشانی شنود",
+            "help": "نشانی محلی سرور WebSocket (پیش‌فرض 127.0.0.1، فقط محلی). نشانی فراگیر مانند 0.0.0.0 یا :: سرور را روی همه رابط‌ها در دسترس می‌گذارد و بدون توکن یا کلید محرمانه صدور توکن رد می‌شود."
           },
           "port": {
-            "label": "Bind port",
-            "help": "Local port the WebSocket server listens on (default 8765). Ignored when a Unix socket path is set."
+            "label": "درگاه شنود",
+            "help": "درگاه محلی سرور WebSocket (پیش‌فرض 8765). اگر مسیر سوکت Unix تنظیم باشد نادیده گرفته می‌شود."
           },
           "unix_socket_path": {
-            "label": "Unix socket path",
-            "help": "Optional absolute path. When set, the server listens on this Unix socket instead of the host and port."
+            "label": "مسیر سوکت Unix",
+            "help": "مسیر مطلق اختیاری؛ در صورت تنظیم، سرور به جای میزبان و درگاه روی این سوکت Unix گوش می‌دهد."
           },
           "path": {
-            "label": "Upgrade path",
-            "help": "WebSocket upgrade path clients connect to (default /). Must start with \"/\"."
+            "label": "مسیر ارتقای اتصال",
+            "help": "مسیر ارتقای WebSocket برای اتصال کلاینت‌ها (پیش‌فرض /). باید با «/» شروع شود."
           },
           "token": {
-            "label": "Static token",
-            "help": "Shared secret checked as the token query parameter during the handshake. Stored server-side and never sent back to the browser."
+            "label": "توکن ثابت",
+            "help": "کلید مشترکی که هنگام برقراری اتصال در پارامتر token بررسی می‌شود. در سرور ذخیره می‌شود و هرگز به مرورگر برگردانده نمی‌شود."
           },
           "token_issue_path": {
-            "label": "Token issue path",
-            "help": "HTTP GET route that hands out short-lived one-time tokens as JSON. Must differ from the upgrade path."
+            "label": "مسیر صدور توکن",
+            "help": "مسیر HTTP GET برای صدور توکن‌های یک‌بارمصرف کوتاه‌عمر به صورت JSON. باید با مسیر ارتقای اتصال متفاوت باشد."
           },
           "token_issue_secret": {
-            "label": "Token issue secret",
-            "help": "Bearer secret the token-issue route requires (Authorization: Bearer or X-Vibe-Trading-Auth). Stored server-side and never sent back to the browser."
+            "label": "کلید محرمانه صدور توکن",
+            "help": "کلید Bearer لازم برای مسیر صدور توکن (Authorization: Bearer یا X-Vibe-Trading-Auth). در سرور ذخیره می‌شود و هرگز به مرورگر برگردانده نمی‌شود."
           },
           "token_ttl_s": {
-            "label": "Issued token TTL (s)",
-            "help": "Lifetime of a token handed out by the token-issue route, in seconds (30-86400, default 300)."
+            "label": "عمر توکن صادرشده (ثانیه)",
+            "help": "عمر توکن صادرشده توسط مسیر صدور توکن به ثانیه (30 تا 86400، پیش‌فرض 300)."
           },
           "websocket_requires_token": {
-            "label": "Require token",
-            "help": "Reject handshakes that do not present a valid static or issued token (on by default)."
+            "label": "الزام توکن",
+            "help": "اتصال بدون توکن ثابت یا صادرشده معتبر رد شود (پیش‌فرض روشن)."
           },
           "allow_from": {
-            "label": "Allowed clients",
-            "help": "Optional allowlist of client IDs that may connect (\"*\" allows everyone, the default)."
+            "label": "کلاینت‌های مجاز",
+            "help": "فهرست اختیاری شناسه کلاینت‌های مجاز برای اتصال («*» به همه اجازه می‌دهد و پیش‌فرض است)."
           },
           "streaming": {
-            "label": "Stream output",
-            "help": "Stream model output deltas to connected clients as they are generated."
+            "label": "خروجی جریانی",
+            "help": "بخش‌های خروجی مدل را هم‌زمان با تولید برای کلاینت‌های متصل ارسال کنید."
           },
           "max_message_bytes": {
-            "label": "Max message bytes",
-            "help": "Largest inbound frame accepted, in bytes (default 37748736; range 1024-41943040)."
+            "label": "بیشینه اندازه پیام (بایت)",
+            "help": "بزرگ‌ترین فریم ورودی قابل پذیرش به بایت (پیش‌فرض 37748736؛ بازه 1024 تا 41943040)."
           },
           "ping_interval_s": {
-            "label": "Ping interval (s)",
-            "help": "Seconds between keepalive pings (5-300, default 20)."
+            "label": "فاصله پینگ (ثانیه)",
+            "help": "فاصله پینگ‌های زنده‌نگه‌دارنده به ثانیه (5 تا 300، پیش‌فرض 20)."
           },
           "ping_timeout_s": {
-            "label": "Ping timeout (s)",
-            "help": "Seconds to wait for a ping reply before dropping the connection (5-300, default 20)."
+            "label": "مهلت پینگ (ثانیه)",
+            "help": "زمان انتظار پاسخ پینگ پیش از قطع اتصال به ثانیه (5 تا 300، پیش‌فرض 20)."
           },
           "ssl_certfile": {
-            "label": "TLS certificate path",
-            "help": "PEM certificate path on the server for WSS. Set both certificate and key, or neither; these are file paths on the server, not uploaded material."
+            "label": "مسیر گواهی TLS",
+            "help": "مسیر گواهی PEM روی سرور برای WSS. گواهی و کلید را با هم تنظیم کنید یا هر دو را خالی بگذارید؛ این‌ها مسیر فایل روی سرورند، نه فایل بارگذاری‌شده."
           },
           "ssl_keyfile": {
-            "label": "TLS key path",
-            "help": "PEM private key path on the server for WSS. Set both certificate and key, or neither; these are file paths on the server, not uploaded material."
+            "label": "مسیر کلید TLS",
+            "help": "مسیر کلید خصوصی PEM روی سرور برای WSS. گواهی و کلید را با هم تنظیم کنید یا هر دو را خالی بگذارید؛ این‌ها مسیر فایل روی سرورند، نه فایل بارگذاری‌شده."
           }
         },
         "feishu": {
           "app_id": {
-            "label": "App ID",
-            "help": "The app's App ID from the Feishu / Lark developer console (starts with cli_)."
+            "label": "شناسه برنامه",
+            "help": "App ID برنامه از کنسول توسعه‌دهندگان Feishu / Lark (با cli_ شروع می‌شود)."
           },
           "app_secret": {
-            "label": "App Secret",
-            "help": "The app's App Secret. Stored server-side and never sent back to the browser."
+            "label": "کلید محرمانه برنامه",
+            "help": "App Secret برنامه؛ در سرور ذخیره می‌شود و هرگز به مرورگر برگردانده نمی‌شود."
           },
           "encrypt_key": {
-            "label": "Encrypt Key",
-            "help": "The Encrypt Key from the Event Subscription settings. Optional for long-connection mode."
+            "label": "کلید رمزگذاری",
+            "help": "Encrypt Key از تنظیمات اشتراک رویداد. در حالت اتصال پایدار اختیاری است."
           },
           "verification_token": {
-            "label": "Verification Token",
-            "help": "The Verification Token from the Event Subscription settings. Optional for long-connection mode."
+            "label": "توکن تأیید",
+            "help": "Verification Token از تنظیمات اشتراک رویداد. در حالت اتصال پایدار اختیاری است."
           },
           "allow_from": {
-            "label": "Allowed senders",
-            "help": "Optional allowlist of Feishu sender IDs that may talk to the agent. Leave empty to allow everyone the bot can see."
+            "label": "فرستندگان مجاز",
+            "help": "فهرست اختیاری شناسه فرستندگان Feishu که می‌توانند با عامل گفتگو کنند. برای اجازه به همه افرادی که ربات می‌بیند خالی بگذارید."
           },
           "react_emoji": {
-            "label": "Working emoji",
-            "help": "Emoji reacted on an incoming message while the agent works (default THUMBSUP)."
+            "label": "ایموجی در حال کار",
+            "help": "واکنش ایموجی به پیام ورودی هنگام کار عامل (پیش‌فرض THUMBSUP)."
           },
           "done_emoji": {
-            "label": "Done emoji",
-            "help": "Emoji reacted when the task completes. Leave empty for none."
+            "label": "ایموجی پایان",
+            "help": "واکنش ایموجی پس از پایان کار. برای نبود واکنش خالی بگذارید."
           },
           "tool_hint_prefix": {
-            "label": "Tool hint prefix",
-            "help": "Prefix shown before inline tool hints in the reply."
+            "label": "پیشوند راهنمای ابزار",
+            "help": "پیشوندی که پیش از راهنمای درون‌خطی ابزار در پاسخ نمایش داده می‌شود."
           },
           "group_policy": {
-            "label": "Group policy",
-            "help": "\"mention\" replies only when the bot is @mentioned in groups, \"open\" replies to all group messages."
+            "label": "سیاست گروه",
+            "help": "«mention» فقط هنگام اشاره با @ به ربات در گروه پاسخ می‌دهد؛ «open» به همه پیام‌های گروه پاسخ می‌دهد."
           },
           "reply_to_message": {
-            "label": "Quote the original message",
-            "help": "Quote-reply to the original message when answering."
+            "label": "نقل پیام اصلی",
+            "help": "هنگام پاسخ، پیام اصلی نقل شود."
           },
           "streaming": {
-            "label": "Streaming replies",
-            "help": "Stream the reply with CardKit live card edits."
+            "label": "پاسخ جریانی",
+            "help": "پاسخ را با ویرایش زنده کارت CardKit به صورت جریانی ارسال کنید."
           },
           "domain": {
-            "label": "Domain",
-            "help": "\"feishu\" for Feishu China (open.feishu.cn), \"lark\" for international Lark (open.larksuite.com)."
+            "label": "دامنه",
+            "help": "«feishu» برای Feishu چین (open.feishu.cn) و «lark» برای Lark بین‌المللی (open.larksuite.com)."
           },
           "topic_isolation": {
-            "label": "Per-topic sessions",
-            "help": "Give each group topic its own agent session instead of sharing one session per group."
+            "label": "نشست جداگانه برای هر موضوع",
+            "help": "هر موضوع گروه نشست عامل جداگانه‌ای داشته باشد، به جای یک نشست مشترک برای کل گروه."
           }
         },
         "slack": {
           "bot_token": {
-            "label": "Bot token (xoxb-)",
-            "help": "The Slack bot user OAuth token (starts with xoxb-). Stored server-side and never sent back to the browser."
+            "label": "توکن ربات (xoxb-)",
+            "help": "توکن OAuth کاربر ربات Slack (با xoxb- شروع می‌شود). در سرور ذخیره می‌شود و هرگز به مرورگر برگردانده نمی‌شود."
           },
           "app_token": {
-            "label": "App token (xapp-)",
-            "help": "The Slack app-level token (starts with xapp-) with the connections:write scope, required for Socket Mode. Stored server-side and never sent back to the browser."
+            "label": "توکن برنامه (xapp-)",
+            "help": "توکن سطح برنامه Slack (با xapp- شروع می‌شود) با مجوز connections:write، لازم برای Socket Mode. در سرور ذخیره می‌شود و هرگز به مرورگر برگردانده نمی‌شود."
           },
           "user_token_read_only": {
-            "label": "User token read-only",
-            "help": "A behavior flag, not a credential: keeps user-token access read-only."
+            "label": "توکن کاربر فقط‌خواندنی",
+            "help": "یک تنظیم رفتاری است، نه اعتبارنامه؛ دسترسی با توکن کاربر را فقط‌خواندنی نگه می‌دارد."
           },
           "reply_in_thread": {
-            "label": "Reply in thread",
-            "help": "Reply in a thread under the original message instead of posting directly to the channel."
+            "label": "پاسخ در رشته گفتگو",
+            "help": "به جای ارسال مستقیم به کانال، زیر پیام اصلی در رشته گفتگو پاسخ دهید."
           },
           "react_emoji": {
-            "label": "Working emoji",
-            "help": "Emoji reacted on an incoming message while the agent works (default eyes)."
+            "label": "ایموجی در حال کار",
+            "help": "واکنش ایموجی به پیام ورودی هنگام کار عامل (پیش‌فرض eyes)."
           },
           "done_emoji": {
-            "label": "Done emoji",
-            "help": "Emoji reacted when the task completes (default white_check_mark). Leave empty for none."
+            "label": "ایموجی پایان",
+            "help": "واکنش ایموجی پس از پایان کار (پیش‌فرض white_check_mark). برای نبود واکنش خالی بگذارید."
           },
           "include_thread_context": {
-            "label": "Include thread context",
-            "help": "Prepend earlier replies from the thread as context the first time the bot is pulled into it."
+            "label": "گنجاندن زمینه رشته گفتگو",
+            "help": "هنگام نخستین ورود ربات به رشته گفتگو، پاسخ‌های قبلی را به عنوان زمینه اضافه کنید."
           },
           "thread_context_limit": {
-            "label": "Thread context limit",
-            "help": "Maximum number of thread messages included as context (default 20)."
+            "label": "سقف زمینه رشته گفتگو",
+            "help": "بیشینه تعداد پیام‌های رشته که به عنوان زمینه اضافه می‌شوند (پیش‌فرض 20)."
           },
           "allow_from": {
-            "label": "Allowed senders",
-            "help": "Allowlist of Slack user IDs permitted to talk to the agent. DM and channel access are further controlled by the DM policy and the group policy."
+            "label": "فرستندگان مجاز",
+            "help": "فهرست شناسه کاربران Slack مجاز به گفتگو با عامل. دسترسی پیام خصوصی و کانال علاوه بر این با سیاست پیام خصوصی و گروه کنترل می‌شود."
           },
           "group_policy": {
-            "label": "Group policy",
-            "help": "\"mention\" replies only when the bot is @mentioned in a channel, \"open\" replies to all channel messages, \"allowlist\" replies only in the channels listed below."
+            "label": "سیاست گروه",
+            "help": "«mention» فقط هنگام اشاره با @ به ربات در کانال پاسخ می‌دهد؛ «open» به همه پیام‌ها؛ «allowlist» فقط در کانال‌های فهرست‌شده زیر."
           },
           "group_allow_from": {
-            "label": "Allowed channels",
-            "help": "Channel IDs the bot responds in when the group policy is \"allowlist\"."
+            "label": "کانال‌های مجاز",
+            "help": "شناسه کانال‌هایی که ربات در سیاست «allowlist» در آن‌ها پاسخ می‌دهد."
           },
           "group_require_mention": {
-            "label": "Require mention in allowed channels",
-            "help": "With the \"allowlist\" policy, also require an @mention before replying in approved channels. No effect for \"mention\" or \"open\"."
+            "label": "الزام اشاره در کانال‌های مجاز",
+            "help": "در سیاست «allowlist»، پاسخ در کانال‌های تأییدشده نیز نیازمند اشاره با @ باشد. روی «mention» و «open» اثری ندارد."
           }
         },
         "discord": {
           "token": {
-            "label": "Bot token",
-            "help": "The bot token from the Discord Developer Portal — not a user or OAuth token. Stored server-side and never sent back to the browser."
+            "label": "توکن ربات",
+            "help": "توکن ربات از پورتال توسعه‌دهندگان Discord، نه توکن کاربر یا OAuth. در سرور ذخیره می‌شود و هرگز به مرورگر برگردانده نمی‌شود."
           },
           "allow_from": {
-            "label": "Allowed senders",
-            "help": "Optional allowlist of Discord user IDs that may talk to the agent. Leave empty to allow everyone."
+            "label": "فرستندگان مجاز",
+            "help": "فهرست اختیاری شناسه کاربران Discord مجاز به گفتگو با عامل. برای اجازه به همه خالی بگذارید."
           },
           "allow_channels": {
-            "label": "Allowed channels",
-            "help": "Optional allowlist of Discord channel IDs the bot responds in. Leave empty to allow every channel."
+            "label": "کانال‌های مجاز",
+            "help": "فهرست اختیاری شناسه کانال‌های Discord که ربات در آن‌ها پاسخ می‌دهد. برای اجازه به همه کانال‌ها خالی بگذارید."
           },
           "intents": {
-            "label": "Gateway intents",
-            "help": "Gateway intent bitfield as an integer (default 37377 = GUILDS | GUILD_MESSAGES | DIRECT_MESSAGES | MESSAGE_CONTENT). MESSAGE CONTENT is a privileged intent that must be enabled in the Developer Portal or the bot fails to connect."
+            "label": "مجوزهای Gateway",
+            "help": "بیت‌فیلد عدد صحیح مجوزهای Gateway (پیش‌فرض 37377 شامل GUILDS، GUILD_MESSAGES، DIRECT_MESSAGES و MESSAGE_CONTENT). مجوز ویژه MESSAGE CONTENT باید در پورتال توسعه‌دهندگان فعال شود، وگرنه ربات متصل نمی‌شود."
           },
           "group_policy": {
-            "label": "Group policy",
-            "help": "\"mention\" replies only when the bot is @mentioned in a server channel, \"open\" replies to all channel messages (still subject to the allowlists)."
+            "label": "سیاست گروه",
+            "help": "«mention» فقط هنگام اشاره با @ به ربات در کانال سرور پاسخ می‌دهد؛ «open» به همه پیام‌های کانال پاسخ می‌دهد (همچنان تابع فهرست‌های مجاز)."
           },
           "read_receipt_emoji": {
-            "label": "Read receipt emoji",
-            "help": "Emoji reacted on an incoming message right away to acknowledge it (default 👀); removed once the reply arrives."
+            "label": "ایموجی تأیید دریافت",
+            "help": "واکنش فوری به پیام ورودی برای تأیید دریافت (پیش‌فرض 👀)؛ پس از ارسال پاسخ برداشته می‌شود."
           },
           "working_emoji": {
-            "label": "Working emoji",
-            "help": "Emoji reacted while the agent is still working (default 🔧), added after the working emoji delay."
+            "label": "ایموجی در حال کار",
+            "help": "واکنش هنگام ادامه کار عامل (پیش‌فرض 🔧)، پس از تأخیر تنظیم‌شده اضافه می‌شود."
           },
           "working_emoji_delay": {
-            "label": "Working emoji delay (s)",
-            "help": "Seconds to wait before adding the working emoji, so quick replies never show it (default 2.0)."
+            "label": "تأخیر ایموجی کار (ثانیه)",
+            "help": "زمان انتظار پیش از افزودن ایموجی کار؛ در پاسخ‌های سریع هرگز نشان داده نمی‌شود (پیش‌فرض 2.0)."
           },
           "streaming": {
-            "label": "Streaming replies",
-            "help": "Stream the reply by progressively editing one Discord message instead of sending a single final message."
+            "label": "پاسخ جریانی",
+            "help": "پاسخ را با ویرایش تدریجی یک پیام Discord به صورت جریانی ارسال کنید، به جای یک پیام نهایی یک‌باره."
           },
           "proxy": {
-            "label": "Proxy URL",
-            "help": "Optional HTTP proxy the gateway connection and API calls go through, e.g. http://host:port."
+            "label": "نشانی پروکسی",
+            "help": "پروکسی HTTP اختیاری برای اتصال Gateway و فراخوانی‌های API، مانند http://host:port."
           },
           "proxy_username": {
-            "label": "Proxy username",
-            "help": "Username for the proxy; set it together with the proxy password or not at all — a half-specified pair is ignored with a warning. Stored server-side and never sent back to the browser."
+            "label": "نام کاربری پروکسی",
+            "help": "نام کاربری پروکسی؛ آن را همراه گذرواژه تنظیم کنید یا هر دو را خالی بگذارید. جفت ناقص با هشدار نادیده گرفته می‌شود. در سرور ذخیره می‌شود و هرگز به مرورگر برگردانده نمی‌شود."
           },
           "proxy_password": {
-            "label": "Proxy password",
-            "help": "Password for the proxy; set it together with the proxy username or not at all — a half-specified pair is ignored with a warning. Stored server-side and never sent back to the browser."
+            "label": "گذرواژه پروکسی",
+            "help": "گذرواژه پروکسی؛ آن را همراه نام کاربری تنظیم کنید یا هر دو را خالی بگذارید. جفت ناقص با هشدار نادیده گرفته می‌شود. در سرور ذخیره می‌شود و هرگز به مرورگر برگردانده نمی‌شود."
           }
         }
       },
       "guides": {
         "dingtalk": {
-          "title": "DingTalk setup guide",
-          "intro": "DingTalk bots use Stream Mode, so no public callback URL is needed.",
-          "step1": "Create an app in the DingTalk developer console (open-dev.dingtalk.com).",
-          "step2": "Add the bot capability to the app and enable Stream Mode for it.",
-          "step3": "Copy the app's AppKey into Client ID and its AppSecret into Client Secret.",
-          "step4": "Publish the app so it is available to your organization.",
-          "step5": "Return here, click Test connection, then enable the channel.",
-          "docsLabel": "Open the DingTalk developer console"
+          "title": "راهنمای تنظیم DingTalk",
+          "intro": "ربات‌های DingTalk از حالت Stream استفاده می‌کنند و به نشانی عمومی بازگشت نیاز ندارند.",
+          "step1": "در کنسول توسعه‌دهندگان DingTalk ‏(open-dev.dingtalk.com) یک برنامه بسازید.",
+          "step2": "قابلیت ربات را به برنامه اضافه و حالت Stream را فعال کنید.",
+          "step3": "AppKey را در Client ID و AppSecret را در Client Secret کپی کنید.",
+          "step4": "برنامه را منتشر کنید تا برای سازمانتان قابل استفاده شود.",
+          "step5": "اینجا برگردید، آزمون اتصال را بزنید و سپس کانال را فعال کنید.",
+          "docsLabel": "باز کردن کنسول توسعه‌دهندگان DingTalk"
         },
         "qq": {
-          "title": "QQ setup guide",
-          "intro": "QQ bots connect over WebSocket via the official botpy SDK, so no public callback URL is needed.",
-          "step1": "Register on the QQ Open Platform (q.qq.com) and create a bot.",
-          "step2": "Copy the AppID and AppSecret from the bot's development settings page.",
-          "step3": "Paste them into the AppID and AppSecret fields above.",
-          "step4": "Add the bot to a QQ group or chat with it privately, following the platform's sandbox/publish rules.",
-          "step5": "Return here, click Test connection, then enable the channel.",
-          "docsLabel": "Open the QQ Open Platform"
+          "title": "راهنمای تنظیم QQ",
+          "intro": "ربات‌های QQ با SDK رسمی botpy از طریق WebSocket متصل می‌شوند و به نشانی عمومی بازگشت نیاز ندارند.",
+          "step1": "در پلتفرم باز QQ ‏(q.qq.com) ثبت‌نام و یک ربات بسازید.",
+          "step2": "AppID و AppSecret را از صفحه تنظیمات توسعه ربات کپی کنید.",
+          "step3": "آن‌ها را در فیلدهای AppID و AppSecret بالا وارد کنید.",
+          "step4": "طبق قواعد محیط آزمایشی و انتشار پلتفرم، ربات را به گروه QQ اضافه کنید یا خصوصی با آن گفتگو کنید.",
+          "step5": "اینجا برگردید، آزمون اتصال را بزنید و سپس کانال را فعال کنید.",
+          "docsLabel": "باز کردن پلتفرم باز QQ"
         },
         "email": {
-          "title": "Email setup guide",
-          "intro": "The email channel polls a mailbox over IMAP for incoming mail and replies over SMTP, so no public callback URL is needed.",
-          "step1": "Get the IMAP and SMTP host names and ports from your mail provider (usually imap.<provider> on 993 and smtp.<provider> on 587).",
-          "step2": "Enable IMAP and SMTP access in your mailbox settings and, if the provider requires one (Gmail, QQ Mail and other 2FA providers), create an app password.",
-          "step3": "Fill in the IMAP and SMTP credentials above, set From address, and add your own address to Allowed senders.",
-          "step4": "Click Test connection — it probes the IMAP login, the mailbox folder, and the SMTP login.",
-          "step5": "Tick Consent granted, then enable the channel; automatic replies then reach senders whose mail passes the DKIM/SPF checks.",
-          "docsLabel": "Open the Vibe-Trading docs"
+          "title": "راهنمای تنظیم ایمیل",
+          "intro": "کانال ایمیل با IMAP صندوق ورودی را بررسی می‌کند و با SMTP پاسخ می‌دهد؛ نشانی عمومی بازگشت لازم نیست.",
+          "step1": "نام میزبان و درگاه IMAP و SMTP را از ارائه‌دهنده ایمیل بگیرید (معمولاً imap.<provider> روی 993 و smtp.<provider> روی 587).",
+          "step2": "دسترسی IMAP و SMTP را در صندوق ایمیل فعال کنید و در صورت نیاز ارائه‌دهنده (Gmail، QQ Mail و سایر سرویس‌های دومرحله‌ای) گذرواژه برنامه بسازید.",
+          "step3": "اعتبارنامه‌های IMAP و SMTP بالا را وارد کنید، نشانی فرستنده را تعیین و نشانی خودتان را به فرستندگان مجاز اضافه کنید.",
+          "step4": "آزمون اتصال را بزنید؛ ورود IMAP، پوشه صندوق و ورود SMTP بررسی می‌شوند.",
+          "step5": "گزینه رضایت داده شده را بزنید و کانال را فعال کنید؛ پاسخ خودکار فقط به فرستندگانی می‌رسد که ایمیلشان از بررسی DKIM/SPF عبور کند.",
+          "docsLabel": "باز کردن مستندات Vibe-Trading"
         },
         "websocket": {
-          "title": "WebSocket setup guide",
-          "intro": "The WebSocket channel runs its own local server that clients connect to directly over a WebSocket URL, so no public callback URL is needed.",
-          "step1": "Choose a bind address: keep 127.0.0.1 for local-only use, or set 0.0.0.0 / :: to expose the server — a wildcard host requires a token or a token-issue secret.",
-          "step2": "Set a static token, or a token-issue path plus its bearer secret so clients can request short-lived tokens.",
-          "step3": "Connect clients with ws://host:port/path?client_id=...&token=...",
-          "step4": "Saving while the channel is running hot-swaps the server: connected clients (including this Web UI chat) briefly disconnect and reconnect.",
-          "step5": "Click Test connection — it validates the SSL certificate/key material and the address availability locally.",
-          "docsLabel": "Open the Vibe-Trading docs"
+          "title": "راهنمای تنظیم WebSocket",
+          "intro": "کانال WebSocket سرور محلی خودش را اجرا می‌کند و کلاینت‌ها مستقیماً با نشانی WebSocket متصل می‌شوند؛ نشانی عمومی بازگشت لازم نیست.",
+          "step1": "نشانی اتصال را انتخاب کنید: برای استفاده محلی 127.0.0.1 را نگه دارید؛ برای دسترسی شبکه 0.0.0.0 یا :: را تنظیم کنید. میزبان عمومی به توکن یا کلید صدور توکن نیاز دارد.",
+          "step2": "توکن ثابت یا مسیر صدور توکن همراه با کلید bearer را تعیین کنید تا کلاینت‌ها توکن کوتاه‌عمر بگیرند.",
+          "step3": "کلاینت‌ها را با ws://host:port/path?client_id=...&token=... متصل کنید.",
+          "step4": "ذخیره هنگام اجرای کانال، سرور را درجا جایگزین می‌کند؛ کلاینت‌ها (از جمله گفتگوی این رابط وب) کوتاه‌مدت قطع و دوباره متصل می‌شوند.",
+          "step5": "آزمون اتصال را بزنید؛ گواهی و کلید SSL و امکان استفاده از نشانی، محلی بررسی می‌شوند.",
+          "docsLabel": "باز کردن مستندات Vibe-Trading"
         },
         "feishu": {
-          "title": "Feishu / Lark bot setup",
-          "intro": "Feishu bots connect over a WebSocket long connection, so no public IP or webhook URL is needed.",
-          "step1": "Create a Custom App on the Feishu Open Platform (open.feishu.cn), or scan-to-create it from the terminal with vibe-trading channels login feishu, which saves the App ID and App Secret automatically.",
-          "step2": "Add the Bot capability to the app.",
-          "step3": "Under Event Subscription, subscribe to receiving messages (im.message.receive_v1) and choose Long Connection mode.",
-          "step4": "Copy the App ID and App Secret from Credentials & Basic Info and paste them into the fields above.",
-          "step5": "Create a version and publish the app (admin approval if your tenant requires it), then enable the channel here — it hot-applies with no restart. For international Lark tenants, set domain to \"lark\".",
-          "docsLabel": "Open the Feishu Open Platform"
+          "title": "راه‌اندازی ربات Feishu / Lark",
+          "intro": "ربات‌های Feishu با اتصال پایدار WebSocket کار می‌کنند و IP عمومی یا نشانی webhook لازم ندارند.",
+          "step1": "در پلتفرم باز Feishu ‏(open.feishu.cn) یک Custom App بسازید، یا با vibe-trading channels login feishu در ترمینال اسکن و ایجاد کنید تا App ID و App Secret خودکار ذخیره شوند.",
+          "step2": "قابلیت Bot را به برنامه اضافه کنید.",
+          "step3": "در Event Subscription دریافت پیام (im.message.receive_v1) را انتخاب و حالت Long Connection را فعال کنید.",
+          "step4": "App ID و App Secret را از Credentials & Basic Info کپی و در فیلدهای بالا وارد کنید.",
+          "step5": "نسخه‌ای بسازید و برنامه را منتشر کنید (در صورت نیاز سازمان با تأیید مدیر)، سپس اینجا کانال را فعال کنید؛ بدون راه‌اندازی مجدد اعمال می‌شود. برای سازمان‌های بین‌المللی Lark، دامنه را «lark» بگذارید.",
+          "docsLabel": "باز کردن پلتفرم باز Feishu"
         },
         "discord": {
-          "title": "Discord setup guide",
-          "intro": "Discord bots connect over the gateway with a bot token, so no public IP or webhook URL is needed.",
-          "step1": "Create an application in the Discord Developer Portal (discord.com/developers).",
-          "step2": "Open the Bot page, reset the token, and copy it.",
-          "step3": "Under Privileged Gateway Intents, enable MESSAGE CONTENT INTENT — the default intents require it.",
-          "step4": "Generate an OAuth2 invite URL with the bot (and applications.commands) scope and add the bot to your server.",
-          "step5": "Paste the token here, click Test connection, then enable the channel.",
-          "docsLabel": "Open the Discord developer documentation"
+          "title": "راهنمای تنظیم Discord",
+          "intro": "ربات‌های Discord با توکن ربات از طریق gateway متصل می‌شوند و IP عمومی یا نشانی webhook لازم ندارند.",
+          "step1": "در پورتال توسعه‌دهندگان Discord ‏(discord.com/developers) یک برنامه بسازید.",
+          "step2": "صفحه Bot را باز کنید، توکن را بازنشانی و کپی کنید.",
+          "step3": "در Privileged Gateway Intents، گزینه MESSAGE CONTENT INTENT را فعال کنید؛ intentهای پیش‌فرض به آن نیاز دارند.",
+          "step4": "نشانی دعوت OAuth2 با scopeهای bot و applications.commands بسازید و ربات را به سرور خود اضافه کنید.",
+          "step5": "توکن را اینجا وارد کنید، آزمون اتصال را بزنید و سپس کانال را فعال کنید.",
+          "docsLabel": "باز کردن مستندات توسعه‌دهندگان Discord"
         }
       }
     },
@@ -1063,10 +1063,10 @@
         "kr_equity": "سهام کره",
         "ca_equity": "سهام کانادا",
         "vietnam_equity": "سهام ویتنام",
-        "ar_equity": "Argentina Equities",
-        "br_equity": "Brazil Equities",
-        "uk_equity": "UK Equities",
-        "index": "Indices",
+        "ar_equity": "سهام آرژانتین",
+        "br_equity": "سهام برزیل",
+        "uk_equity": "سهام بریتانیا",
+        "index": "شاخص‌ها",
         "crypto": "رمزارز",
         "futures": "آتی",
         "fund": "صندوق‌ها",
@@ -1075,9 +1075,9 @@
       }
     },
     "tushareToken": "توکن توشار",
-    "gildataToken": "Gildata token",
+    "gildataToken": "توکن Gildata",
     "clearTushareToken": "پاک‌کردن توکن توشار ذخیره‌شده",
-    "clearGildataToken": "Clear saved Gildata token",
+    "clearGildataToken": "پاک کردن توکن ذخیره‌شده Gildata",
     "saveDataSourceSettings": "ذخیره تنظیمات منبع داده",
     "baostock": "بائواستاک",
     "loadLlmSettingsFailed": "بارگذاری تنظیمات LLM ناموفق بود: {{message}}",
@@ -1110,7 +1110,7 @@
     "authentication": "احراز هویت",
     "apiKey": "کلید API",
     "tushareTokenDesc": "برای داده سهام A، آینده، صندوق و کلان چین استفاده می‌شود. اگر تنظیم نشود، در صورت وجود، پروژه به AKShare برمی‌گردد.",
-    "gildataTokenDesc": "Optional Gildata (Hundsun Juyuan) feed for China A-shares. When set, it joins the tail of the A-share fallback chain with forward-adjusted daily bars."
+    "gildataTokenDesc": "داده اختیاری Gildata: قیمت روزانه تعدیل‌شده سهام A چین، قیمت خام سهام هنگ‌کنگ و شاخص‌ها، خالص ارزش دارایی صندوق‌های خارج از بورس، و ابزارهای اقتصاد کلان، اطلاعیه و پژوهش چین."
   },
   "qveris": {
     "title": "بازار ابزار QVeris",
@@ -1187,7 +1187,7 @@
     "dropFiles": "فایل‌ها را این‌جا رها کنید",
     "removeAttachment": "حذف {{filename}}",
     "uploadFailed": "بارگذاری ناموفق بود: {{error}}",
-    "messageTooLong": "Message exceeds {{limit}} characters including attachments and team instructions. Shorten it before sending.",
+    "messageTooLong": "پیام همراه با پیوست‌ها و دستورهای تیم از {{limit}} نویسه بیشتر است. پیش از ارسال آن را کوتاه کنید.",
     "failedToSend": "ارسال پیام ناموفق بود؛ لطفاً دوباره تلاش کنید.",
     "failedToContinue": "ادامه هدف ناموفق بود؛ لطفاً دوباره تلاش کنید.",
     "runtimeBadge": "ران‌تایم",
@@ -1225,7 +1225,7 @@
       "steps": "{{count}} گام",
       "continue": "ادامه",
       "reattach": "اتصال دوباره",
-      "checkingFigures": "Checking the figures in this answer (round {{round}})…"
+      "checkingFigures": "در حال بررسی ارقام این پاسخ (دور {{round}})…"
     },
     "resumeConnector": "ازسرگیری کانکتور",
     "resumeConnectorTitle": "کلید قطع را پاک کنید و فعالیت کانکتور را دوباره فعال کنید",
@@ -1237,8 +1237,8 @@
     "runNotFound": "اجرا یافت نشد",
     "runNotFoundDesc": "پوشه اجرا ممکن است حذف شده باشد یا مرورگر شما دسترسی API نداشته باشد. اگر از راه دور دسترسی دارید، بررسی کنید کلید احراز API در تنظیمات ست شده باشد.",
     "goBack": "بازگشت",
-    "showFullPrompt": "Show full prompt",
-    "showLessPrompt": "Show less",
+    "showFullPrompt": "نمایش دستور کامل",
+    "showLessPrompt": "نمایش کمتر",
     "chart": "نمودار",
     "trades": "معاملات",
     "factor": "پژوهش فاکتور",
@@ -1252,8 +1252,8 @@
     "symbol": "نماد",
     "weight": "وزن",
     "rebalanceCount": "متوازن‌سازی‌ها",
-    "rebalanceExecuted": "Rebalance executions (fills)",
-    "rebalanceRealizedTurnover": "Realized rebalance turnover",
+    "rebalanceExecuted": "اجراهای بازتوازن (معاملات انجام‌شده)",
+    "rebalanceRealizedTurnover": "گردش محقق‌شده بازتوازن",
     "turnoverMean": "میانگین گردش",
     "turnoverMax": "حداکثر گردش",
     "largestRebalance": "بزرگ‌ترین متوازن‌سازی",
@@ -1292,30 +1292,30 @@
     "metrics": "متریک‌ها",
     "validationPayload": "اعتبارسنجی",
     "trust": {
-      "executionRecords": "Execution records",
-      "executionDescription": "Recorded execution stages and the hashes of their inputs and results.",
-      "noExecutionRecords": "Execution records were not recorded for this run.",
-      "startedAt": "Started (UTC)",
-      "endedAt": "Ended (UTC)",
-      "argsHash": "Arguments SHA-256",
-      "resultHash": "Result SHA-256",
-      "metricEvidence": "Metric evidence",
-      "evidenceDescription": "References to saved metric data. Checksums identify the recorded files; this view does not independently verify them.",
-      "noMetricEvidence": "Metric evidence was not recorded for this run.",
-      "metric": "Metric",
-      "artifact": "Artifact",
-      "column": "Column",
-      "row": "Data row (1-based, excluding header)",
-      "artifactHash": "Artifact SHA-256",
+      "executionRecords": "سوابق اجرا",
+      "executionDescription": "مراحل ثبت‌شده اجرا و هش ورودی‌ها و نتایج آن‌ها.",
+      "noExecutionRecords": "سوابق اجرا برای این اجرا ثبت نشده است.",
+      "startedAt": "شروع (UTC)",
+      "endedAt": "پایان (UTC)",
+      "argsHash": "SHA-256 آرگومان‌ها",
+      "resultHash": "SHA-256 نتیجه",
+      "metricEvidence": "شواهد معیارها",
+      "evidenceDescription": "ارجاع به داده‌های ذخیره‌شده معیارها. چک‌سام‌ها فایل‌های ثبت‌شده را مشخص می‌کنند؛ این نما آن‌ها را مستقل تأیید نمی‌کند.",
+      "noMetricEvidence": "شواهد معیارها برای این اجرا ثبت نشده است.",
+      "metric": "معیار",
+      "artifact": "فایل خروجی",
+      "column": "ستون",
+      "row": "ردیف داده (از ۱، بدون سرستون)",
+      "artifactHash": "SHA-256 فایل خروجی",
       "tools": {
-        "backtest": "Backtest",
-        "load_data": "Load data",
-        "generate_signals": "Generate signals"
+        "backtest": "پس‌آزمایی",
+        "load_data": "بارگذاری داده",
+        "generate_signals": "تولید سیگنال"
       },
       "status": {
-        "ok": "Completed",
-        "error": "Failed",
-        "cancelled": "Cancelled"
+        "ok": "تکمیل شد",
+        "error": "ناموفق",
+        "cancelled": "لغو شد"
       }
     },
     "artifactChecksums": "چک‌سام خروجی‌ها",
@@ -1325,8 +1325,8 @@
     "noBacktestSummary": "خلاصه بک‌تستی ثبت نشده است.",
     "noReproducibilityHashes": "هش بازتولیدپذیری ثبت نشده است.",
     "noScalarMetrics": "متریک عددی ثبت نشده است.",
-    "noStructuredMetrics": "No structured metrics recorded.",
-    "structuredMetrics": "Structured metrics",
+    "noStructuredMetrics": "معیار ساختاریافته‌ای ثبت نشده است.",
+    "structuredMetrics": "معیارهای ساختاریافته",
     "noValidationPayload": "بار اعتبارسنجی ثبت نشده است.",
     "noArtifactChecksums": "چک‌سامی برای خروجی‌ها ثبت نشده است.",
     "noCodeFiles": "فایلی از کد وجود ندارد.",
@@ -1394,10 +1394,10 @@
         "crypto": "رمزارز",
         "futures": "آینده",
         "forex": "فارکس",
-        "ar_equity": "Argentina equity",
-        "br_equity": "Brazil equity",
-        "uk_equity": "UK equity",
-        "vietnam_equity": "Vietnam equity",
+        "ar_equity": "سهام آرژانتین",
+        "br_equity": "سهام برزیل",
+        "uk_equity": "سهام بریتانیا",
+        "vietnam_equity": "سهام ویتنام",
         "other": "سایر"
       }
     },
@@ -1867,14 +1867,14 @@
     "expiresOn": "انقضا {{date}}",
     "accountSummary": "{{broker}} · حساب {{type}} · تأمین‌شده توسط {{fundedBy}}",
     "adjustRequestMessage": "برای پیشنهاد ماندیت \"{{label}}\" (گزینه {{ordinal}}): {{text}}",
-    "accountLoading": "Loading the broker's accounts…",
-    "accountLoadFailed": "Could not load the broker's accounts: {{error}}",
-    "accountLabel": "Account this mandate may trade",
-    "accountChoose": "Choose an account",
-    "accountDefault": " · broker default",
-    "accountDeactivated": " · deactivated",
-    "accountNotAgentic": " · agentic trading not allowed",
-    "accountHint": "The agent trades only this account. Nothing is chosen for you."
+    "accountLoading": "در حال بارگذاری حساب‌های کارگزار…",
+    "accountLoadFailed": "حساب‌های کارگزار بارگذاری نشد: {{error}}",
+    "accountLabel": "حساب مجاز برای معامله در این مأموریت",
+    "accountChoose": "انتخاب حساب",
+    "accountDefault": " · پیش‌فرض کارگزار",
+    "accountDeactivated": " · غیرفعال‌شده",
+    "accountNotAgentic": " · معامله توسط عامل مجاز نیست",
+    "accountHint": "عامل فقط در این حساب معامله می‌کند. هیچ حسابی به جای شما انتخاب نمی‌شود."
   },
   "messageBubble": {
     "elapsedTime": "کل زمان پاسخ",
@@ -2067,8 +2067,8 @@
   },
   "runDashboard": {
     "eyebrow": "پژوهش کمّی · بک‌تست",
-    "noBacktestData": "This run has no backtest data to chart",
-    "noBacktestDataStudioHint": "It looks like a portfolio/risk analysis instead — check the Studio tab for its numbers.",
+    "noBacktestData": "این اجرا داده پس‌آزمایی برای ترسیم ندارد",
+    "noBacktestDataStudioHint": "به نظر می‌رسد تحلیل سبد یا ریسک باشد؛ ارقام را در زبانه استودیو ببینید.",
     "engine": "موتور",
     "portfolio": "پورتفولیو",
     "systematicStrategy": "استراتژی سیستمی",
@@ -2150,8 +2150,8 @@
       "errorReconnectTimeout": "احراز هویت مرورگر منقضی شد. دوباره وصل شوید و تأیید کارگزار را سریع کامل کنید.",
       "errorSaveSettings": "ذخیره تنظیمات پورتفولیو ممکن نشد",
       "errorExport": "خروجی گرفتن ناموفق بود",
-      "exportResearch": "Export research snapshot",
-      "researchSnapshotHint": "Export this exact observation without credentials or account numbers. Reuse its snapshot ID in portfolio_summary."
+      "exportResearch": "دریافت تصویر پژوهشی",
+      "researchSnapshotHint": "همین مشاهده را بدون اعتبارنامه یا شماره حساب دریافت کنید. شناسه تصویر را در portfolio_summary دوباره استفاده کنید."
     },
     "metrics": {
       "total": "جمع دارایی‌ها",
@@ -2287,102 +2287,102 @@
       "unknownTestError": "کانکتور خطای ناشناخته‌ای برگرداند.",
       "delete": "حذف",
       "configured": "اعتبارنامه‌های لازم پیکربندی شده‌اند",
-      "accountTitle": "Account",
-      "accountCurrent": "Reads the account ending ····{{last4}}",
-      "accountNone": "No account selected. This connection reads nothing until you choose one.",
-      "accountLoad": "Choose account",
-      "accountChange": "Change account",
-      "accountEmpty": "This login reaches no accounts.",
-      "accountPicker": "Accounts this login can reach",
-      "accountChoose": "Choose an account",
-      "accountDefault": " · broker default",
-      "accountDeactivated": " · deactivated",
-      "accountSave": "Use this account",
-      "accountSaved": "Account saved."
+      "accountTitle": "حساب",
+      "accountCurrent": "حساب با پایان ····{{last4}} خوانده می‌شود",
+      "accountNone": "حسابی انتخاب نشده است. تا زمانی که انتخاب نکنید، این اتصال چیزی نمی‌خواند.",
+      "accountLoad": "انتخاب حساب",
+      "accountChange": "تغییر حساب",
+      "accountEmpty": "این ورود به هیچ حسابی دسترسی ندارد.",
+      "accountPicker": "حساب‌های قابل دسترسی با این ورود",
+      "accountChoose": "یک حساب انتخاب کنید",
+      "accountDefault": " · پیش‌فرض کارگزار",
+      "accountDeactivated": " · غیرفعال‌شده",
+      "accountSave": "استفاده از این حساب",
+      "accountSaved": "حساب ذخیره شد."
     }
   },
   "analysis": {
-    "updated": "Updated",
-    "updating": "Calculating…",
-    "editing": "Parameters changed",
-    "invalid": "Enter valid parameters to calculate",
-    "failed": "Analysis failed",
-    "previousResult": "Showing the previous parameters’ result",
-    "lastComputed": "Calculated at {{time}}",
-    "advancedParameters": "Advanced parameters",
-    "chainOnDemand": "Load market quotes when needed; payoff calculation uses the premiums you enter.",
-    "allStrikes": "Show all strikes",
-    "nearAtm": "Show near ATM",
-    "chainQuote": "{{ticker}} underlying quote: {{price}}",
-    "lastFetched": "Fetched at {{time}}",
-    "assetsValidation": "Enter 2–20 distinct assets, separated by commas, spaces or semicolons.",
-    "windowObservations": "Return observations",
-    "coverage": "{{count}} aligned observations · {{start}} to {{end}}",
-    "usedAssets": "Assets used: {{assets}}",
-    "missingAssets": "Missing prices: {{assets}}",
-    "regimeMethod": "Regimes use Pearson correlation; the selected method applies to the matrix.",
-    "evaluateFactor": "Evaluate this factor",
-    "evaluateSelected": "Evaluate selected ({{count}})",
-    "factorSelectionHint": "Select one factor to evaluate, or a few to compare. A full zoo takes longer.",
-    "resultLimit": "Rows to display (does not reduce computation)",
-    "evaluationScope": "Will evaluate {{count}} factor(s) across a stock universe.",
-    "checkingData": "Checking data requirements…",
-    "ready_public_data": "Uses public data. Availability is checked when the task runs.",
-    "ready_tushare_ready": "Tushare is configured. CSI 300 also needs daily, adjustment-factor and historical constituent permissions.",
-    "ready_tushare_token_missing": "CSI 300 needs a Tushare token and data permissions. Configure it in Settings or use S&P 500.",
-    "ready_tushare_dependency_missing": "Install the Tushare dependency, or use S&P 500.",
-    "ready_single_asset": "BTC-USDT is one asset; cross-sectional IC needs a stock universe. Choose CSI 300 or S&P 500.",
-    "stage_loading_data": "Loading universe and price history…",
-    "stage_preparing_returns": "Preparing forward returns…",
-    "stage_computing": "Computing factor scores…",
-    "backgroundJob": "You can leave this page and return to this task while the server stays running.",
-    "resumeJob": "Reconnect to task",
-    "streamInterrupted": "Connection interrupted. Reconnect to retrieve progress and results.",
-    "jobExpired": "Task expired or the server restarted. Start a new evaluation.",
-    "source_unavailable": "Source unavailable or not configured",
-    "fetch_failed": "Request failed",
-    "no_data": "No bars for this symbol and date range",
-    "factorCoverage": "Prices fetched for {{count}} of {{total}} requested stocks.",
-    "survivorshipBias": "Current index constituents are used; historical results have survivorship bias.",
-    "degradedUniverse": "The index roster could not be obtained; this run uses a smaller disclosed fallback universe.",
-    "selectedFactor": "Selected factor: {{id}}. Only this factor will be evaluated.",
-    "fundamentalsRequirement": "Fundamental factors need PIT SEC financial statements and a US stock universe (S&P 500).",
-    "noEvaluableFactors": "No factors could be evaluated. Try a longer history and check the factor’s required fields and stock universe."
+    "updated": "به‌روز شد",
+    "updating": "در حال محاسبه…",
+    "editing": "پارامترها تغییر کرده‌اند",
+    "invalid": "برای محاسبه پارامترهای معتبر وارد کنید",
+    "failed": "تحلیل ناموفق بود",
+    "previousResult": "نتیجه پارامترهای قبلی نمایش داده می‌شود",
+    "lastComputed": "محاسبه‌شده در {{time}}",
+    "advancedParameters": "پارامترهای پیشرفته",
+    "chainOnDemand": "قیمت‌های بازار را هنگام نیاز بارگذاری کنید؛ محاسبه سود و زیان از حق‌بیمه‌های واردشده شما استفاده می‌کند.",
+    "allStrikes": "نمایش همه قیمت‌های اعمال",
+    "nearAtm": "نمایش نزدیک قیمت جاری",
+    "chainQuote": "قیمت دارایی پایه {{ticker}}: {{price}}",
+    "lastFetched": "دریافت‌شده در {{time}}",
+    "assetsValidation": "۲ تا ۲۰ دارایی متمایز وارد کنید و با ویرگول، فاصله یا نقطه‌ویرگول جدا کنید.",
+    "windowObservations": "مشاهدات بازده",
+    "coverage": "{{count}} مشاهده هم‌تراز · از {{start}} تا {{end}}",
+    "usedAssets": "دارایی‌های استفاده‌شده: {{assets}}",
+    "missingAssets": "قیمت‌های ناموجود: {{assets}}",
+    "regimeMethod": "رژیم‌ها از همبستگی پیرسون استفاده می‌کنند؛ روش انتخابی بر ماتریس اعمال می‌شود.",
+    "evaluateFactor": "ارزیابی این عامل",
+    "evaluateSelected": "ارزیابی انتخاب‌شده‌ها ({{count}})",
+    "factorSelectionHint": "یک عامل برای ارزیابی یا چند عامل برای مقایسه انتخاب کنید. ارزیابی کل مجموعه زمان بیشتری می‌گیرد.",
+    "resultLimit": "تعداد ردیف نمایشی (محاسبه را کاهش نمی‌دهد)",
+    "evaluationScope": "{{count}} عامل در یک مجموعه سهام ارزیابی خواهد شد.",
+    "checkingData": "در حال بررسی نیازهای داده…",
+    "ready_public_data": "از داده عمومی استفاده می‌کند. دسترسی هنگام اجرا بررسی می‌شود.",
+    "ready_tushare_ready": "Tushare تنظیم شده است. CSI 300 به مجوز داده روزانه، ضریب تعدیل و اعضای تاریخی نیز نیاز دارد.",
+    "ready_tushare_token_missing": "CSI 300 به توکن Tushare و مجوز داده نیاز دارد. آن را در تنظیمات وارد کنید یا از S&P 500 استفاده کنید.",
+    "ready_tushare_dependency_missing": "وابستگی Tushare را نصب کنید یا از S&P 500 استفاده کنید.",
+    "ready_single_asset": "BTC-USDT یک دارایی است؛ IC مقطعی به مجموعه‌ای از سهام نیاز دارد. CSI 300 یا S&P 500 را انتخاب کنید.",
+    "stage_loading_data": "در حال بارگذاری مجموعه سهام و تاریخچه قیمت…",
+    "stage_preparing_returns": "در حال آماده‌سازی بازده‌های آتی…",
+    "stage_computing": "در حال محاسبه امتیاز عامل‌ها…",
+    "backgroundJob": "تا وقتی سرور روشن است، می‌توانید صفحه را ترک کنید و به این کار بازگردید.",
+    "resumeJob": "اتصال دوباره به کار",
+    "streamInterrupted": "اتصال قطع شد. برای دریافت پیشرفت و نتایج دوباره متصل شوید.",
+    "jobExpired": "مهلت کار پایان یافته یا سرور دوباره راه‌اندازی شده است. ارزیابی جدیدی آغاز کنید.",
+    "source_unavailable": "منبع در دسترس نیست یا تنظیم نشده است",
+    "fetch_failed": "درخواست ناموفق بود",
+    "no_data": "برای این نماد و بازه زمانی میله قیمتی موجود نیست",
+    "factorCoverage": "قیمت {{count}} سهم از {{total}} سهم درخواستی دریافت شد.",
+    "survivorshipBias": "از اعضای فعلی شاخص استفاده می‌شود؛ نتایج تاریخی دارای سوگیری بقا هستند.",
+    "degradedUniverse": "فهرست اعضای شاخص دریافت نشد؛ این اجرا از مجموعه جایگزین کوچک‌تر و اعلام‌شده استفاده می‌کند.",
+    "selectedFactor": "عامل انتخابی: {{id}}. فقط همین عامل ارزیابی می‌شود.",
+    "fundamentalsRequirement": "عامل‌های بنیادی به صورت‌های مالی SEC در زمان دسترسی واقعی و مجموعه سهام آمریکا (S&P 500) نیاز دارند.",
+    "noEvaluableFactors": "هیچ عاملی قابل ارزیابی نبود. تاریخچه طولانی‌تری امتحان کنید و فیلدهای لازم و مجموعه سهام عامل را بررسی کنید."
   },
   "customProviders": {
-    "loadFailed": "Failed to load custom providers",
-    "testPassed": "Provider test passed",
-    "testFailed": "Provider test failed",
-    "saved": "Provider saved in the local credential vault",
-    "saveFailed": "Provider save failed",
-    "activationFailed": "Provider activation failed",
-    "title": "Custom OpenAI-compatible providers",
-    "description": "Add any provider with a compatible chat-completions API. The key is tested before saving, then kept in the OS credential vault.",
-    "keyPrivate": "Key never displayed",
-    "active": "Active",
-    "keyStored": "Key stored",
-    "activate": "Activate",
-    "empty": "No custom providers yet. Add one below and test it before saving.",
-    "add": "Add provider",
-    "id": "Provider ID",
-    "idHint": "Lowercase letters, numbers, dots, dashes, or underscores.",
-    "label": "Display name",
-    "labelPlaceholder": "My provider",
-    "baseUrl": "API Base URL",
-    "urlHint": "Use the API root. Do not include an API key in the URL.",
-    "model": "Model",
-    "key": "API key",
-    "keyPlaceholder": "Enter key for one-time test",
-    "testing": "Testing…",
-    "test": "Test connection",
-    "saving": "Saving…",
-    "save": "Save tested provider",
-    "saveHint": "Save unlocks only after a successful test. Activation is a separate confirmed action.",
-    "confirm": "Activate {{label}} for new agent requests?",
-    "activated": "{{label}} is now active",
-    "preview": "Test passed: {{preview}}",
-    "error": "Provider test failed: {{error}}",
-    "waiting": "The provider is taking longer than usual ({{seconds}}s). The request will continue until the server timeout."
+    "loadFailed": "بارگذاری ارائه‌دهندگان سفارشی ناموفق بود",
+    "testPassed": "آزمون ارائه‌دهنده موفق بود",
+    "testFailed": "آزمون ارائه‌دهنده ناموفق بود",
+    "saved": "ارائه‌دهنده در مخزن محلی اعتبارنامه‌ها ذخیره شد",
+    "saveFailed": "ذخیره ارائه‌دهنده ناموفق بود",
+    "activationFailed": "فعال‌سازی ارائه‌دهنده ناموفق بود",
+    "title": "ارائه‌دهندگان سفارشی سازگار با OpenAI",
+    "description": "ارائه‌دهنده‌ای با API سازگار با تکمیل گفتگو اضافه کنید. آزمون یک درخواست کوتاه به مدل می‌فرستد و پس از موفقیت، کلید در مخزن اعتبارنامه‌های سیستم‌عامل ذخیره می‌شود.",
+    "keyPrivate": "کلید هرگز نمایش داده نمی‌شود",
+    "active": "فعال",
+    "keyStored": "کلید ذخیره شده",
+    "activate": "فعال‌سازی",
+    "empty": "هنوز ارائه‌دهنده سفارشی ندارید. در پایین اضافه کنید و پیش از ذخیره آن را بیازمایید.",
+    "add": "افزودن ارائه‌دهنده",
+    "id": "شناسه ارائه‌دهنده",
+    "idHint": "حروف کوچک لاتین، عدد، نقطه، خط تیره یا زیرخط.",
+    "label": "نام نمایشی",
+    "labelPlaceholder": "ارائه‌دهنده من",
+    "baseUrl": "نشانی پایه API",
+    "urlHint": "نشانی ریشه API را وارد کنید. کلید API را در نشانی قرار ندهید.",
+    "model": "مدل",
+    "key": "کلید API",
+    "keyPlaceholder": "کلید این آزمون را وارد کنید",
+    "testing": "در حال آزمون…",
+    "test": "آزمون اتصال",
+    "saving": "در حال ذخیره…",
+    "save": "ذخیره ارائه‌دهنده آزموده‌شده",
+    "saveHint": "ذخیره فقط پس از آزمون موفق ممکن است. فعال‌سازی تأیید جداگانه می‌خواهد.",
+    "confirm": "{{label}} برای درخواست‌های جدید عامل فعال شود؟",
+    "activated": "{{label}} اکنون فعال است",
+    "preview": "آزمون موفق: {{preview}}",
+    "error": "آزمون ارائه‌دهنده ناموفق: {{error}}",
+    "waiting": "پاسخ ارائه‌دهنده بیشتر از معمول طول کشیده است ({{seconds}} ثانیه). درخواست تا پایان مهلت سرور ادامه می‌یابد."
   },
   "pixelOffice": {
     "title": "دفتر پیکسلی",
