@@ -399,7 +399,10 @@
       "shadowDeltaPrompt": "Execute um backtest de sombra nos últimos 90 dias e analise onde meu PnL divergiu da sombra (violações de regras, saídas antecipadas, sinais perdidos)",
       "shadowReport": "Gerar relatório de sombra",
       "shadowReportDesc": "Relatório compartilhável em oito partes: curva da conta, retorno ajustado ao risco e origem de cada ganho",
-      "shadowReportPrompt": "Renderize o relatório sombra e me forneça o URL – comece com o delta você-vs-sombra"
+      "shadowReportPrompt": "Renderize o relatório sombra e me forneça o URL – comece com o delta você-vs-sombra",
+      "adaptStrategy": "Adaptar estratégia cadastrada",
+      "adaptStrategyDesc": "Manter o sinal e testar outro universo",
+      "adaptStrategyPrompt": "Ajude-me a adaptar uma estratégia cadastrada a outro universo e período. Primeiro liste as estratégias e confira as evidências da original; pergunte pelo ID, ativos, datas e tamanho das posições que faltarem. Preserve o sinal, gere o código da derivada, execute o backtest e relate apenas as evidências atualizadas da própria derivada."
     },
     "taskSubtitle": "Pergunte sobre uma ação, uma estratégia ou seu portfólio — extrairei os dados, analisarei os números e mostrarei cada etapa.",
     "quickActions": "Ações rápidas",

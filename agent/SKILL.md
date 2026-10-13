@@ -133,7 +133,7 @@ Comprehensive knowledge base covering:
 
 Use `load_skill(name)` to access full methodology docs with code templates.
 
-## Available MCP Tools (80)
+## Available MCP Tools (81)
 
 | Tool | Description | API Key |
 |------|-------------|---------|
@@ -186,6 +186,7 @@ Use `load_skill(name)` to access full methodology docs with code templates.
 | `list_strategies` | Browse discoverable strategies (Alpha Zoo + SDM store) | None |
 | `query_strategies` | Evidence-gated query: regime / Sharpe / quality / cost filters | None |
 | `get_strategy_evidence` | Per-regime evidence rows for one strategy | None |
+| `adapt_strategy` | Prepare an evidence-gated child strategy for generation and its own backtest |
 | `refresh_strategy_evidence` | Rebuild the disposable strategy-evidence cache from run artifacts | None |
 | `analyze_trade_journal` | Parse broker CSV → profile + behavior diagnostics | None |
 | `extract_shadow_strategy` | Distill 3-5 if-then rules from profitable roundtrips | None |

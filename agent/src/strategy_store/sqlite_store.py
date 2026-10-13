@@ -216,6 +216,11 @@ class SqliteStrategyStore:
                     created_at      TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS adaptation_bindings (
+                    artifact_id TEXT PRIMARY KEY REFERENCES artifacts(id) ON DELETE CASCADE,
+                    contract TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS decay_snapshots (
                     id              INTEGER PRIMARY KEY AUTOINCREMENT,
                     artifact_id     TEXT NOT NULL
@@ -370,7 +375,7 @@ class SqliteStrategyStore:
     # -- Artifact CRUD ------------------------------------------------------
 
     @_synchronized
-    def register_artifact(self, artifact: Artifact) -> str:
+    def register_artifact(self, artifact: Artifact, *, adaptation_binding: dict | None = None) -> str:
         """Register a new artifact.  Returns the artifact_id."""
         # A brand-new record has no prior validation history, so its implicit
         # "current" state is UNVALIDATED — registering directly with
@@ -436,6 +441,11 @@ class SqliteStrategyStore:
                         artifact.validation_date,
                     ),
                 )
+                if adaptation_binding is not None:
+                    self._conn.execute(
+                        "INSERT INTO adaptation_bindings VALUES (?, ?)",
+                        (artifact_id, _json_dumps(adaptation_binding)),
+                    )
         except sqlite3.IntegrityError as exc:
             if "artifacts.name" in str(exc):
                 raise ValueError(
@@ -452,6 +462,14 @@ class SqliteStrategyStore:
             "SELECT * FROM artifacts WHERE id = ?", (artifact_id,)
         ).fetchone()
         return self._row_to_artifact(row) if row else None
+
+    @_synchronized
+    def get_adaptation_binding(self, artifact_id: str) -> dict | None:
+        """Return the immutable input contract of a prepared adaptation."""
+        row = self._conn.execute(
+            "SELECT contract FROM adaptation_bindings WHERE artifact_id = ?", (artifact_id,)
+        ).fetchone()
+        return json.loads(row["contract"]) if row else None
 
     @_synchronized
     def list_artifacts(

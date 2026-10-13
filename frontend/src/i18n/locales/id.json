@@ -399,7 +399,10 @@
       "shadowDeltaPrompt": "Jalankan shadow backtest untuk 90 hari terakhir dan uraikan di mana PnL saya berbeda dari shadow (pelanggaran aturan, exit terlalu cepat, sinyal terlewat)",
       "shadowReport": "Buat Shadow Report",
       "shadowReportDesc": "Laporan 8 bagian yang dapat dibagikan: kurva akun Anda, return yang disesuaikan terhadap risiko, dan sumber setiap keuntungan",
-      "shadowReportPrompt": "Render shadow report dan berikan URL-nya — mulai dengan delta Anda vs shadow"
+      "shadowReportPrompt": "Render shadow report dan berikan URL-nya — mulai dengan delta Anda vs shadow",
+      "adaptStrategy": "Adaptasi strategi terdaftar",
+      "adaptStrategyDesc": "Pertahankan sinyal, uji semesta baru",
+      "adaptStrategyPrompt": "Bantu saya mengadaptasi strategi terdaftar ke semesta dan rentang tanggal baru. Daftar strategi dan periksa bukti induknya terlebih dahulu; tanyakan ID, instrumen, tanggal, dan ukuran posisi yang belum ada. Pertahankan sinyal, buat kode turunan, jalankan backtest, dan laporkan hanya bukti terbaru milik strategi turunan."
     },
     "taskSubtitle": "Tanyakan tentang saham, strategi, atau portofolio Anda — saya akan mengambil data, menghitung angkanya, dan menampilkan setiap langkah.",
     "quickActions": "Aksi cepat",

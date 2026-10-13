@@ -672,6 +672,20 @@ class StrategyDiscoveryFacade:
                 "found": bool(rows),
                 "rows": rendered,
             }
+            if strategy_id.startswith("sdm:"):
+                try:
+                    sdm = self._get_sdm_store()
+                    artifact = sdm.get_artifact(strategy_id.split(":", 1)[1]) if sdm else None
+                except Exception:
+                    logger.warning("SDM description unavailable", exc_info=True)
+                    artifact = None
+                if artifact is not None:
+                    envelope["description"] = {
+                        key: getattr(artifact, key, None) for key in (
+                            "name", "universe", "signal_definition", "entry_rules", "exit_rules",
+                            "position_sizing", "derived_from", "run_dir", "signal_engine_path",
+                        )
+                    }
             if lifecycle_note is not None:
                 envelope["lifecycle_note"] = lifecycle_note
             if not rows:

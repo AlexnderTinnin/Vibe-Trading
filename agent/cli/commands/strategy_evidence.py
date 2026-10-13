@@ -63,7 +63,7 @@ def _cmd_refresh(args: argparse.Namespace) -> int:
 
     manifest = getattr(args, "strategy_evidence_manifest", None)
     try:
-        envelope = refresh_strategy_evidence_core(manifest_path=manifest)
+        envelope = refresh_strategy_evidence_core(manifest_path=manifest, scope=getattr(args, "scope", "all"))
     except ValueError as exc:
         message = str(exc)
         if getattr(args, "strategy_evidence_json", False):
@@ -90,7 +90,25 @@ def _cmd_refresh(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_adapt(args: argparse.Namespace) -> int:
+    """Prepare an adaptation; generation and backtesting use the returned plan."""
+    from pathlib import Path
+    from src.strategy_discovery.adaptation_workflow import prepare_adaptation
+
+    try:
+        result = prepare_adaptation(strategy_id=args.strategy_id, name=args.name,
+                                    universe=args.universe,
+                                    config=json.loads(Path(args.config).read_text()),
+                                    position_sizing=args.position_sizing)
+    except (OSError, ValueError, TypeError) as exc:
+        print(json.dumps({"status": "error", "error": str(exc)}))
+        return 2
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
 _DISPATCH = {
+    "adapt": _cmd_adapt,
     "refresh": _cmd_refresh,
 }
 
@@ -110,8 +128,8 @@ def add_subparser(subparsers: Any) -> argparse.ArgumentParser:
         "strategy-evidence",
         help="Strategy-evidence cache: refresh from backtest run artifacts",
         description=(
-            "Manage the strategy-discovery evidence cache. Only 'refresh' "
-            "lives here — querying evidence stays with the agent tools "
+            "Prepare strategy adaptations and refresh their evidence. "
+            "Querying evidence stays with the agent tools "
             "(list_strategies / query_strategies / get_strategy_evidence)."
         ),
     )
@@ -141,6 +159,15 @@ def add_subparser(subparsers: Any) -> argparse.ArgumentParser:
         action="store_true",
         help="Emit the machine-readable envelope instead of a summary",
     )
+
+    p_refresh.add_argument("--scope", choices=["all", "strategies"], default="all",
+                           help="Replace all evidence, or only successful named strategies")
+    p_adapt = sub.add_parser("adapt", help="Prepare a child strategy for generation and backtest")
+    p_adapt.add_argument("--strategy-id", required=True)
+    p_adapt.add_argument("--name", required=True)
+    p_adapt.add_argument("--universe", required=True)
+    p_adapt.add_argument("--config", required=True, help="JSON backtest config with codes and dates")
+    p_adapt.add_argument("--position-sizing")
 
     _STRATEGY_EVIDENCE_PARSER = parser
     return parser

@@ -42,13 +42,13 @@ TODAY_STALE = TODAY_FRESH + timedelta(days=180)
 
 
 def _evidence(
-    *, trades: int = 20, date_ranges: tuple[str, ...] = HEALTHY_RANGES
+    parent_id="art_parent", *, trades: int = 20, date_ranges: tuple[str, ...] = HEALTHY_RANGES
 ) -> tuple[EvidenceRow, ...]:
     """One evidence row for the parent, adequate and fresh unless told otherwise."""
     coverage = coverage_days_from_ranges(date_ranges)
     return (
         EvidenceRow(
-            strategy_id="sdm:parent",
+            strategy_id=f"sdm:{parent_id}",
             regime="bull_market",
             trades_in_regime=trades,
             date_ranges=date_ranges,
@@ -107,7 +107,7 @@ class TestAdaptArtifact:
         assert child.signal_definition == SIGNAL
         assert child.entry_rules == ENTRY
         assert child.exit_rules == EXIT
-        assert child.signal_engine_path == ENGINE
+        assert child.signal_engine_path is None
         assert child.theme == parent.theme
         assert child.columns_required == parent.columns_required
         assert child.decay_horizon == parent.decay_horizon
@@ -149,7 +149,7 @@ class TestRegisterAdaptation:
             store,
             parent_id,
             AdaptationPatch(universe="SP500"),
-            parent_evidence=_evidence(),
+            parent_evidence=_evidence(parent_id),
             today=TODAY_FRESH,
         )
         child = store.get_artifact(child_id)
@@ -171,7 +171,7 @@ class TestRegisterAdaptation:
             store,
             parent_id,
             AdaptationPatch(name="momentum_weekly"),
-            parent_evidence=_evidence(),
+            parent_evidence=_evidence(parent_id),
             today=TODAY_FRESH,
         )
         with pytest.raises(ValueError, match="already exists"):
@@ -179,7 +179,7 @@ class TestRegisterAdaptation:
                 store,
                 parent_id,
                 AdaptationPatch(name="momentum_weekly"),
-                parent_evidence=_evidence(),
+                parent_evidence=_evidence(parent_id),
                 today=TODAY_FRESH,
             )
 
@@ -194,7 +194,7 @@ class TestSqliteDerivedFromRoundtrip:
             store,
             parent_id,
             AdaptationPatch(universe="SP500"),
-            parent_evidence=_evidence(),
+            parent_evidence=_evidence(parent_id),
             today=TODAY_FRESH,
         )
         fetched = store.get_artifact(child_id)
@@ -282,7 +282,7 @@ class TestEvidenceGateSitsOnTheWritePath:
                 store,
                 parent_id,
                 AdaptationPatch(universe="SP500"),
-                parent_evidence=_evidence(),
+                parent_evidence=_evidence(parent_id),
                 today=TODAY_STALE,
             )
 

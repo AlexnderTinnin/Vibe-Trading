@@ -399,7 +399,10 @@
       "shadowDeltaPrompt": "Run a shadow backtest for the last 90 days and break down where my PnL diverged from the shadow (rule violations, early exits, missed signals)",
       "shadowReport": "Generate Shadow Report",
       "shadowReportDesc": "A shareable 8-part report: your account curve, risk-adjusted return, and where each gain came from",
-      "shadowReportPrompt": "Render the shadow report and give me the URL — lead with the you-vs-shadow delta"
+      "shadowReportPrompt": "Render the shadow report and give me the URL — lead with the you-vs-shadow delta",
+      "adaptStrategy": "Adapt a registered strategy",
+      "adaptStrategyDesc": "Keep its signal, test a new universe",
+      "adaptStrategyPrompt": "Help me adapt a registered strategy to a new universe and date window. First list strategies and inspect the parent evidence; ask me for any missing strategy ID, instruments, dates and sizing. Preserve the signal, generate the child code, backtest it, and report only its own refreshed evidence."
     },
     "taskSubtitle": "Ask about a stock, a strategy, or your portfolio — I'll pull the data, run the numbers, and show every step.",
     "quickActions": "Quick actions",

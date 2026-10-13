@@ -39,6 +39,7 @@ SD_TOOLS = (
     "query_strategies",
     "get_strategy_evidence",
     "refresh_strategy_evidence",
+    "adapt_strategy",
 )
 
 

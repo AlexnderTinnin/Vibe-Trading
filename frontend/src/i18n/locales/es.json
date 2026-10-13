@@ -399,7 +399,10 @@
       "shadowDeltaPrompt": "Ejecuta un backtest espejo de los últimos 90 días y desglosa dónde mi PnL se desvió del espejo (incumplimientos de reglas, salidas anticipadas, señales perdidas)",
       "shadowReport": "Genera informe de cuenta espejo",
       "shadowReportDesc": "Un informe compartible de 8 partes: la curva de tu cuenta, el retorno ajustado por riesgo y de dónde vino cada ganancia",
-      "shadowReportPrompt": "Genera el informe de cuenta espejo y dame la URL — comienza con la diferencia tú-vs-espejo"
+      "shadowReportPrompt": "Genera el informe de cuenta espejo y dame la URL — comienza con la diferencia tú-vs-espejo",
+      "adaptStrategy": "Adaptar una estrategia registrada",
+      "adaptStrategyDesc": "Conservar la señal y probar otro universo",
+      "adaptStrategyPrompt": "Ayúdame a adaptar una estrategia registrada a otro universo y período. Primero enumera las estrategias y revisa la evidencia de la original; pregunta por el ID, los instrumentos, las fechas y el tamaño de posición que falten. Conserva la señal, genera el código de la derivada, ejecuta el backtest e informa solo de su propia evidencia actualizada."
     },
     "taskSubtitle": "Pregunta sobre una acción, una estrategia o tu portafolio — obtendré los datos, haré los cálculos y te mostraré cada paso.",
     "quickActions": "Acciones rápidas",

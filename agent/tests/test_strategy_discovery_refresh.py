@@ -98,7 +98,7 @@ class TestToolIdentity:
         assert tool.name == TOOL_NAME
         assert tool.is_readonly is False, "the refresh tool is a WRITE tool"
         assert tool.repeatable is True
-        assert tool.parameters["properties"].keys() == {"manifest_path", "runs"}
+        assert tool.parameters["properties"].keys() == {"manifest_path", "runs", "scope"}
         assert tool.parameters.get("required", []) == []
 
 

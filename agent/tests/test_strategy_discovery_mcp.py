@@ -27,6 +27,7 @@ SD_TOOLS = (
     "query_strategies",
     "get_strategy_evidence",
     "refresh_strategy_evidence",
+    "adapt_strategy",
 )
 
 
@@ -96,6 +97,8 @@ class TestDelegation:
                 {"regime": "bear_market", "min_trades": 12, "cost_feasible": True},
             ),
             ("get_strategy_evidence", {"strategy_id": "alpha_zoo:a1", "regime": None}),
+            ("adapt_strategy", {"strategy_id": "sdm:p", "name": "child", "universe": "US", "config": {"codes": ["AAPL.US"]}}),
+            ("refresh_strategy_evidence", {"runs": [], "scope": "strategies"}),
         ],
     )
     def test_wrapper_delegates_to_registry_execute_with_own_name(
@@ -148,6 +151,8 @@ class TestDelegation:
             fn = _unwrapped(name)
             if name == "get_strategy_evidence":
                 result = fn(strategy_id="alpha_zoo:a1")
+            elif name == "adapt_strategy":
+                result = fn(strategy_id="sdm:p", name="child", universe="US", config={})
             else:
                 result = fn()
             payload = json.loads(result)

@@ -267,10 +267,12 @@ class EvidenceStore:
                 count += 1
         return count
 
-    def replace_rows(self, rows: Sequence[EvidenceRow]) -> int:
+    def replace_rows(self, rows: Sequence[EvidenceRow], *, strategy_ids: Sequence[str] | None = None) -> int:
         """Atomically replace ALL evidence rows with ``rows``.
 
-        DELETE-all + INSERT-all inside ONE ``_connect()`` context — a single
+        With strategy_ids, delete only those complete regime sets and reject
+        rows outside that scope. Otherwise replace the whole cache.
+        DELETE + INSERT inside ONE ``_connect()`` context — a single
         transaction, so a failure anywhere leaves the previous contents
         intact (rollback) instead of the clear-then-upsert window where a
         crash could leave the store empty (plan D5). Per-row validation is
@@ -285,7 +287,13 @@ class EvidenceStore:
             _validate_row_for_write(row)
         count = 0
         with self._connect() as conn:
-            conn.execute(f"DELETE FROM {self.TABLE}")
+            if strategy_ids is None:
+                conn.execute(f"DELETE FROM {self.TABLE}")
+            else:
+                if any(row.strategy_id not in strategy_ids for row in materialized):
+                    raise ValueError("row outside replacement strategy scope")
+                conn.executemany(f"DELETE FROM {self.TABLE} WHERE strategy_id = ?",
+                                 [(sid,) for sid in strategy_ids])
             for row in materialized:
                 conn.execute(
                     _INSERT_SQL,

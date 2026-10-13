@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import date
+from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, Sequence
 
 from src.strategy_store.models import (
@@ -33,7 +34,7 @@ class AdaptationPatch:
 class _ArtifactStore(Protocol):
     def get_artifact(self, artifact_id: str) -> Artifact | None: ...
 
-    def register_artifact(self, artifact: Artifact) -> str: ...
+    def register_artifact(self, artifact: Artifact, **kwargs) -> str: ...
 
 
 def adapt_artifact(parent: Artifact, patch: AdaptationPatch) -> Artifact:
@@ -77,6 +78,7 @@ def adapt_artifact(parent: Artifact, patch: AdaptationPatch) -> Artifact:
         derived_from=parent.id,
         status=ArtifactStatus.CREATED,
         run_dir=None,
+        signal_engine_path=None,
         created_at="",
         updated_at="",
         disabled_at=None,
@@ -97,6 +99,7 @@ def register_adaptation(
     *,
     parent_evidence: "Sequence[EvidenceRow]",
     today: date,
+    run_binding: dict | None = None,
 ) -> str:
     """Persist an adapted child through the strategy store. Returns the new id.
 
@@ -112,6 +115,8 @@ def register_adaptation(
         patch: Description-driven changes; signal fields are not on this type.
         parent_evidence: Evidence rows computed for *parent_id*.
         today: Reference date the decay verdict is taken against.
+        run_binding: Optional prepared run contract, persisted atomically with
+            the child by the SQLite store; omitted for description-only use.
 
     Returns:
         The new child artifact's id.
@@ -126,6 +131,10 @@ def register_adaptation(
     if parent is None:
         raise AdaptationError(f"parent artifact {parent_id!r} not found")
 
+    if parent.status in (ArtifactStatus.DECAYED, ArtifactStatus.DISABLED):
+        raise AdaptationError("a decayed or disabled parent cannot be adapted")
+    if any(row.strategy_id != f"sdm:{parent_id}" for row in parent_evidence):
+        raise AdaptationError("evidence must belong to the parent strategy")
     blockers = parent_adaptation_blockers(parent_evidence, today)
     if blockers:
         raise AdaptationError(
@@ -133,4 +142,8 @@ def register_adaptation(
         )
 
     child = adapt_artifact(parent, patch)
+    if run_binding is not None:
+        child = replace(child, run_dir=run_binding["run_dir"],
+                        signal_engine_path=str(Path(run_binding["run_dir"]) / "code/signal_engine.py"))
+        return store.register_artifact(child, adaptation_binding=run_binding)
     return store.register_artifact(child)

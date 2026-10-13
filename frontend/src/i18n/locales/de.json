@@ -399,7 +399,10 @@
       "shadowDeltaPrompt": "Führe einen Shadow-Backtest für die letzten 90 Tage durch und zerlege, wo mein PnL vom Shadow abweicht (Regelverletzungen, vorzeitige Exits, verpasste Signale)",
       "shadowReport": "Shadow-Bericht erstellen",
       "shadowReportDesc": "Ein teilbarer 8-teiliger Bericht: deine Kontokurve, risikobereinigte Rendite und woher jeder Gewinn kam",
-      "shadowReportPrompt": "Rendere den Shadow-Bericht und gib mir die URL — beginne mit dem Du-vs-Shadow-Delta"
+      "shadowReportPrompt": "Rendere den Shadow-Bericht und gib mir die URL — beginne mit dem Du-vs-Shadow-Delta",
+      "adaptStrategy": "Registrierte Strategie anpassen",
+      "adaptStrategyDesc": "Signal beibehalten, neues Universum testen",
+      "adaptStrategyPrompt": "Hilf mir, eine registrierte Strategie auf ein neues Universum und einen neuen Zeitraum anzupassen. Liste zuerst Strategien auf und prüfe die Evidenz der Ausgangsstrategie. Frage nach fehlender ID, Instrumenten, Daten und Positionsgrößen. Behalte das Signal bei, generiere den abgeleiteten Code, führe den Backtest aus und berichte nur dessen eigene aktualisierte Evidenz."
     },
     "taskSubtitle": "Frag nach einer Aktie, einer Strategie oder deinem Portfolio — ich hole die Daten, rechne alles durch und zeige jeden Schritt.",
     "quickActions": "Schnellaktionen",

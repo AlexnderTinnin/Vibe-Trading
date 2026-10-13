@@ -1,7 +1,7 @@
 """Strategy-discovery agent tools: evidence-gated discovery surface.
 
-Four tools — ``list_strategies`` / ``query_strategies`` /
-``get_strategy_evidence`` / ``refresh_strategy_evidence`` — expose the
+Five tools — ``list_strategies`` / ``query_strategies`` /
+``get_strategy_evidence`` / ``refresh_strategy_evidence`` / ``adapt_strategy`` expose the
 Strategy Discovery facade over the Alpha Zoo registry and the SDM strategy
 store. The surface is evidence-gated: strategies carry computed per-regime
 evidence rows instead of boolean scenario tags, and anything below the
@@ -13,7 +13,8 @@ The first three tools are read-only. The fourth,
 scope: it rebuilds ONLY the disposable facade-owned evidence cache from
 local backtest run artifacts (manifest-driven; plan D6/D7). It never writes
 to the Alpha Zoo or SDM sources of truth, and it uses no network and no
-credentials.
+credentials. ``adapt_strategy`` prepares a new SDM child for the existing
+generate/backtest workflow and binds its own evidence inputs.
 
 The facade is constructed lazily inside each ``execute()`` (never at import
 time), parameter types are coerced/validated defensively (bad input yields
@@ -583,6 +584,7 @@ def refresh_strategy_evidence_core(
     *,
     manifest_path: str | None = None,
     runs: list | None = None,
+    scope: str = "all",
 ) -> dict:
     """Shared refresh core for the agent tool and the CLI (one code path).
 
@@ -617,7 +619,20 @@ def refresh_strategy_evidence_core(
             )
         entries = runs
 
+    if scope not in {"all", "strategies"}:
+        raise ValueError("scope must be all or strategies")
     specs, skipped = validate_refresh_entries(entries)
+    from src.strategy_discovery.adaptation_workflow import validate_adapted_run
+
+    validated = []
+    for spec in specs:
+        try:
+            validate_adapted_run(spec["strategy_id"], spec["run_dir"])
+        except ValueError as exc:
+            skipped.append({"run_dir": spec["run_dir"], "reason": str(exc)})
+        else:
+            validated.append(spec)
+    specs = validated
     if not specs:
         # Nothing admissible to rebuild from. Do NOT call rebuild_evidence:
         # an empty rebuild clears the store, and wiping the cache because
@@ -632,7 +647,7 @@ def refresh_strategy_evidence_core(
 
     from src.strategy_discovery import EvidenceStore, rebuild_evidence
 
-    result = dict(rebuild_evidence(specs, EvidenceStore()))
+    result = dict(rebuild_evidence(specs, EvidenceStore(), scope=scope))
     result["runs"] = len(entries)
     result["skipped"] = skipped + list(result.get("skipped", []))
     return result
@@ -643,9 +658,9 @@ class RefreshStrategyEvidenceTool(BaseTool):
 
     name = "refresh_strategy_evidence"
     description = (
-        "Rebuild the strategy-discovery evidence cache from real backtest "
+        "Refresh the strategy-discovery evidence cache from real backtest "
         "run artifacts. WRITE tool, disposable-cache scope only: it replaces "
-        "the facade-owned evidence cache (drop-and-rebuild by contract) and "
+        "the facade-owned evidence cache (default scope=all). Set scope=strategies to replace only successful named strategies, preserving other evidence. It "
         "never touches the Alpha Zoo or SDM sources of truth; no network, no "
         "credentials. Provide EXACTLY ONE of manifest_path (JSON manifest: "
         '{"runs": [{strategy_id, run_dir, position_size?}, ...]} — a bare '
@@ -657,6 +672,10 @@ class RefreshStrategyEvidenceTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
+            "scope": {
+                "type": "string", "enum": ["all", "strategies"], "default": "all",
+                "description": "Use strategies after adaptation to preserve the parent's and other strategies' evidence.",
+            },
             "manifest_path": {
                 "type": "string",
                 "description": (
@@ -696,7 +715,7 @@ class RefreshStrategyEvidenceTool(BaseTool):
             )
         try:
             result = refresh_strategy_evidence_core(
-                manifest_path=manifest_path, runs=runs
+                manifest_path=manifest_path, runs=runs, scope=kwargs.get("scope", "all")
             )
         except ValueError as exc:
             return _err(str(exc))
@@ -706,3 +725,40 @@ class RefreshStrategyEvidenceTool(BaseTool):
             logger.exception("refresh_strategy_evidence failed")
             return _err("refresh_strategy_evidence failed internally; see server logs")
         return _envelope(result)
+
+
+class AdaptStrategyTool(BaseTool):
+    """Prepare a child for the existing strategy-generate/backtest workflow."""
+
+    name = "adapt_strategy"
+    description = (
+        "Prepare a new SDM child from a strategy with adequate, non-stale evidence. "
+        "Preserves signal, entry and exit definitions; only universe, name and sizing "
+        "may change. Returns the description and assigned run directory. Then load "
+        "strategy-generate, write the child's own SignalEngine, backtest it and call "
+        "refresh_strategy_evidence with scope=strategies. Never inherits parent metrics."
+    )
+    parameters = {
+        "type": "object",
+        "properties": {
+            "strategy_id": {"type": "string", "description": "Parent sdm: id from list_strategies."},
+            "name": {"type": "string"},
+            "universe": {"type": "string", "description": "Target universe description."},
+            "config": {"type": "object", "description": "Backtest config with explicit codes, start_date and end_date; no guessed costs or data inputs."},
+            "position_sizing": {"type": "string", "description": "Optional new sizing description; omit to preserve parent's."},
+        },
+        "required": ["strategy_id", "name", "universe", "config"],
+    }
+    is_readonly = False
+
+    def execute(self, **kwargs: Any) -> str:
+        from src.strategy_discovery.adaptation_workflow import prepare_adaptation
+
+        try:
+            result = prepare_adaptation(**{key: kwargs[key] for key in self.parameters["properties"] if key in kwargs})
+            return _envelope(result)
+        except (ValueError, TypeError) as exc:
+            return _err(str(exc))
+        except Exception:
+            logger.exception("strategy adaptation preparation failed")
+            return _err("strategy adaptation preparation failed; see server logs")

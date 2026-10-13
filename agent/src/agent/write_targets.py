@@ -10,8 +10,8 @@ orchestrator.
 
 State stays on the loop: ``written_files`` is passed in and mutated in
 place by ``record_written_target``; the provenance identity fields are
-read at delegation time in ``loop.py``. Behavior is unchanged — every
-branch condition, regex, and message string moved verbatim.
+read at delegation time in ``loop.py``. The extraction preserved behavior. Prepared adaptation runs now also receive
+writer provenance when their code is written from another active run.
 """
 
 from __future__ import annotations
@@ -55,9 +55,28 @@ def record_written_target(
     try:
         relative = resolved.relative_to(run_root).as_posix()
     except ValueError:
-        return
+        relative = ""
     if relative not in {"config.json", "code/signal_engine.py"}:
-        return
+        # Adaptation code is written to a separate, prepared run. Resolve its
+        # identity from that run's own config; never stamp the active run's
+        # code identity onto a file written somewhere else.
+        candidate = resolved.parent.parent if resolved.name == "signal_engine.py" and resolved.parent.name == "code" else resolved.parent
+        if resolved.name not in {"config.json", "signal_engine.py"}:
+            return
+        try:
+            from src.tools.path_utils import safe_run_dir
+
+            candidate = safe_run_dir(str(candidate))
+            config = json.loads((candidate / "config.json").read_text(encoding="utf-8"))
+            token = config["strategy_adaptation"]["token"]
+            if not isinstance(token, str) or candidate.name != f"adaptation-{token}":
+                return
+            relative = resolved.relative_to(candidate).as_posix()
+            if relative not in {"config.json", "code/signal_engine.py"}:
+                return
+            run_root = candidate
+        except (OSError, ValueError, KeyError, TypeError):
+            return
 
     metadata_path = run_root / "strategy_provenance.json"
     try:

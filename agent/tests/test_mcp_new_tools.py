@@ -46,6 +46,7 @@ KNOWN_MUTATING_MCP_TOOLS = frozenset(
         "alpha_bench",
         "backtest",
         "refresh_strategy_evidence",
+        "adapt_strategy",
         "run_swarm",
         "start_research_goal",
         "trading_select_connection",

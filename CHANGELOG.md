@@ -1,5 +1,7 @@
 # Changelog
 
+- Strategy adaptation now binds each child to its own description, universe, date window and hashed backtest artifacts; scoped refresh preserves other strategies' evidence. Agent/MCP, CLI, authenticated REST and the Web welcome entry share the workflow.
+
 All notable changes to Vibe-Trading are documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/).
 

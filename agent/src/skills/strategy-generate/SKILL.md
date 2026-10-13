@@ -16,6 +16,14 @@ category: strategy
 
 **You only need to write `signal_engine.py` and `config.json`. The `backtest` tool automatically handles data loading and backtest execution.**
 
+## Adapting a registered strategy
+
+1. Read `get_strategy_evidence(strategy_id="sdm:...")` for the parent's description and computed regime definitions. A stale, disabled, decayed or inadequately evidenced parent cannot be adapted.
+2. Call `adapt_strategy(strategy_id=..., name=..., universe=..., config=...)` with explicit codes and date window. Only name, universe and optional position sizing may change. Signal definition, entry and exit rules remain the parent's. Missing inputs require a question, never a fabricated metric or threshold.
+3. Use the returned assigned `run_dir` and seeded `config.json`. Generate the child's `code/signal_engine.py` from its description using the contract below; never copy a parent run's metrics. Preserve the bound codes, dates and `strategy_adaptation` metadata. Record model provenance through the normal write tool.
+4. Call `backtest(run_dir=...)`, inspect its artifacts, then `refresh_strategy_evidence(runs=[{"strategy_id": "sdm:<child>", "run_dir": "<assigned>"}], scope="strategies")`. This updates only successful named strategies and preserves the parent's evidence. Refresh refuses a different run or changed config/code/results against the run card.
+5. Read the child's evidence and report its actual quality, cost and decay warnings. A successful backtest is not adequate regime evidence or independent approval. An unchanged mathematical signal can legitimately generate identical code for another universe; hashes establish provenance, not semantic correctness of generated Python.
+
 ## Requirements Parsing
 
 Extract the following from the user's description:

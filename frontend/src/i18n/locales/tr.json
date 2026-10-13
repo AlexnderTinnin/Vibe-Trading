@@ -356,7 +356,10 @@
       "shadowDeltaPrompt": "Run a shadow backtest for the last 90 days and break down where my PnL diverged from the shadow (rule violations, early exits, missed signals)",
       "shadowReport": "Generate Shadow Report",
       "shadowReportDesc": "A shareable 8-part report: your account curve, risk-adjusted return, and where each gain came from",
-      "shadowReportPrompt": "Render the shadow report and give me the URL â€” lead with the you-vs-shadow delta"
+      "shadowReportPrompt": "Render the shadow report and give me the URL â€” lead with the you-vs-shadow delta",
+      "adaptStrategy": "Kayıtlı stratejiyi uyarlayın",
+      "adaptStrategyDesc": "Sinyali koruyun, yeni evreni test edin",
+      "adaptStrategyPrompt": "Kayıtlı bir stratejiyi yeni bir varlık evrenine ve tarih aralığına uyarlamama yardım edin. Önce stratejileri listeleyip ana stratejinin kanıtlarını inceleyin; eksik kimlik, varlık, tarih ve pozisyon büyüklüğünü sorun. Sinyali koruyun, türetilen kodu üretip geriye dönük test edin ve yalnızca türetilen stratejinin kendi güncel kanıtlarını raporlayın."
     },
     "taskSubtitle": "Ask about a stock, a strategy, or your portfolio â€” I'll pull the data, run the numbers, and show every step.",
     "quickActions": "Hızlı işlemler",

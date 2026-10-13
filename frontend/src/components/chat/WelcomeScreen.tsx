@@ -21,6 +21,11 @@ const CATEGORIES: Category[] = [
     icon: <TrendingUp className="h-4 w-4" />,
     examples: [
       {
+        titleKey: "welcome.examples.adaptStrategy",
+        descKey: "welcome.examples.adaptStrategyDesc",
+        promptKey: "welcome.examples.adaptStrategyPrompt",
+      },
+      {
         titleKey: "welcome.examples.crossMarketPortfolio",
         descKey: "welcome.examples.crossMarketPortfolioDesc",
         promptKey: "welcome.examples.crossMarketPortfolioPrompt",

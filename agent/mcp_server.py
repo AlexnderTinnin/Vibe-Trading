@@ -1398,7 +1398,21 @@ def get_strategy_evidence(strategy_id: str, regime: str | None = None) -> str:
 
 
 @mcp.tool
-def refresh_strategy_evidence(manifest_path: str | None = None, runs: list | None = None) -> str:
+def adapt_strategy(strategy_id: str, name: str, universe: str, config: dict, position_sizing: str | None = None) -> str:
+    """Prepare a child from fresh adequate SDM evidence, preserving signal logic.
+
+    Returns description and a bound run_dir. Load strategy-generate, write the
+    child's code, backtest there, then refresh its evidence with scope=strategies.
+    Does not generate code or run a backtest by itself, or copy parent metrics.
+    """
+    return _strategy_discovery_execute("adapt_strategy", {
+        "strategy_id": strategy_id, "name": name, "universe": universe,
+        "config": config, "position_sizing": position_sizing,
+    })
+
+
+@mcp.tool
+def refresh_strategy_evidence(manifest_path: str | None = None, runs: list | None = None, scope: str = "all") -> str:
     """Rebuild the strategy-discovery evidence cache from backtest run artifacts.
 
     WRITE tool with disposable-cache-only scope: it replaces the facade-owned
@@ -1420,10 +1434,11 @@ def refresh_strategy_evidence(manifest_path: str | None = None, runs: list | Non
     Args:
         manifest_path: Path to the JSON manifest file (see above).
         runs: Inline run specs (see above).
+        scope: all replaces the whole cache; strategies updates successful named strategies only.
     """
     return _strategy_discovery_execute(
         "refresh_strategy_evidence",
-        {"manifest_path": manifest_path, "runs": runs},
+        {"manifest_path": manifest_path, "runs": runs, "scope": scope},
     )
 
 

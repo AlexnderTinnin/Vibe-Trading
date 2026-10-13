@@ -220,6 +220,8 @@ register_custom_provider_routes(app, require_local_or_auth, require_settings_wri
 
 from src.api.pixel_office_routes import register_pixel_office_routes  # noqa: E402
 register_pixel_office_routes(app, require_local_or_auth, require_settings_write_auth)
+from src.api.strategy_adaptation_routes import register_strategy_adaptation_routes  # noqa: E402
+register_strategy_adaptation_routes(app, require_settings_write_auth)
 
 # --- Uploads ---
 from src.api.uploads_routes import register_uploads_routes  # noqa: E402

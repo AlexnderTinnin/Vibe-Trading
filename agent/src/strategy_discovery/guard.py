@@ -2,12 +2,12 @@
 
 This module is the single source of truth for the Strategy Discovery routing
 text injected into the agent's Task-Routing prompt section, and for checking
-whether the discovery tools (three read-only plus the refresh write tool)
+whether the discovery tools (three read-only plus the refresh and adaptation write tools)
 are actually registered. It is fail-safe by design: when any tool is missing
 (or the registry object does not quack as expected) the routing block is
 omitted rather than advertising tools the agent cannot call — the exact
-failure mode of the rejected #896. The routing block names all four tools,
-so the guard covers all four: advertising ``refresh_strategy_evidence``
+failure mode of the rejected #896. The routing block names all five tools,
+so the guard covers all five: advertising ``refresh_strategy_evidence``
 while only the three reads register would reintroduce the phantom-tool
 failure the guard exists to prevent.
 
@@ -20,13 +20,14 @@ from __future__ import annotations
 from typing import Any
 
 #: The discovery tools advertised by the routing block: the three read-only
-#: query tools plus the refresh write tool. All four must be registered
+#: query tools plus the refresh and adaptation write tools. All five must be registered
 #: before any routing text is emitted (atomic advertisement).
 STRATEGY_DISCOVERY_TOOLS = (
     "list_strategies",
     "query_strategies",
     "get_strategy_evidence",
     "refresh_strategy_evidence",
+    "adapt_strategy",
 )
 
 ROUTING_BLOCK: str = """**Strategy Discovery** — user asks what strategies exist, which fit a market regime (bear/bull/structural), or what state registered strategies are in:
@@ -34,6 +35,7 @@ ROUTING_BLOCK: str = """**Strategy Discovery** — user asks what strategies exi
 2. `query_strategies(regime=...)` — evidence-gated per-regime results; report trades, date coverage, breakeven and warnings verbatim; NEVER present insufficient or marginal evidence as a recommendation
 3. `get_strategy_evidence(strategy_id=...)` — full per-regime evidence breakdown
 4. `refresh_strategy_evidence(manifest_path=...)` — after re-backtesting a strategy, rebuild the disposable evidence cache from the new run artifacts so its evidence rows repopulate
+5. `adapt_strategy(strategy_id=..., name=..., universe=..., config=...)` — prepare a child from adequate fresh parent evidence, load strategy-generate, write its own code, backtest in its assigned directory, then refresh only the child with scope="strategies". Signal/entry/exit definitions stay fixed; NEVER inherit parent performance.
 Never recommend a strategy whose supporting regime evidence is missing or insufficient."""
 
 
