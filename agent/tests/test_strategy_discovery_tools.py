@@ -1,11 +1,11 @@
 """Frozen-contract tests for ``src.tools.strategy_discovery_tool`` — issue #969.
 
-AC1 (tools callable at runtime): the module must expose exactly four
+AC1 (tools callable at runtime): the module must expose exactly five
 ``BaseTool`` classes whose ``name`` attributes are ``list_strategies`` /
 ``query_strategies`` / ``get_strategy_evidence`` /
-``refresh_strategy_evidence``. The three query tools are read-only; the
-refresh tool is the single WRITE tool (``is_readonly=False``, scope limited
-to the disposable evidence cache — Phase 2, plan D13). All return strict-JSON
+``refresh_strategy_evidence`` / ``adapt_strategy``. The three query tools
+are read-only. Refresh writes only the disposable evidence cache; adaptation
+creates a new unvalidated SDM child with its own bound run (Phase 3, #1149). All return strict-JSON
 envelopes with ``status`` ok/error and never raise on invalid parameter
 types.
 
@@ -37,7 +37,8 @@ requires_tools = pytest.mark.skipif(
 
 READ_TOOL_NAMES = {"list_strategies", "query_strategies", "get_strategy_evidence"}
 WRITE_TOOL_NAME = "refresh_strategy_evidence"
-EXPECTED_NAMES = READ_TOOL_NAMES | {WRITE_TOOL_NAME}
+WRITE_TOOL_NAMES = {WRITE_TOOL_NAME, "adapt_strategy"}
+EXPECTED_NAMES = READ_TOOL_NAMES | WRITE_TOOL_NAMES
 
 
 def _strict_json_loads(text: str) -> dict:
@@ -114,8 +115,8 @@ def _discover_tool_classes():
 
 def _instantiate_tools() -> dict:
     classes = _discover_tool_classes()
-    assert len(classes) == 4, (
-        f"expected exactly 4 BaseTool classes in strategy_discovery_tool, found "
+    assert len(classes) == len(EXPECTED_NAMES), (
+        f"expected exactly {len(EXPECTED_NAMES)} BaseTool classes in strategy_discovery_tool, found "
         f"{[c.__name__ for c in classes]}"
     )
     tools = {cls().name: cls() for cls in classes}
@@ -137,11 +138,9 @@ class TestToolClasses:
             ), f"{name} must declare a JSON-schema parameters block"
             assert tool.is_readonly is True, f"{name} must be read-only"
 
-    def test_refresh_tool_is_the_single_write_tool(self, fake_facade) -> None:
-        # Phase 2 (plan D13): refresh_strategy_evidence is a WRITE tool, but
-        # its scope is the disposable evidence cache only — it rebuilds that
-        # cache from run artifacts and never touches Alpha Zoo/SDM sources of
-        # truth. It must be the ONLY non-read-only tool in the module.
+    def test_only_refresh_and_adaptation_are_write_tools(self, fake_facade) -> None:
+        # Refresh remains limited to evidence-cache replacement; Phase 3 adds
+        # the independently guarded SDM-child write, never an edit to the parent.
         tools = _instantiate_tools()
         tool = tools[WRITE_TOOL_NAME]
         assert isinstance(tool, BaseTool)
@@ -154,9 +153,9 @@ class TestToolClasses:
         non_readonly = [
             name for name, instance in tools.items() if instance.is_readonly is False
         ]
-        assert non_readonly == [
-            WRITE_TOOL_NAME
-        ], f"only {WRITE_TOOL_NAME} may be non-read-only, got {non_readonly}"
+        assert set(non_readonly) == WRITE_TOOL_NAMES
+        assert tools["adapt_strategy"].parameters
+        assert tools["adapt_strategy"].repeatable is False
 
 
 @requires_tools
