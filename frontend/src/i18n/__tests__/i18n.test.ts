@@ -185,7 +185,8 @@ describe("new locale content", () => {
     ]);
     const copied = Object.entries(collectStrings(locales.tr)).filter(([key, value]) => {
       const prose = value.replace(/\{\{.*?\}\}/g, "");
-      return value === enStrings[key] && /[A-Za-z]/.test(prose) && !sharedTerms.has(value);
+      // The release version is shared metadata, checked against pyproject by the backend suite.
+      return key !== "app.version" && value === enStrings[key] && /[A-Za-z]/.test(prose) && !sharedTerms.has(value);
     }).map(([key]) => key);
     expect(copied).toEqual([]);
   });
