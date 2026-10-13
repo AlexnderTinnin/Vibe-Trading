@@ -24,6 +24,17 @@ REQUIRED_READ_CAPABILITIES = frozenset({"account.read", "positions.read"})
 _ACCOUNT_REF_MAX_LENGTH = 128
 
 
+def is_readonly_connection_profile(profile: TradingProfile) -> bool:
+    """Allow credential management for a verified read surface, even without valuation.
+
+    Portfolio eligibility is stricter and remains controlled separately by
+    is_portfolio_connection_profile. Discovery alone is not a usable read.
+    """
+    from src.trading.types import READ_CAPABILITIES
+
+    return bool(profile.readonly) and bool(set(profile.capabilities).intersection(READ_CAPABILITIES))
+
+
 def is_portfolio_connection_profile(profile: TradingProfile) -> bool:
     """Report whether a profile can back a read-only portfolio connection.
 
@@ -326,6 +337,7 @@ class ConnectionStore:
                     "environment": profile.environment,
                     "transport": profile.transport,
                     "readonly": profile.readonly,
+                    "portfolio_eligible": is_portfolio_connection_profile(profile),
                     "capabilities": list(profile.capabilities),
                     "supports_reconnect": profile.transport == "remote_mcp",
                     "account_selection_required": requires_account_selection(profile),
@@ -360,8 +372,8 @@ class ConnectionStore:
             raise ValueError(f"invalid local connection id: {connection_id or '?'}")
         profile_id = str(raw.get("profile_id") or "").strip().lower()
         profile = profile_by_id(profile_id)
-        if not is_portfolio_connection_profile(profile):
-            raise ValueError(f"connection profile is not eligible for read-only portfolios: {profile_id}")
+        if not is_readonly_connection_profile(profile):
+            raise ValueError(f"connection profile is not eligible for read-only connections: {profile_id}")
         label = str(raw.get("label") or profile.label).strip()
         if not label or len(label) > 80 or any(ord(character) < 32 for character in label):
             raise ValueError("connection label must contain 1 to 80 printable characters")
@@ -453,7 +465,7 @@ def credential_fields(profile_id: str) -> tuple[str, ...]:
 
 
 def readonly_profile_catalog() -> list[dict[str, Any]]:
-    """Return the profiles that can back a read-only portfolio connection.
+    """Return profiles with a usable read surface and their portfolio eligibility.
 
     Returns:
         One row per eligible profile, sorted by connector, environment and
@@ -464,7 +476,7 @@ def readonly_profile_catalog() -> list[dict[str, Any]]:
     plugin_ids = {plugin.profile.id for plugin in plugins}
     rows = []
     for profile in list_profiles():
-        if not is_portfolio_connection_profile(profile):
+        if not is_readonly_connection_profile(profile):
             continue
         rows.append(
             {
@@ -475,6 +487,7 @@ def readonly_profile_catalog() -> list[dict[str, Any]]:
                 "transport": profile.transport,
                 "capabilities": list(profile.capabilities),
                 "readonly": profile.readonly,
+                "portfolio_eligible": is_portfolio_connection_profile(profile),
                 "notes": profile.notes,
                 "local_plugin": profile.id in plugin_ids,
                 "credential_fields": credential_field_catalog(profile.id),

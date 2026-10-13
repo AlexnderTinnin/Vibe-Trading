@@ -50,6 +50,18 @@ def _field(
 
 
 _BUILTIN: dict[str, ConnectorOnboarding] = {
+    "mstock": ConnectorOnboarding(
+        auth_type="access_token",
+        credential_fields=(_field("api_key", "API Key"), _field("access_token", "Session Access Token")),
+        dependency="httpx",
+        install_command="pip install keyring",
+        test_operation="positions.read",
+        setup_hint=(
+            "Generate a Type B session token through mStock, then save it with the API key. "
+            "Tokens expire at midnight. Reads keep holdings and net positions separate; "
+            "portfolio aggregation and all orders are unavailable."
+        ),
+    ),
     "alpaca": ConnectorOnboarding(
         auth_type="api_key",
         credential_fields=(
@@ -196,8 +208,7 @@ _BUILTIN: dict[str, ConnectorOnboarding] = {
         dependency="requests",
         install_command="pip install keyring",
         setup_hint=(
-            "Apply via the Toss Securities app (더보기 > Open API), then fetch "
-            "account_seq from GET /api/v1/accounts."
+            "Apply via the Toss Securities app (더보기 > Open API), then fetch account_seq from GET /api/v1/accounts."
         ),
     ),
 }

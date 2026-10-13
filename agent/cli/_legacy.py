@@ -4505,7 +4505,7 @@ def cmd_connector_setup(
     from src.trading.connections import (
         ConnectionStore,
         credential_field_catalog,
-        is_portfolio_connection_profile,
+        is_readonly_connection_profile,
         requires_account_selection,
     )
     from src.trading.profiles import profile_by_id
@@ -4513,8 +4513,8 @@ def cmd_connector_setup(
 
     try:
         profile = profile_by_id(profile_id)
-        if not is_portfolio_connection_profile(profile):
-            raise ValueError(f"{profile.id} is not a read-only portfolio profile")
+        if not is_readonly_connection_profile(profile):
+            raise ValueError(f"{profile.id} is not a read-only connection profile")
         local_id = str(connection_id or f"{profile.connector}-{profile.environment}").strip().lower()
         store = ConnectionStore()
         connection = store.ensure(local_id, profile.id, label or profile.label)
@@ -4827,6 +4827,9 @@ def _enum_text(value: Any) -> str:
 
 
 def _print_connector_account(result: dict[str, Any]) -> int:
+    if result.get("valuation_basis") == "margin_limits_not_net_liquidation":
+        console.print_json(data=result)
+        return EXIT_SUCCESS
     accounts = ", ".join(result.get("accounts", [])) or "(none)"
     rows = result.get("summary", [])
     # broker_sdk connectors (Longbridge, …) return a ``balances`` list instead of
@@ -4898,12 +4901,16 @@ def cmd_connector_account(
     port: int | None = None,
     client_id: int | None = None,
     account: str | None = None,
+    connection_id: str | None = None,
 ) -> int:
     """Print account summary from a connector profile."""
     from src.trading.service import get_account
 
     try:
-        result = get_account(_profile_id(profile_id), host=host, port=port, client_id=client_id, account=account)
+        options = {"host": host, "port": port, "client_id": client_id, "account": account}
+        if connection_id is not None:
+            options["connection_id"] = connection_id
+        result = get_account(_profile_id(profile_id), **options)
     except Exception as exc:  # noqa: BLE001
         console.print(f"[red]Connector account failed:[/red] {exc}")
         return EXIT_RUN_FAILED
@@ -4920,18 +4927,25 @@ def cmd_connector_positions(
     port: int | None = None,
     client_id: int | None = None,
     account: str | None = None,
+    connection_id: str | None = None,
 ) -> int:
     """Print positions from a connector profile."""
     from src.trading.service import get_positions
 
     try:
-        result = get_positions(_profile_id(profile_id), host=host, port=port, client_id=client_id, account=account)
+        options = {"host": host, "port": port, "client_id": client_id, "account": account}
+        if connection_id is not None:
+            options["connection_id"] = connection_id
+        result = get_positions(_profile_id(profile_id), **options)
     except Exception as exc:  # noqa: BLE001
         console.print(f"[red]Connector positions failed:[/red] {exc}")
         return EXIT_RUN_FAILED
     if result.get("status") == "error":
         console.print(f"[red]{rich_escape(str(result.get('error')))}[/red]")
         return EXIT_RUN_FAILED
+    if result.get("valuation_basis") == "broker_books_unaggregated":
+        console.print_json(data=result)
+        return EXIT_SUCCESS
     rows = result.get("positions", [])
     if not rows:
         # Not the broker_sdk flat shape — try the remote-MCP nested shape
@@ -5313,6 +5327,7 @@ def _dispatch_connector(args: argparse.Namespace) -> int:
             port=args.port,
             client_id=args.client_id,
             account=args.account,
+            **({"connection_id": args.connection_id} if getattr(args, "connection_id", None) else {}),
         )
     if sub == "positions":
         return cmd_connector_positions(
@@ -5321,6 +5336,7 @@ def _dispatch_connector(args: argparse.Namespace) -> int:
             port=args.port,
             client_id=args.client_id,
             account=args.account,
+            **({"connection_id": args.connection_id} if getattr(args, "connection_id", None) else {}),
         )
     if sub == "orders":
         return cmd_connector_orders(
@@ -5647,10 +5663,12 @@ def _build_parser() -> argparse.ArgumentParser:
     connector_account = connector_subparsers.add_parser("account", help="Read account summary")
     _add_connector_profile_arg(connector_account)
     _add_connector_local(connector_account)
+    connector_account.add_argument("--connection-id", default=None)
 
     connector_positions = connector_subparsers.add_parser("positions", help="Read current positions")
     _add_connector_profile_arg(connector_positions)
     _add_connector_local(connector_positions)
+    connector_positions.add_argument("--connection-id", default=None)
 
     connector_orders = connector_subparsers.add_parser("orders", help="Read open orders")
     _add_connector_profile_arg(connector_orders)

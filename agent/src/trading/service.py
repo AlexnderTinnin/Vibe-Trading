@@ -16,6 +16,7 @@ RUNNER_CAPABILITY = "runner.manage.requires_mandate"
 #: ``get_account_snapshot``, ``get_positions``, ``get_open_orders``, ``get_quote``,
 #: ``get_historical_bars``).
 _SDK_CONNECTOR_MODULES = {
+    "mstock": "src.trading.connectors.mstock.sdk",
     "tiger": "src.trading.connectors.tiger.sdk",
     "longbridge": "src.trading.connectors.longbridge.sdk",
     "alpaca": "src.trading.connectors.alpaca.sdk",

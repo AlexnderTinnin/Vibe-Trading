@@ -293,6 +293,7 @@ export interface ConnectorOnboarding {
 }
 
 export interface LocalConnection {
+  portfolio_eligible?: boolean;
   id: string;
   profile_id: string;
   label: string;
@@ -314,6 +315,7 @@ export interface LocalConnection {
 }
 
 export interface ReadonlyConnectionProfile {
+  portfolio_eligible?: boolean;
   id: string;
   connector: string;
   label: string;

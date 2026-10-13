@@ -37,6 +37,7 @@ from src.trading.connectors.scalable.classification import SCALABLE_TOOL_CLASS
 from src.trading.connectors.shoonya.classification import SHOONYA_TOOL_CLASS
 from src.trading.connectors.tiger.classification import TIGER_TOOL_CLASS
 from src.trading.connectors.etoro.classification import ETORO_TOOL_CLASS
+from src.trading.connectors.mstock.classification import MSTOCK_TOOL_CLASS
 from src.trading.connectors.toss.classification import TOSS_TOOL_CLASS
 from src.trading.connectors.trading212.classification import TRADING212_TOOL_CLASS
 from src.trading.connectors.upbit.classification import UPBIT_TOOL_CLASS
@@ -66,6 +67,7 @@ _BROKER_CURATED_MAPS = {
     "kis": KIS_TOOL_CLASS,
     "upbit": UPBIT_TOOL_CLASS,
     "toss": TOSS_TOOL_CLASS,
+    "mstock": MSTOCK_TOOL_CLASS,
     "scalable": SCALABLE_TOOL_CLASS,
 }
 

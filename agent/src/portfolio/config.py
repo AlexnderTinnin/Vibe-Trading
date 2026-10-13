@@ -77,7 +77,7 @@ def eligible_profiles() -> list[TradingProfile]:
 
     Eligibility is decided by
     :func:`src.trading.connections.is_portfolio_connection_profile` so the
-    settings gate and the connection registry can never drift apart: a profile
+    settings gate and source catalog share the same rule: a profile
     qualifies only when it is read-only *and* declares both ``account.read``
     and ``positions.read``. A profile that merely advertises remote tool
     discovery (``mcp.read.discovery``) cannot serve either read, so selecting
@@ -113,6 +113,8 @@ def source_catalog(
     for connection in store.public_list():
         source = selected.get(connection["id"])
         profile = profile_by_id(connection["profile_id"])
+        if not is_portfolio_connection_profile(profile):
+            continue
         rows.append(
             {
                 **connection,
