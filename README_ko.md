@@ -494,14 +494,15 @@ vibe-trading connector install /tmp/my-broker
 
 - **A주** → `tencent` · `eastmoney` · `baostock` · `akshare` · `tushare` · `gildata` · `local`
 - **미국** → `yahoo` · `stooq` · `sina` · `eastmoney` · `yfinance` · `tiingo` · `fmp` · `finnhub` · `alphavantage` · `longbridge` · `akshare` · `local`
-- **홍콩** → `tencent` · `eastmoney` · `yahoo` · `futu` · `akshare` · `yfinance` · `tushare` · `longbridge` · `local`
+- **홍콩** → `tencent` · `eastmoney` · `yahoo` · `futu` · `akshare` · `yfinance` · `tushare` · `longbridge` · `gildata` · `local`
 - **인도 (NSE/BSE)** → `yahoo` · `yfinance` · `india_broker` · `local`
 - **Brazil (B3 `.SA`)** → `yahoo` · `yfinance` · `b3_cotahist` · `local`
 - **한국 (KOSPI/KOSDAQ)** → `pykrx` · `yahoo` · `yfinance` · `local`
+- **지수** → `yahoo` · `yfinance` · `gildata` · `local`
 - **영국 (LSE)** → `yahoo` · `yfinance` · `local` *(명시된 GBP/GBp 호가만 허용)*
 - **크립토** → `okx` · `binance` · `ccxt` · `yfinance` · `local`
 - **외환/귀금속** → `mt5` · `akshare` · `yfinance` · `local`
-- **캐나다 / 베트남 / 아르헨티나 / 지수** → `yahoo` · `yfinance` · `local`
+- **캐나다 / 베트남 / 아르헨티나** → `yahoo` · `yfinance` · `local`
 - **중국 선물** → `akshare` · `local` &nbsp;·&nbsp; **펀드** → `tushare` · `akshare` · `local` &nbsp;·&nbsp; **매크로** → `akshare` · `tushare` · `local`
 
 ### Longbridge를 명시적으로 사용하기
@@ -1295,7 +1296,7 @@ curl -X POST http://localhost:8899/scheduled-runs/playbooks/premarket-brief \
 
 ## 🔌 MCP Plugin
 
-Vibe-Trading은 모든 MCP-compatible client를 위해 76개 MCP tools를 제공합니다. stdio subprocess로 실행되므로 server setup이 필요 없습니다. 핵심 research tools는 HK/US/crypto에서 API key 없이 작동하고, trading connector tools는 선택된 connector profile을 사용하며, `run_swarm`만 LLM key가 필요합니다.
+Vibe-Trading은 모든 MCP-compatible client를 위해 80개 MCP tools를 제공합니다. stdio subprocess로 실행되므로 server setup이 필요 없습니다. 핵심 research tools는 HK/US/crypto에서 API key 없이 작동하고, trading connector tools는 선택된 connector profile을 사용하며, `run_swarm`만 LLM key가 필요합니다.
 
 **환경 변수:** server는 client가 직접 spawn하므로 shell의 `export`는 전달되지 않습니다 —— client의 `env` block에 설정하세요. 생성된 backtest code는 allowed run roots 안으로 제한되므로, 결과를 자신의 작업 directory에 쓰려면 `VIBE_TRADING_ALLOWED_RUN_ROOTS`가 필요합니다:
 
@@ -1351,7 +1352,7 @@ vibe-trading-mcp --transport sse   # legacy SSE (deprecated)
 
 </details>
 
-**노출되는 MCP tools(76):** `list_skills`, `load_skill`, `start_research_goal`, `get_research_goal`, `add_goal_evidence`, `update_research_goal_status`, `backtest`, `factor_analysis`, `alpha_zoo`, `alpha_bench`, `analyze_options`, `analyze_options_payoff`, `pattern_recognition`, `read_url`, `read_document`, `web_search`, `write_file`, `read_file`, `read_run_artifact`, `list_strategies`, `query_strategies`, `get_strategy_evidence`, `refresh_strategy_evidence`, `trading_connections`, `trading_select_connection`, `trading_check`, `trading_account`, `trading_positions`, `trading_orders`, `trading_quote`, `trading_history`, `list_swarm_presets`, `run_swarm`, `get_market_data`, `get_fund_flow`, `get_dragon_tiger`, `get_northbound_flow`, `get_southbound_flow`, `get_margin_trading`, `get_block_trades`, `get_shareholder_count`, `get_lockup_expiry`, `get_sector_info`, `get_research_reports`, `get_stock_news`, `get_sec_filings`, `get_financial_statements`, `get_options_chain`, `get_stock_profile`, `screen_market`, `search_symbol`, `get_macro_series`, `iwencai_search`, `qveris_search`, `qveris_inspect`, `qveris_execute`, `get_institutional_holdings`, `etf_holdings`, `prediction_market`, `research_papers`, `get_swarm_status`, `get_run_result`, `list_runs`, `reap_stale_runs`, `retry_run`, `analyze_trade_journal`, `extract_shadow_strategy`, `run_shadow_backtest`, `render_shadow_report`, `scan_shadow_signals`, `quantlib_call`, `cashflow_performance`, `orderbook_depth`, `sentiment`, `technical_indicators`, `get_fundamentals`.
+**노출되는 MCP tools(80):** `list_skills`, `load_skill`, `start_research_goal`, `get_research_goal`, `add_goal_evidence`, `update_research_goal_status`, `backtest`, `factor_analysis`, `alpha_zoo`, `alpha_bench`, `analyze_options`, `analyze_options_payoff`, `pattern_recognition`, `read_url`, `read_document`, `web_search`, `write_file`, `read_file`, `read_run_artifact`, `list_strategies`, `query_strategies`, `get_strategy_evidence`, `refresh_strategy_evidence`, `trading_connections`, `trading_select_connection`, `trading_check`, `trading_account`, `trading_positions`, `trading_orders`, `trading_quote`, `trading_history`, `list_swarm_presets`, `run_swarm`, `get_market_data`, `get_fund_flow`, `get_dragon_tiger`, `get_northbound_flow`, `get_southbound_flow`, `get_margin_trading`, `get_block_trades`, `get_shareholder_count`, `get_lockup_expiry`, `get_sector_info`, `get_research_reports`, `get_stock_news`, `get_sec_filings`, `get_financial_statements`, `get_options_chain`, `get_stock_profile`, `screen_market`, `search_symbol`, `get_macro_series`, `iwencai_search`, `qveris_search`, `qveris_inspect`, `qveris_execute`, `get_institutional_holdings`, `etf_holdings`, `prediction_market`, `research_papers`, `get_swarm_status`, `get_run_result`, `list_runs`, `reap_stale_runs`, `retry_run`, `analyze_trade_journal`, `extract_shadow_strategy`, `run_shadow_backtest`, `render_shadow_report`, `scan_shadow_signals`, `quantlib_call`, `cashflow_performance`, `orderbook_depth`, `sentiment`, `technical_indicators`, `get_fundamentals`, `get_fund_nav`, `get_cn_macro_series`, `get_cn_announcements`, `search_broker_reports`.
 
 ### SWARM 외부 MCP tools
 
@@ -1713,7 +1714,7 @@ Vibe-Trading/
 ├── agent/                          # Backend (Python)
 │   ├── cli/                        # CLI package — interactive TUI + subcommands
 │   ├── api_server.py               # FastAPI server — runs, sessions, upload, swarm, SSE
-│   ├── mcp_server.py               # MCP server — 76 tools for OpenClaw / Claude Desktop
+│   ├── mcp_server.py               # MCP server — 80 tools for OpenClaw / Claude Desktop
 │   │
 │   ├── src/
 │   │   ├── agent/                  # ReAct agent core

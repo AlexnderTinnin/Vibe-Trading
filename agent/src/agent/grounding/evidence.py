@@ -459,6 +459,7 @@ def _is_metadata_count_leaf(path: str) -> bool:
 # prefix (spec §5). An unregistered leaf is still evidence but cannot ground a
 # price: inferring price-ness from leaf names admitted ``sma_cross`` as a price.
 _REGISTERED_PRICE_INDICATORS: dict[str, tuple[str, ...]] = {
+    "get_fund_nav": ("unit_nav", "accumulated_nav", "adjusted_nav"),
     "technical_indicators": (
         "latest_close",
         "indicators.sma_",
@@ -484,6 +485,11 @@ def _is_registered_price_indicator(tool: str, path: str) -> bool:
     if not prefixes:
         return False
     leaf = str(path or "").strip()
+    if tool == "get_fund_nav":
+        # Only this tool's dated, exactly resolved fund rows expose these
+        # levels. A generic nav field or daily growth is not a price.
+        match = re.fullmatch(r"funds\.[0-9]{6}\.OF\.rows\[[0-9]+\]\.([a-z_]+)", leaf)
+        return bool(match and match.group(1) in prefixes)
     for prefix in prefixes:
         if leaf == prefix:
             return True

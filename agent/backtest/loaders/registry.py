@@ -220,6 +220,9 @@ FALLBACK_CHAINS: dict[str, list[str]] = {
         "yfinance",
         "tushare",
         "longbridge",
+        # Key-gated commercial vendor, same tail-of-chain rationale as the
+        # a_share chain (paid quota only spent when free sources cannot serve).
+        "gildata",
         "local",
     ],
     "india_equity": ["yahoo", "yfinance", "india_broker", "local"],
@@ -253,7 +256,7 @@ FALLBACK_CHAINS: dict[str, list[str]] = {
     "forex": ["mt5", "akshare", "yfinance", "local"],
     # Yahoo index symbols (^SPX, ^NDX, ^FTSE, ^VIX, ...): served verbatim by
     # the public chart endpoint, same as the =F/=X conventions.
-    "index": ["yahoo", "yfinance", "local"],
+    "index": ["yahoo", "yfinance", "gildata", "local"],
 }
 
 
@@ -312,6 +315,9 @@ PRICE_CALIBER_BY_SOURCE_MARKET: dict[tuple[str, str], str] = {
     # and US series are not measured and keep the per-source label.
     ("eastmoney", "a_share"): "split_dividend_additive",
     ("akshare", "a_share"): "split_dividend_additive",
+    # Gildata's HKStockDailyQuotes serves raw traded prices (befadj/aftadj
+    # closes are separate fields, ignored) — measured on 00700.HK.
+    ("gildata", "hk_equity"): "raw",
 }
 
 #: Markets with no corporate-action adjustment concept. Their sources stamp

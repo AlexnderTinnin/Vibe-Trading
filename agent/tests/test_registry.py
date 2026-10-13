@@ -284,6 +284,7 @@ class TestFallbackChains:
             "yfinance",
             "tushare",
             "longbridge",
+            "gildata",
             "local",
         ]
 

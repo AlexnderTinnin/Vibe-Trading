@@ -655,14 +655,15 @@ Satu call `get_market_data`, **29 sumber data market**, salah satunya marketplac
 
 - **A-share** → `tencent` · `eastmoney` · `baostock` · `akshare` · `tushare` · `gildata` · `local`
 - **US** → `yahoo` · `stooq` · `sina` · `eastmoney` · `yfinance` · `tiingo` · `fmp` · `finnhub` · `alphavantage` · `longbridge` · `akshare` · `local`
-- **HK** → `tencent` · `eastmoney` · `yahoo` · `futu` · `akshare` · `yfinance` · `tushare` · `longbridge` · `local`
+- **HK** → `tencent` · `eastmoney` · `yahoo` · `futu` · `akshare` · `yfinance` · `tushare` · `longbridge` · `gildata` · `local`
 - **India (NSE/BSE)** → `yahoo` · `yfinance` · `india_broker` · `local`
 - **Brazil (B3 `.SA`)** → `yahoo` · `yfinance` · `b3_cotahist` · `local`
 - **Korea (KOSPI/KOSDAQ)** → `pykrx` · `yahoo` · `yfinance` · `local`
+- **Indeks** → `yahoo` · `yfinance` · `gildata` · `local`
 - **UK (LSE)** → `yahoo` · `yfinance` · `local` *(declared GBP/GBp quotes only)*
 - **Crypto** → `okx` · `binance` · `ccxt` · `yfinance` · `local`
 - **Forex / metals** → `mt5` · `akshare` · `yfinance` · `local`
-- **Canada / Vietnam / Argentina / indices** → `yahoo` · `yfinance` · `local`
+- **Canada / Vietnam / Argentina** → `yahoo` · `yfinance` · `local`
 - **China futures** → `akshare` · `local` &nbsp;·&nbsp; **funds** → `tushare` · `akshare` · `local` &nbsp;·&nbsp; **macro** → `akshare` · `tushare` · `local`
 
 ### Menggunakan Longbridge secara eksplisit
@@ -1598,7 +1599,7 @@ Mengirim `{}` akan menjadwalkan template memakai cadence yang disarankan beserta
 <a id="-mcp-plugin"></a>
 ## 🔌 Plugin MCP
 
-Vibe-Trading mengekspos 76 tool MCP untuk client yang kompatibel MCP. Berjalan sebagai subprocess stdio — tidak perlu setup server. Tool riset inti bekerja tanpa API key untuk HK/AS/crypto; tool connector trading menggunakan profil connector terpilih, dan `run_swarm` memerlukan LLM key.
+Vibe-Trading mengekspos 80 tool MCP untuk client yang kompatibel MCP. Berjalan sebagai subprocess stdio — tidak perlu setup server. Tool riset inti bekerja tanpa API key untuk HK/AS/crypto; tool connector trading menggunakan profil connector terpilih, dan `run_swarm` memerlukan LLM key.
 
 **Environment variable:** client menjalankan server sendiri, sehingga `export` dari shell tidak pernah sampai ke proses tersebut — atur di block `env` client. Kode backtest yang dihasilkan dibatasi ke root run yang diizinkan, jadi menulis hasil ke workspace Anda sendiri memerlukan `VIBE_TRADING_ALLOWED_RUN_ROOTS`:
 
@@ -1667,7 +1668,7 @@ dengan `--host` / `--port`.
 
 </details>
 
-**Tool MCP yang diekspos (76):** `list_skills`, `load_skill`, `start_research_goal`, `get_research_goal`, `add_goal_evidence`, `update_research_goal_status`, `backtest`, `factor_analysis`, `alpha_zoo`, `alpha_bench`, `analyze_options`, `analyze_options_payoff`, `pattern_recognition`, `read_url`, `read_document`, `web_search`, `write_file`, `read_file`, `read_run_artifact`, `list_strategies`, `query_strategies`, `get_strategy_evidence`, `refresh_strategy_evidence`, `trading_connections`, `trading_select_connection`, `trading_check`, `trading_account`, `trading_positions`, `trading_orders`, `trading_quote`, `trading_history`, `list_swarm_presets`, `run_swarm`, `get_market_data`, `get_fund_flow`, `get_dragon_tiger`, `get_northbound_flow`, `get_southbound_flow`, `get_margin_trading`, `get_block_trades`, `get_shareholder_count`, `get_lockup_expiry`, `get_sector_info`, `get_research_reports`, `get_stock_news`, `get_sec_filings`, `get_financial_statements`, `get_options_chain`, `get_stock_profile`, `screen_market`, `search_symbol`, `get_macro_series`, `iwencai_search`, `qveris_search`, `qveris_inspect`, `qveris_execute`, `get_institutional_holdings`, `etf_holdings`, `prediction_market`, `research_papers`, `get_swarm_status`, `get_run_result`, `list_runs`, `reap_stale_runs`, `retry_run`, `analyze_trade_journal`, `extract_shadow_strategy`, `run_shadow_backtest`, `render_shadow_report`, `scan_shadow_signals`, `quantlib_call`, `cashflow_performance`, `orderbook_depth`, `sentiment`, `technical_indicators`, `get_fundamentals`.
+**Tool MCP yang diekspos (80):** `list_skills`, `load_skill`, `start_research_goal`, `get_research_goal`, `add_goal_evidence`, `update_research_goal_status`, `backtest`, `factor_analysis`, `alpha_zoo`, `alpha_bench`, `analyze_options`, `analyze_options_payoff`, `pattern_recognition`, `read_url`, `read_document`, `web_search`, `write_file`, `read_file`, `read_run_artifact`, `list_strategies`, `query_strategies`, `get_strategy_evidence`, `refresh_strategy_evidence`, `trading_connections`, `trading_select_connection`, `trading_check`, `trading_account`, `trading_positions`, `trading_orders`, `trading_quote`, `trading_history`, `list_swarm_presets`, `run_swarm`, `get_market_data`, `get_fund_flow`, `get_dragon_tiger`, `get_northbound_flow`, `get_southbound_flow`, `get_margin_trading`, `get_block_trades`, `get_shareholder_count`, `get_lockup_expiry`, `get_sector_info`, `get_research_reports`, `get_stock_news`, `get_sec_filings`, `get_financial_statements`, `get_options_chain`, `get_stock_profile`, `screen_market`, `search_symbol`, `get_macro_series`, `iwencai_search`, `qveris_search`, `qveris_inspect`, `qveris_execute`, `get_institutional_holdings`, `etf_holdings`, `prediction_market`, `research_papers`, `get_swarm_status`, `get_run_result`, `list_runs`, `reap_stale_runs`, `retry_run`, `analyze_trade_journal`, `extract_shadow_strategy`, `run_shadow_backtest`, `render_shadow_report`, `scan_shadow_signals`, `quantlib_call`, `cashflow_performance`, `orderbook_depth`, `sentiment`, `technical_indicators`, `get_fundamentals`, `get_fund_nav`, `get_cn_macro_series`, `get_cn_announcements`, `search_broker_reports`.
 
 ### Tool MCP eksternal untuk SWARM
 
@@ -2041,7 +2042,7 @@ Vibe-Trading/
 ├── agent/                          # Backend (Python)
 │   ├── cli/                        # CLI package — interactive TUI + subcommands
 │   ├── api_server.py               # FastAPI server — runs, sessions, upload, swarm, SSE
-│   ├── mcp_server.py               # MCP server — 76 tools for OpenClaw / Claude Desktop
+│   ├── mcp_server.py               # MCP server — 80 tools for OpenClaw / Claude Desktop
 │   │
 │   ├── src/
 │   │   ├── agent/                  # ReAct agent core

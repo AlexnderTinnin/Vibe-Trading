@@ -169,6 +169,11 @@ def test_additive_warning_truncates_a_long_served_list() -> None:
     msg = additive_caliber_warning(stamps)
     assert msg is not None
     assert "+2 more" in msg
+def test_gildata_hk_override_is_raw() -> None:
+    """HKStockDailyQuotes serves raw traded prices (befadj/aftadj closes are
+    separate fields the loader ignores) — measured on 00700.HK."""
+    assert price_caliber("gildata", "hk_equity") == "raw"
+    assert price_caliber("gildata", "a_share") == "split_dividend"
 
 
 def test_non_equity_markets_stamp_na() -> None:
