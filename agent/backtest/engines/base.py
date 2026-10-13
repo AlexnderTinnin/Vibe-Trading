@@ -281,6 +281,14 @@ def _align(
 
     # Use int64 view for O(log n) searchsorted lookups
     dates_i8 = dates.values.view("i8")
+    # Daily panels usually share one calendar. Direct placement avoids two
+    # binary-search passes per symbol over an already identical grid. Reuse
+    # each irregular calendar's mapping for both prices and shifted signals.
+    row_indexes = {
+        c: slice(None) if ns_index[c].equals(dates)
+        else np.searchsorted(dates_i8, ns_index[c].asi8)
+        for c in codes
+    }
 
     # ffill with limit to avoid masking long suspensions (e.g. 3-week halt)
     # Cross-market needs larger limit (Chinese New Year can be 9-10 bars)
@@ -290,8 +298,7 @@ def _align(
     close_arr = np.full((n_dates, n_codes), np.nan)
     for j, c in enumerate(codes):
         series = data_map[c]["close"]
-        row_idx = np.searchsorted(dates_i8, indexes[j].asi8)
-        close_arr[row_idx, j] = series.values
+        close_arr[row_indexes[c], j] = series.values
 
     # Vectorized ffill with limit using pandas (C-optimized internals)
     _tmp = pd.DataFrame(close_arr)
@@ -330,8 +337,7 @@ def _align(
         shifted_vals[0] = 0.0
         shifted_vals[1:] = sig_vals[:-1]
         # Place into unified grid via searchsorted
-        row_idx = np.searchsorted(dates_i8, ns_index[c].asi8)
-        pos_arr[row_idx, j] = shifted_vals
+        pos_arr[row_indexes[c], j] = shifted_vals
 
     # Vectorized ffill with limit using pandas (C-optimized)
     _tmp = pd.DataFrame(pos_arr)

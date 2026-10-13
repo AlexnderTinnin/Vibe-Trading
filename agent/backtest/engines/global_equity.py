@@ -68,10 +68,9 @@ class GlobalEquityEngine(BaseEngine):
       - hk_levy: default 0.0000565 (SFC + FRC)
       - hk_settlement: default 0.00002 (CCASS)
       - hk_lot_sizes: ``{symbol: board lot}``. HK board lots are set per
-        issuer, so a flat 100 mis-sizes most names. When the table is given,
-        any HK symbol missing from it falls back to 100 and is reported in
-        the run metrics under ``lot_assumptions``. Without the table every HK
-        symbol uses 100, as before.
+        issuer, so a flat 100 mis-sizes most names. Any HK symbol missing
+        from the table falls back to 100 and is reported in the run metrics
+        under ``lot_assumptions``, including runs with no table.
       - slippage_ca: defaults to slippage_us
       - ca_commission: broker commission rate, default 0.0
       - slippage_uk: defaults to slippage_us
@@ -131,7 +130,7 @@ class GlobalEquityEngine(BaseEngine):
         lot = self.hk_lot_sizes.get(key, 0)
         if lot > 0:
             return lot
-        if self.hk_lot_sizes and key not in self.lot_assumptions:
+        if key not in self.lot_assumptions:
             self.lot_assumptions[key] = _DEFAULT_HK_BOARD_LOT
             logger.warning(
                 "HK symbol %r has no usable hk_lot_sizes entry; sizing it on "

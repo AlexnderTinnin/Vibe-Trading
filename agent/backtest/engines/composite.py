@@ -8,7 +8,7 @@ All state (capital, positions, trades) lives in CompositeEngine.
 
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import pandas as pd
 
@@ -170,6 +170,26 @@ class CompositeEngine(BaseEngine):
         # bar span — same convention as CryptoEngine.run_backtest.
         self._run_interval = str(config.get("interval", "1D"))
         return super().run_backtest(config, *args, **kwargs)
+
+    def _engine_diagnostics(self) -> Dict[str, Any]:
+        """Carry sub-engine assumptions into the shared run's metrics.
+
+        Returns:
+            Per-market diagnostics, plus combined list-valued assumptions
+            using the same keys as a single-market run.
+        """
+        by_market = {
+            market: details for market, engine in self._rule_engines.items()
+            if (details := engine._engine_diagnostics())
+        }
+        if not by_market:
+            return {}
+        result: Dict[str, Any] = {"market_diagnostics": by_market}
+        for details in by_market.values():
+            for key, value in details.items():
+                if isinstance(value, list):
+                    result.setdefault(key, []).extend(value)
+        return result
 
     def _rule_for(self, symbol: str) -> BaseEngine:
         """Get the sub-engine that provides rules for this symbol."""

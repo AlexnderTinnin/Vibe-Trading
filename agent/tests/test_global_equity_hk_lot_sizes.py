@@ -80,7 +80,7 @@ def test_non_positive_lot_is_treated_as_missing() -> None:
     assert engine.lot_assumptions == {"0001.HK": 100}
 
 
-def test_without_a_table_sizing_and_output_are_unchanged(
+def test_without_a_table_default_lots_are_still_disclosed(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     engine = _engine(lots=None)
@@ -89,8 +89,9 @@ def test_without_a_table_sizing_and_output_are_unchanged(
         assert _sized(engine, "00001.HK", 99) == 0
         assert _sized(engine, "00002.HK", 250) == 200
 
-    assert engine._engine_diagnostics() == {}
-    assert not caplog.records
+    assert engine.lot_assumptions == {"0001.HK": 100, "0002.HK": 100}
+    assert len(engine._engine_diagnostics()["lot_assumptions"]) == 2
+    assert len(caplog.records) == 2
 
 
 def test_non_hk_markets_ignore_the_table() -> None:
@@ -127,3 +128,65 @@ def test_a_rebalance_fills_each_symbol_on_its_own_lot() -> None:
     assert opened["00001.HK"] > 0 and opened["00001.HK"] % 20 == 0
     assert opened["00002.HK"] > 0 and opened["00002.HK"] % 500 == 0
     assert engine.lot_assumptions == {}
+
+
+def test_composite_preserves_lot_and_futures_assumptions():
+    from backtest.engines.composite import CompositeEngine
+
+    engine = CompositeEngine({"hk_lot_sizes": {"0700.HK": 20}}, ["0700.HK", "0005.HK"])
+    engine._active_symbol = "0005.HK"
+    assert engine.round_size(250, 10) == 200
+    hk = engine._rule_for("0005.HK")
+    # Exercise an independent diagnostic provider without inventing a future's
+    # exchange metadata: the composite must retain every sub-engine report.
+    class OtherDiagnostics:
+        def _engine_diagnostics(self):
+            return {"pricing_assumptions": [{"product": "ZZ", "field": "tick", "value": 1}]}
+    engine._rule_engines["synthetic"] = OtherDiagnostics()
+    report = engine._engine_diagnostics()
+    assert report["lot_assumptions"] == hk._engine_diagnostics()["lot_assumptions"]
+    assert report["pricing_assumptions"] == [{"product": "ZZ", "field": "tick", "value": 1}]
+    assert "hk_equity" in report["market_diagnostics"]
+
+
+@pytest.mark.parametrize("composite", [False, True])
+def test_local_csv_run_persists_lot_assumptions(tmp_path, monkeypatch, composite):
+    """Actual CSV ingestion and artifact writing preserve sizing diagnostics."""
+    import json
+
+    from backtest.engines.composite import CompositeEngine
+    from backtest.loaders import local_loader
+
+    codes = ["00001.HK", "00002.HK"]
+    dates = pd.date_range("2026-01-05", periods=4, freq="B")
+    sources = []
+    for symbol in codes:
+        path = tmp_path / f"{symbol}.csv"
+        pd.DataFrame({"date": dates, "open": 10, "high": 10, "low": 10,
+                      "close": 10, "volume": 100_000}).to_csv(path, index=False)
+        sources.append({"symbol": symbol, "type": "csv", "path": str(path)})
+    config_path = tmp_path / "data-bridge.yaml"
+    config_path.write_text(json.dumps({"sources": sources}), encoding="utf-8")
+    monkeypatch.setattr(local_loader, "_CONFIG_PATH", config_path)
+    config = {"codes": codes, "initial_cash": 100_000, "source": "local",
+              "start_date": "2026-01-05", "end_date": "2026-01-08",
+              "hk_lot_sizes": {"00001.HK": 20}}
+
+    class Signals:
+        def generate(self, frames):
+            return {symbol: pd.Series(1.0, index=frame.index)
+                    for symbol, frame in frames.items()}
+
+    engine = CompositeEngine(config, codes) if composite else GlobalEquityEngine(config, market="hk")
+    run_dir = tmp_path / "run"
+    engine.run_backtest(config, local_loader.DataLoader(), Signals(), run_dir)
+    fills = [json.loads(line) for line in (run_dir / "artifacts/fills.jsonl").read_text().splitlines()]
+    opened = [fill for fill in fills if fill["action"] == "open"]
+    assert {fill["symbol"] for fill in opened} == set(codes)
+    assert all(abs(fill["signed_quantity"]) % (20 if fill["symbol"] == codes[0] else 100) == 0
+               for fill in opened)
+    card = json.loads((run_dir / "run_card.json").read_text())
+    expected = [{"symbol": "0002.HK", "field": "board_lot", "value": 100}]
+    assert card["structured_metrics"]["lot_assumptions"] == expected
+    if composite:
+        assert card["structured_metrics"]["market_diagnostics"]["hk_equity"]["lot_assumptions"] == expected

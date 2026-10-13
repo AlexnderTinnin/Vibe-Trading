@@ -833,3 +833,32 @@ class TestFundPanelCompatibility:
         assert not (close_df == sentinel).any().any(), (
             "Sentinel 999.0 from fund:* columns leaked into close matrix"
         )
+
+
+@pytest.mark.parametrize("unit", ["ns", "us", "ms"])
+@pytest.mark.parametrize("tz", [None, "Asia/Hong_Kong"])
+def test_reused_calendar_mapping_preserves_own_bar_lag_after_column_drop(unit, tz):
+    """Shared and irregular calendars retain exact dates, marks and signal lag."""
+    dates = pd.bdate_range("2026-01-05", periods=4, tz=tz).as_unit("ns")
+    sparse_dates = dates[[0, 2]].as_unit(unit)
+    codes = ["EMPTY.SZ", "000001.SZ", "600519.SH"]
+    frames = {
+        codes[0]: pd.DataFrame({"close": np.nan}, index=dates),
+        codes[1]: pd.DataFrame({"close": [10., 11., 12., 13.]}, index=dates),
+        codes[2]: pd.DataFrame({"close": [20., 22.]}, index=sparse_dates),
+    }
+    signals = {
+        codes[0]: pd.Series(1., index=dates),
+        codes[1]: pd.Series([1., 0., -1., 1.], index=dates),
+        codes[2]: pd.Series([1., -1.], index=sparse_dates),
+    }
+    actual_dates, close, valuation, positions, returns = _align(frames, signals, codes)
+    pd.testing.assert_index_equal(actual_dates, dates)
+    expected_close = pd.DataFrame({codes[1]: [10., 11., 12., 13.],
+                                   codes[2]: [20., 20., 22., 22.]}, index=dates)
+    expected_positions = pd.DataFrame({codes[1]: [0., 1., 0., -0.5],
+                                       codes[2]: [0., 0., 1., 0.5]}, index=dates)
+    pd.testing.assert_frame_equal(close, expected_close, check_freq=False)
+    pd.testing.assert_frame_equal(valuation, expected_close, check_freq=False)
+    pd.testing.assert_frame_equal(positions, expected_positions, check_freq=False)
+    assert returns[codes[2]].tolist() == pytest.approx([0., 0., 0.1, 0.])
