@@ -48,7 +48,8 @@ def _service(tmp_path, account: dict, position: dict) -> PortfolioService:
     )
 
 
-def test_futu_hkd_position_and_account_total_are_converted_to_usd(tmp_path) -> None:
+@pytest.mark.parametrize("average_cost", ["10", None])
+def test_futu_hkd_position_and_account_total_are_converted_to_usd(tmp_path, average_cost) -> None:
     account = futu_sdk._account_to_dict(
         {
             "total_assets": "1600",
@@ -62,6 +63,9 @@ def test_futu_hkd_position_and_account_total_are_converted_to_usd(tmp_path) -> N
             "code": "HK.SYNTH",
             "qty": "100",
             "cost_price": "10",
+            # The explicit average basis can price unrealized P&L; diluted
+            # cost and total pl_val alone cannot establish that component.
+            "average_cost": average_cost,
             "market_val": "800",
             "pl_val": "-200",
             "position_market": "HK",
@@ -78,7 +82,12 @@ def test_futu_hkd_position_and_account_total_are_converted_to_usd(tmp_path) -> N
     assert holding["price_currency"] == "HKD"
     assert holding["market_value_usd"] == pytest.approx(100.0)
     assert holding["market_value_cny"] == pytest.approx(700.0)
-    assert holding["unrealized_pnl_usd"] == pytest.approx(-25.0)
+    if average_cost is None:
+        assert holding["unrealized_pnl_usd"] is None
+        assert holding["cost_price"] is None
+    else:
+        assert holding["unrealized_pnl_usd"] == pytest.approx(-25.0)
+        assert holding["cost_price"] == 10.0
     assert snapshot["totals"]["usd"] == pytest.approx(200.0)
     assert snapshot["totals"]["cny"] == pytest.approx(1400.0)
 
