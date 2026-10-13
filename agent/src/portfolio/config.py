@@ -13,6 +13,7 @@ from typing import Any
 from src.config.paths import get_runtime_root
 from src.portfolio.compatibility import profile_compatibility
 from src.portfolio.fx import DISPLAY_RATE_CURRENCIES
+from src.portfolio.imports import PortfolioImportStore
 from src.portfolio.iso4217 import is_iso_currency
 from src.trading.connections import (
     ConnectionStore,
@@ -27,13 +28,14 @@ _SOURCE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
 
 @dataclass(frozen=True)
 class PortfolioSource:
-    """One enabled or disabled local connection selected for aggregation."""
+    """One selected read-only connection or imported holdings source."""
 
     connection_id: str
     label: str
     enabled: bool = True
     order: int = 0
     include_cash: bool = True
+    source_kind: str = "connection"
 
     @property
     def id(self) -> str:
@@ -95,6 +97,7 @@ def eligible_profiles() -> list[TradingProfile]:
 def source_catalog(
     settings: PortfolioSettings,
     connection_store: ConnectionStore | None = None,
+    import_store: PortfolioImportStore | None = None,
 ) -> list[dict[str, Any]]:
     """Describe configured local connections without exposing secret values.
 
@@ -124,12 +127,24 @@ def source_catalog(
                 "portfolio_compatibility": profile_compatibility(profile),
             }
         )
+    for imported in (import_store or PortfolioImportStore()).list():
+        source = selected.get(imported["id"])
+        rows.append({
+            **imported, "connection_id": imported["id"], "connector": "extraetf",
+            "profile_id": "", "environment": "import", "transport": "file_import",
+            "readonly": True, "capabilities": [], "supports_reconnect": False,
+            "credential_fields": [], "credential_status": {}, "credentials_configured": True,
+            "notes": "Holdings export only; no account cash, no live quotes, no execution.",
+            "selected": source is not None, "source_id": source.id if source else None,
+            "portfolio_compatibility": None,
+        })
     return rows
 
 
 def parse_settings(
     payload: dict[str, Any],
     connection_store: ConnectionStore | None = None,
+    import_store: PortfolioImportStore | None = None,
 ) -> PortfolioSettings:
     """Validate untrusted Web settings against the local connection registry.
 
@@ -162,6 +177,7 @@ def parse_settings(
         raise ValueError("at most 50 portfolio sources are allowed")
 
     seen_ids: set[str] = set()
+    imported_portfolios: set[str] = set()
     sources: list[PortfolioSource] = []
     for index, raw in enumerate(raw_sources):
         if not isinstance(raw, dict):
@@ -169,6 +185,25 @@ def parse_settings(
         connection_id = str(raw.get("connection_id") or raw.get("id") or "").strip().lower()
         if not _SOURCE_ID_RE.fullmatch(connection_id):
             raise ValueError(f"invalid portfolio connection id: {connection_id or '?'}")
+        source_kind = raw.get("source_kind", "connection")
+        if source_kind not in {"connection", "extraetf"}:
+            raise ValueError("unknown portfolio source_kind")
+        if source_kind == "extraetf":
+            imported = (import_store or PortfolioImportStore()).get(connection_id)
+            if connection_id in seen_ids:
+                raise ValueError("portfolio source ids must be unique")
+            if raw.get("enabled", True):
+                groups = {row["portfolio_id"] for row in imported["positions"]}
+                if groups & imported_portfolios:
+                    raise ValueError("selected extraETF exports contain overlapping Portfolio IDs; replace the older source")
+                imported_portfolios.update(groups)
+            label = str(raw.get("label") or imported["label"]).strip()
+            if not label or len(label) > 80 or any(ord(c) < 32 for c in label):
+                raise ValueError("portfolio source labels must contain 1 to 80 printable characters")
+            seen_ids.add(connection_id)
+            sources.append(PortfolioSource(connection_id, label, bool(raw.get("enabled", True)),
+                                           int(raw.get("order", index)), False, "extraetf"))
+            continue
         legacy_profile_id = str(raw.get("profile_id") or "").strip().lower()
         if legacy_profile_id:
             legacy_profile = profile_by_id(legacy_profile_id)
@@ -224,6 +259,7 @@ class PortfolioSettingsStore:
         self.path = path or (get_runtime_root() / CONFIG_FILENAME)
         connection_path = self.path.with_name("connections.json") if path is not None else None
         self.connection_store = connection_store or ConnectionStore(connection_path)
+        self.import_store = PortfolioImportStore(self.path.parent / "portfolio" / "imports.sqlite3")
 
     def load(self) -> PortfolioSettings:
         """Read persisted settings, creating an empty file on first use.
@@ -242,7 +278,7 @@ class PortfolioSettingsStore:
                 raise ValueError(f"invalid portfolio settings: {exc}") from exc
             if not isinstance(payload, dict):
                 raise ValueError("invalid portfolio settings: root must be an object")
-            settings = parse_settings(payload, self.connection_store)
+            settings = parse_settings(payload, self.connection_store, self.import_store)
             if any("profile_id" in source for source in payload.get("sources", [])):
                 self.save(settings)
             return settings
@@ -264,9 +300,9 @@ class PortfolioSettingsStore:
             ValueError: If validation fails; nothing is written in that case.
         """
         validated = (
-            parse_settings(settings, self.connection_store)
+            parse_settings(settings, self.connection_store, self.import_store)
             if isinstance(settings, dict)
-            else parse_settings(settings.to_dict(), self.connection_store)
+            else parse_settings(settings.to_dict(), self.connection_store, self.import_store)
         )
         self.path.parent.mkdir(parents=True, exist_ok=True)
         descriptor, temporary = tempfile.mkstemp(prefix=".portfolio-", suffix=".json", dir=self.path.parent)

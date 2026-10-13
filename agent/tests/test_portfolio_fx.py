@@ -73,8 +73,8 @@ def test_account_total_converts_a_valid_iso_currency_when_rated() -> None:
 def test_parse_settings_rejects_valid_iso_display_currency_without_production_rate() -> (
     None
 ):
-    with pytest.raises(ValueError, match="EUR.*no production FX rate"):
-        parse_settings({"display_currency": "EUR", "sources": []})
+    with pytest.raises(ValueError, match="KRW.*no production FX rate"):
+        parse_settings({"display_currency": "KRW", "sources": []})
 
 
 def test_parse_settings_accepts_rateable_display_currency() -> None:

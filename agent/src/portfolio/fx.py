@@ -8,6 +8,7 @@ closed with the missing currency named.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Mapping
 
@@ -15,7 +16,7 @@ from src.portfolio.compatibility import PortfolioContractError
 
 Rates = Mapping[str, Decimal]
 
-DISPLAY_RATE_CURRENCIES = frozenset({"USD", "CNY", "HKD"})
+DISPLAY_RATE_CURRENCIES = frozenset({"USD", "CNY", "HKD", "EUR"})
 
 
 def _validated_rate(pair: str, value: Decimal) -> Decimal:
@@ -57,3 +58,25 @@ def from_usd(value_usd: Decimal, currency: str, rates: Rates) -> Decimal:
         )
     rate = _validated_rate(f"USD/{code}", rate)
     return value_usd * rate
+
+
+@dataclass(frozen=True)
+class FxQuote:
+    """One coherent reference-rate observation and its separate retrieval time."""
+
+    rates: Rates
+    fetched_at: str
+    as_of: str | None = None
+    source: str = "injected"
+
+    def validated(self) -> FxQuote:
+        """Reject a malformed USD base or a non-finite/non-positive rate."""
+        rates = {code: _validated_rate(f"USD/{code}", value) for code, value in self.rates.items()}
+        if rates.get("USD") != 1 or not {"CNY", "HKD"} <= rates.keys():
+            raise PortfolioContractError("FX quote requires USD=1 and CNY/HKD rates")
+        return FxQuote(rates, self.fetched_at, self.as_of, self.source)
+
+    def to_dict(self) -> dict:
+        """Serialize rates without losing decimal precision."""
+        return {"rates": {k: str(v) for k, v in self.rates.items()},
+                "fetched_at": self.fetched_at, "as_of": self.as_of, "source": self.source}

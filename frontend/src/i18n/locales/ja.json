@@ -2134,7 +2134,7 @@
       "badge": "ローカル読み取り専用 · 複数口座",
       "title": "ポートフォリオ",
       "subtitle": "有効な読み取り専用接続をまとめて 1 つの評価にします。読み取れなかった口座はエラーとして表示され、合計には含まれません。",
-      "fxFresh": "USD/CNY {{rate}} · 最新レート",
+      "fxFresh": "USD/CNY {{rate}} · 参考為替レート",
       "fxCached": "USD/CNY {{rate}} · キャッシュされたレート",
       "manageAccounts": "口座を管理",
       "exportCsv": "CSV を書き出す",
@@ -2299,6 +2299,30 @@
       "accountDeactivated": "・無効化済み",
       "accountSave": "この口座を使う",
       "accountSaved": "口座を保存しました。"
+    },
+    "imports": {
+      "title": "extraETF Investments をインポート",
+      "hint": "現金やリアルタイム価格を含まない保有明細です。ファイル更新時刻は価格の観測時刻ではなく、ISIN の取引市場も未解決です。",
+      "file": "Investments CSV",
+      "count": "保有行数（extraETF で確認）",
+      "age": "ファイルの最大経過日数",
+      "overlap": "重複しないソースを選択してください。extraETF に、ここで接続済みの口座が含まれる場合があります。",
+      "import": "ファイルをインポート",
+      "importing": "インポート中…",
+      "success": "インポートしました。上の利用可能なソースから追加し、保存して更新してください。",
+      "source": "ファイルインポート",
+      "mtime": "ファイル更新日時：{{time}}",
+      "expires": "有効期限：{{time}}",
+      "tooLarge": "インポートの上限は 4 MiB です。"
+    },
+    "rebalance": {
+      "title": "配分変更案",
+      "hint": "合計 100% の目標比率を入力してください。変更額は確認用です。注文、数量、税金、手数料は計算しません。",
+      "target": "{{id}} の目標（%）",
+      "generate": "変更案を計算",
+      "current": "現在の評価額",
+      "targetValue": "目標額",
+      "change": "変更額"
     }
   },
   "analysis": {

@@ -2134,7 +2134,7 @@
       "badge": "Somente leitura local · Várias contas",
       "title": "Portfólio",
       "subtitle": "Uma avaliação nas conexões somente leitura habilitadas. Uma conta que não pode ser lida é relatada como um erro e deixada de fora dos totais.",
-      "fxFresh": "USD/CNY {{rate}} · taxa ao vivo",
+      "fxFresh": "USD/CNY {{rate}} · taxa de referência",
       "fxCached": "USD/CNY {{rate}} · taxa em cache",
       "manageAccounts": "Gerenciar contas",
       "exportCsv": "Exportar CSV",
@@ -2299,6 +2299,30 @@
       "accountDeactivated": " · desativada",
       "accountSave": "Usar esta conta",
       "accountSaved": "Conta salva."
+    },
+    "imports": {
+      "title": "Importar extraETF Investments",
+      "hint": "Apenas posições, sem caixa ou preços em tempo real. A data do arquivo não é a data de observação do preço; os ISINs não têm mercado de negociação definido.",
+      "file": "CSV de Investments",
+      "count": "Número esperado de posições (confirme no extraETF)",
+      "age": "Idade máxima do arquivo (dias)",
+      "overlap": "Selecione fontes sem sobreposição. A visão do extraETF pode incluir contas já conectadas aqui.",
+      "import": "Importar arquivo",
+      "importing": "Importando…",
+      "success": "Importado. Adicione esta exportação pelas fontes disponíveis acima, salve e atualize.",
+      "source": "Importação de arquivo",
+      "mtime": "Arquivo modificado: {{time}}",
+      "expires": "Validade: {{time}}",
+      "tooLarge": "O limite de importação é de 4 MiB."
+    },
+    "rebalance": {
+      "title": "Proposta de alocação",
+      "hint": "Informe percentuais-alvo que somem 100%. As alterações são valores para revisão; não são calculadas ordens, quantidades, impostos ou taxas.",
+      "target": "Meta de {{id}} (%)",
+      "generate": "Calcular proposta",
+      "current": "Valor atual",
+      "targetValue": "Valor-alvo",
+      "change": "Alteração de valor"
     }
   },
   "analysis": {

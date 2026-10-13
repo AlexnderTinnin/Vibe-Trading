@@ -2134,7 +2134,7 @@
       "badge": "Local read-only · Multi-account",
       "title": "Portfolio",
       "subtitle": "One valuation across the enabled read-only connections. An account that cannot be read is reported as an error and left out of the totals.",
-      "fxFresh": "USD/CNY {{rate}} · live rate",
+      "fxFresh": "USD/CNY {{rate}} · reference rate",
       "fxCached": "USD/CNY {{rate}} · cached rate",
       "manageAccounts": "Manage accounts",
       "exportCsv": "Export CSV",
@@ -2299,6 +2299,30 @@
       "accountDeactivated": " · deactivated",
       "accountSave": "Use this account",
       "accountSaved": "Account saved."
+    },
+    "imports": {
+      "title": "Import extraETF Investments",
+      "hint": "Holdings only, without cash or live prices. File modification time is not a price observation; ISINs have no resolved trading venue.",
+      "file": "Investments CSV",
+      "count": "Expected holdings count (confirm in extraETF)",
+      "age": "Maximum file age (days)",
+      "overlap": "Select disjoint sources. An extraETF view may already include accounts connected elsewhere here.",
+      "import": "Import file",
+      "importing": "Importing…",
+      "success": "Imported. Add this export from the available sources above, then save and refresh.",
+      "source": "File import",
+      "mtime": "File modified: {{time}}",
+      "expires": "Expires: {{time}}",
+      "tooLarge": "The import limit is 4 MiB."
+    },
+    "rebalance": {
+      "title": "Allocation proposal",
+      "hint": "Enter target percentages totalling 100%. Changes are amounts for review only; no orders, quantities, taxes or fees are calculated.",
+      "target": "{{id}} target (%)",
+      "generate": "Calculate proposal",
+      "current": "Current value",
+      "targetValue": "Target value",
+      "change": "Value change"
     }
   },
   "analysis": {

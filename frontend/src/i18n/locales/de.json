@@ -2134,7 +2134,7 @@
       "badge": "Lokal & schreibgeschützt · Mehrere Konten",
       "title": "Portfolio",
       "subtitle": "Eine Bewertung über alle aktivierten schreibgeschützten Verbindungen. Ein Konto, das nicht gelesen werden kann, wird als Fehler gemeldet und bleibt aus den Summen heraus.",
-      "fxFresh": "USD/CNY {{rate}} · aktueller Kurs",
+      "fxFresh": "USD/CNY {{rate}} · Referenzkurs",
       "fxCached": "USD/CNY {{rate}} · zwischengespeicherter Kurs",
       "manageAccounts": "Konten verwalten",
       "exportCsv": "CSV exportieren",
@@ -2299,6 +2299,30 @@
       "accountDeactivated": " · deaktiviert",
       "accountSave": "Dieses Konto verwenden",
       "accountSaved": "Konto gespeichert."
+    },
+    "imports": {
+      "title": "extraETF Investments importieren",
+      "hint": "Nur Bestände, ohne Bargeld oder Livekurse. Das Änderungsdatum der Datei ist kein Kurszeitpunkt; den ISINs ist kein Handelsplatz zugeordnet.",
+      "file": "Investments-CSV",
+      "count": "Erwartete Anzahl der Positionen (in extraETF prüfen)",
+      "age": "Maximales Dateialter (Tage)",
+      "overlap": "Wählen Sie überschneidungsfreie Quellen. Eine extraETF-Ansicht kann hier bereits verbundene Konten enthalten.",
+      "import": "Datei importieren",
+      "importing": "Import läuft…",
+      "success": "Importiert. Fügen Sie den Export aus den verfügbaren Quellen oben hinzu, speichern und aktualisieren Sie.",
+      "source": "Dateiimport",
+      "mtime": "Datei geändert: {{time}}",
+      "expires": "Gültig bis: {{time}}",
+      "tooLarge": "Die Importgrenze beträgt 4 MiB."
+    },
+    "rebalance": {
+      "title": "Allokationsvorschlag",
+      "hint": "Geben Sie Zielanteile mit insgesamt 100% ein. Änderungen sind nur zu prüfende Beträge; Orders, Stückzahlen, Steuern und Gebühren werden nicht berechnet.",
+      "target": "Ziel für {{id}} (%)",
+      "generate": "Vorschlag berechnen",
+      "current": "Aktueller Wert",
+      "targetValue": "Zielwert",
+      "change": "Wertänderung"
     }
   },
   "analysis": {

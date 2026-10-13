@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { RebalanceProposal } from "@/components/portfolio/RebalanceProposal";
 import { useTranslation } from "react-i18next";
 import {
   AlertTriangle,
@@ -355,7 +356,7 @@ export function Portfolio() {
             <p className="mt-2 text-sm text-muted-foreground">{t("portfolio.page.subtitle")}</p>
             {snapshot?.fx && Number.isFinite(snapshot.fx.usd_cny) ? (
               <p className="mt-2 text-xs text-muted-foreground">
-                {t(snapshot.fx.stale ? "portfolio.page.fxCached" : "portfolio.page.fxFresh", { rate: snapshot.fx.usd_cny.toFixed(4) })}
+                {t(snapshot.fx.stale ? "portfolio.page.fxCached" : "portfolio.page.fxFresh", { rate: snapshot.fx.usd_cny.toFixed(4) })}{snapshot.fx.as_of ? ` · ${snapshot.fx.as_of}` : ""}
               </p>
             ) : null}
           </div>
@@ -459,13 +460,14 @@ export function Portfolio() {
                       const valueMain = row.priced ? money(displayValue(row.market_value_usd, row.market_value_cny, displayCurrency, snapshot.fx), displayCurrency) : "—";
                       const valueAlt = row.priced ? (displayCurrency === "USD" ? money(row.market_value_cny, "CNY") : money(row.market_value_usd)) : t("portfolio.holdings.unpriced");
                       const pnlDisplay = displayValue(row.unrealized_pnl_usd, undefined, displayCurrency, snapshot.fx);
-                      return <tr key={`${row.source_id ?? row.broker}-${row.symbol}`} className="hover:bg-muted/20"><Td><div className="font-medium">{row.source_label ?? row.broker.toUpperCase()}</div><div className="mt-1 text-xs"><BrokerBadge broker={row.broker} /></div></Td><Td><div className="font-medium">{row.symbol}</div><div className="max-w-52 truncate text-xs text-muted-foreground">{row.name}</div></Td><Td><span className="capitalize text-muted-foreground">{row.asset_type}</span></Td><Td>{quantity(row.quantity)}</Td><Td><div>{price(row.cost_price)}</div><div className="text-xs text-muted-foreground">{price(row.market_price)}</div></Td><Td><div className="font-medium">{valueMain}</div><div className="text-xs text-muted-foreground">{valueAlt}</div></Td><Td>{row.priced ? percentage(weight) : "—"}</Td><Td><span className={pnlDisplay == null ? "text-muted-foreground" : pnlDisplay >= 0 ? "text-positive" : "text-danger"}>{pnlDisplay == null ? "—" : money(pnlDisplay, displayCurrency)}</span></Td><Td><DataBadge priced={row.priced} /></Td></tr>;
+                      return <tr key={`${row.source_id ?? row.broker}-${row.portfolio_id ?? ""}-${row.symbol}`} className="hover:bg-muted/20"><Td><div className="font-medium">{row.source_label ?? row.broker.toUpperCase()}</div><div className="mt-1 text-xs"><BrokerBadge broker={row.broker} /></div></Td><Td><div className="font-medium">{row.symbol}</div><div className="max-w-52 truncate text-xs text-muted-foreground">{row.name}</div>{row.portfolio_id && <div className="text-xs text-muted-foreground">{row.portfolio_name} · {row.portfolio_id}</div>}{row.source_mtime && <div className="text-xs text-muted-foreground">{t("portfolio.imports.mtime", { time: dateTime(row.source_mtime) })}</div>}</Td><Td><span className="capitalize text-muted-foreground">{row.asset_type}</span></Td><Td>{quantity(row.quantity)}</Td><Td><div>{price(row.cost_price)}</div><div className="text-xs text-muted-foreground">{price(row.market_price)}</div></Td><Td><div className="font-medium">{valueMain}</div><div className="text-xs text-muted-foreground">{valueAlt}</div></Td><Td>{row.priced ? percentage(weight) : "—"}</Td><Td><span className={pnlDisplay == null ? "text-muted-foreground" : pnlDisplay >= 0 ? "text-positive" : "text-danger"}>{pnlDisplay == null ? "—" : money(pnlDisplay, displayCurrency)}</span></Td><Td><DataBadge priced={row.priced} /></Td></tr>;
                     })}
                   </tbody>
                 </table>
               </div>
             </section>
 
+            <RebalanceProposal key={snapshot.snapshot_id} snapshot={snapshot} />
             <HistoryChart history={history} currency={displayCurrency} />
 
             <section className="rounded-xl border bg-card p-5">
@@ -560,7 +562,7 @@ function AccountCard({ account, active, displayCurrency, fx, onClick, onReconnec
       <>
         <div className="mt-4 text-2xl font-semibold">{money(accountDisplay, displayCurrency)}</div>
         <div className="mt-1 text-xs text-muted-foreground">{displayCurrency === "USD" ? money(account.total_cny, "CNY") : money(account.total_usd)} · {t("portfolio.accounts.positions", { count: account.position_count ?? 0 })}</div>
-        <div className="mt-4 flex items-center justify-between border-t pt-3 text-xs"><span className="text-positive">{t("portfolio.accounts.fresh")}</span><span className="text-muted-foreground">{dateTime(account.last_success_at)}</span></div>
+        <div className="mt-4 flex items-center justify-between border-t pt-3 text-xs"><span className="text-positive">{account.source_kind === "extraetf" ? t("portfolio.imports.source") : t("portfolio.accounts.fresh")}</span><span className="text-muted-foreground">{dateTime(account.import_metadata?.source_mtime ?? account.last_success_at)}</span></div>
       </>
     )}
     {failed && account.error ? <p className="mt-3 line-clamp-2 text-xs text-muted-foreground" title={account.error}>{account.error}</p> : null}
@@ -583,6 +585,7 @@ function DataBadge({ priced }: { priced: boolean }) {
 function CredentialCard({ account }: { account: PortfolioAccount }) {
   const { t } = useTranslation();
   const auth = account.auth;
+  if (account.source_kind === "extraetf") return <div className="rounded-lg border p-4"><div className="font-medium">{account.label}</div><p className="mt-2 text-sm">{t("portfolio.imports.hint")}</p>{account.import_metadata && <><p className="mt-2 text-xs">{t("portfolio.imports.mtime", { time: dateTime(account.import_metadata.source_mtime) })}</p><p className="text-xs">{t("portfolio.imports.expires", { time: dateTime(account.import_metadata.expires_at) })}</p></>}</div>;
   const renewal = auth?.renewal === "automatic"
     ? t("portfolio.credentials.renewalAutomatic")
     : auth?.renewal === "session"
@@ -654,7 +657,7 @@ function HistoryChart({ history, currency = "USD" }: { history: PortfolioHistory
       },
       xAxis: { type: "category", boundaryGap: false, data: rows.map((row) => new Date(row.created_at).toLocaleString(uiLocale(), { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })), axisLabel: { color: theme.textColor, hideOverlap: true }, axisLine: { lineStyle: { color: theme.gridColor } } },
       yAxis: { type: "value", scale: true, axisLabel: { color: theme.textColor, formatter: (v: number) => compactMoney(v, currency) }, splitLine: { lineStyle: { color: theme.gridColor, opacity: 0.45 } } },
-      series: [{ type: "line", data: rows.map((row) => { const value = currency === "USD" ? row.total_usd : currency === "CNY" ? row.total_cny : currency === "HKD" ? row.total_hkd : null; return value == null ? null : Number(value); }), smooth: true, symbol: rows.length < 30 ? "circle" : "none", lineStyle: { width: 2, color: "#4f6edb" }, itemStyle: { color: "#4f6edb" }, areaStyle: { color: "rgba(79,110,219,0.10)" } }],
+      series: [{ type: "line", data: rows.map((row) => { const value = currency === "USD" ? row.total_usd : currency === "CNY" ? row.total_cny : currency === "HKD" ? row.total_hkd : currency === "EUR" ? row.total_eur : null; return value == null ? null : Number(value); }), smooth: true, symbol: rows.length < 30 ? "circle" : "none", lineStyle: { width: 2, color: "#4f6edb" }, itemStyle: { color: "#4f6edb" }, areaStyle: { color: "rgba(79,110,219,0.10)" } }],
     });
     const resize = () => chart.resize();
     window.addEventListener("resize", resize);

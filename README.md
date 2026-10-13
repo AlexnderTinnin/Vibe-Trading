@@ -412,6 +412,28 @@ execution; organizational ranks grant no trading permissions. Record the actual
 result when completing a task. See [Pixel Office](pixel-office/README.md) for CLI
 and API examples.
 
+### Import an extraETF holdings export
+
+Open **Portfolio → Manage accounts → Import extraETF Investments**, choose the official Investments CSV, confirm the number of holdings in extraETF, and choose the maximum file age you accept. Add the imported source, save, and refresh. Transactions, dividends and X-Ray exports are not holdings and are refused. Imports are local file evidence, separate from broker connections; no extraETF login or browser scraping is used.
+
+```bash
+vibe-trading portfolio import-extraetf ~/Downloads/Investments.csv \
+  --label "extraETF export" --expected-positions 27 --max-age-days 7 --select
+vibe-trading portfolio refresh
+vibe-trading portfolio show
+```
+
+The row count and age above are examples to replace with your own. The entire import fails on an unreadable row, count mismatch, missing price, future file time or expired freshness policy. File mtime is labelled as file mtime, never as a price observation; copying a file can change it. `Portfolio ID` keeps accounts separate even when they hold the same ISIN. Imported totals are quantity × exported price and **exclude cash and other assets absent from the export**. Select disjoint sources: an extraETF view can include accounts already selected through broker connections.
+
+USD, CNY, HKD and EUR display values use [Frankfurter reference rates](https://frankfurter.dev/) with the rate date separate from fetch time; they are not intraday quotes. An unavailable currency fails valuation. Cached rates are labelled stale and cannot produce a rebalancing proposal. An ISIN identifies a security but not its trading venue: imported holdings remain excluded from historical risk-series tools until that identity is resolved.
+
+**Allocation proposal** accepts user-defined percentages totalling 100% and shows value changes for review. It creates no orders, quantities, taxes or fee estimates. The same operation is available through `POST /api/portfolio/rebalance`, `portfolio_summary(snapshot_id=..., target_weights=...)`, or:
+
+```bash
+# targets.json maps the snapshot's holdings canonical_id (or CASH) to fractions.
+vibe-trading portfolio rebalance --snapshot-id <snapshot-id> --targets targets.json
+```
+
 ### Portfolio connector compatibility
 
 | Badge | Meaning |

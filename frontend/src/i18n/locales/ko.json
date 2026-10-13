@@ -2134,7 +2134,7 @@
       "badge": "로컬 읽기 전용 · 다중 계좌",
       "title": "포트폴리오",
       "subtitle": "활성화된 읽기 전용 연결을 하나의 평가로 합칩니다. 읽지 못한 계좌는 오류로 표시되며 합계에서 제외됩니다.",
-      "fxFresh": "USD/CNY {{rate}} · 실시간 환율",
+      "fxFresh": "USD/CNY {{rate}} · 참고 환율",
       "fxCached": "USD/CNY {{rate}} · 캐시된 환율",
       "manageAccounts": "계좌 관리",
       "exportCsv": "CSV 내보내기",
@@ -2299,6 +2299,30 @@
       "accountDeactivated": " · 비활성화됨",
       "accountSave": "이 계좌 사용",
       "accountSaved": "계좌를 저장했습니다."
+    },
+    "imports": {
+      "title": "extraETF Investments 가져오기",
+      "hint": "현금이나 실시간 가격이 없는 보유 내역입니다. 파일 수정 시간은 가격 관측 시간이 아니며, ISIN의 거래 시장은 확인되지 않았습니다.",
+      "file": "Investments CSV",
+      "count": "예상 보유 행 수 (extraETF에서 확인)",
+      "age": "허용할 파일의 최대 경과 일수",
+      "overlap": "서로 겹치지 않는 소스를 선택하세요. extraETF에 여기서 연결한 다른 계좌가 이미 포함되어 있을 수 있습니다.",
+      "import": "파일 가져오기",
+      "importing": "가져오는 중…",
+      "success": "가져왔습니다. 위의 사용 가능한 소스에서 추가한 뒤 저장하고 새로고침하세요.",
+      "source": "파일 가져오기",
+      "mtime": "파일 수정: {{time}}",
+      "expires": "만료: {{time}}",
+      "tooLarge": "가져오기 제한은 4 MiB입니다."
+    },
+    "rebalance": {
+      "title": "배분 조정 제안",
+      "hint": "합계가 100%인 목표 비중을 입력하세요. 변경 금액은 검토용이며 주문, 수량, 세금 또는 수수료를 계산하지 않습니다.",
+      "target": "{{id}} 목표 (%)",
+      "generate": "제안 계산",
+      "current": "현재 금액",
+      "targetValue": "목표 금액",
+      "change": "변경 금액"
     }
   },
   "analysis": {

@@ -64,6 +64,9 @@ class PortfolioStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_created
                     ON portfolio_snapshots(created_at DESC);
+                CREATE TABLE IF NOT EXISTS portfolio_fx_quotes (
+                    id INTEGER PRIMARY KEY CHECK (id = 1), payload TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS portfolio_fx_cache (
                     base TEXT NOT NULL,
                     quote TEXT NOT NULL,
@@ -195,6 +198,8 @@ class PortfolioStore:
                     "total_usd": row["total_usd"],
                     "total_cny": row["total_cny"],
                     "total_hkd": total_hkd,
+                    "total_eur": (str(Decimal(row["total_usd"]) * Decimal(str(payload["fx"]["rates"]["EUR"])))
+                                  if payload.get("fx", {}).get("rates", {}).get("EUR") else None),
                 }
             )
             if len(history) >= row_limit:
@@ -283,3 +288,15 @@ class PortfolioStore:
                 (base, quote),
             ).fetchone()
         return (str(row["rate"]), str(row["fetched_at"])) if row else None
+
+
+    def save_fx_quote(self, payload: dict[str, Any]) -> None:
+        """Atomically cache a whole observation, preserving its rate date."""
+        with self._connect() as db:
+            db.execute("INSERT OR REPLACE INTO portfolio_fx_quotes VALUES (1, ?)", (json.dumps(payload),))
+
+    def load_fx_quote(self) -> dict[str, Any] | None:
+        """Read one complete cached observation, never a mixture of rate dates."""
+        with self._connect() as db:
+            row = db.execute("SELECT payload FROM portfolio_fx_quotes WHERE id = 1").fetchone()
+        return json.loads(row[0]) if row else None

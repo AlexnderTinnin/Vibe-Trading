@@ -340,8 +340,8 @@ def test_unrated_balance_currency_fails_only_that_source(tmp_path):
 
 def test_display_currency_without_production_rate_is_rejected_on_save(tmp_path):
     store = PortfolioSettingsStore(tmp_path / "portfolio.json")
-    with pytest.raises(ValueError, match="EUR.*no production FX rate"):
-        store.save({"display_currency": "EUR", "sources": []})
+    with pytest.raises(ValueError, match="KRW.*no production FX rate"):
+        store.save({"display_currency": "KRW", "sources": []})
 
 
 def test_failed_source_is_excluded_from_totals_and_reports_its_last_success(tmp_path):

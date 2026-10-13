@@ -10,7 +10,7 @@ import subprocess
 import sys
 import urllib.request
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable
 
@@ -24,7 +24,7 @@ from src.portfolio.compatibility import (
     ensure_supported_currencies,
     profile_compatibility,
 )
-from src.portfolio.fx import Rates, build_rates, from_usd
+from src.portfolio.fx import FxQuote, Rates, build_rates, from_usd
 from src.portfolio.normalization import (
     STABLECOINS,
     account_cash_usd,
@@ -139,7 +139,7 @@ class PortfolioService:
         get_positions: Callable[..., dict[str, Any]] | None = None,
         get_quote: Callable[..., dict[str, Any]] | None = None,
         get_longbridge_quotes: Callable[..., dict[str, Any]] | None = None,
-        fx_fetcher: Callable[[], tuple[Decimal, Decimal, str]] | None = None,
+        fx_fetcher: Callable[[], FxQuote | tuple[Decimal, Decimal, str]] | None = None,
         progress_callback: Callable[[str, str, str | None], None] | None = None,
     ) -> None:
         """Wire the service to its stores and connector read functions.
@@ -156,8 +156,8 @@ class PortfolioService:
                 ``src.trading.service.get_quote``.
             get_longbridge_quotes: Optional batch quote reader used only for
                 Longbridge positions the connector reports without a price.
-            fx_fetcher: Returns ``(usd_cny, usd_hkd, fetched_at)``. Defaults to
-                the built-in HTTPS fetch.
+            fx_fetcher: Returns a dated FxQuote (or the legacy CNY/HKD tuple
+                for injected readers). Defaults to the reference-rate HTTPS fetch.
             progress_callback: Called as ``(source_id, status, error)`` while a
                 refresh walks its sources.
         """
@@ -211,6 +211,7 @@ class PortfolioService:
         return source_catalog(
             self.settings_store.load(),
             self.settings_store.connection_store,
+            self.settings_store.import_store,
         )
 
     def _connection_profile(self, source: PortfolioSource):
@@ -222,6 +223,8 @@ class PortfolioService:
         Returns:
             A ``(connection, profile)`` pair.
         """
+        if source.source_kind != "connection":
+            raise ValueError("file imports have no broker connection")
         connection = self.settings_store.connection_store.get(source.connection_id)
         return connection, profile_by_id(connection.profile_id)
 
@@ -245,9 +248,12 @@ class PortfolioService:
         sources = [source for source in settings.sources if source.enabled]
         if not sources:
             raise RuntimeError("Add and enable at least one read-only account on the Portfolio page before refreshing")
-        usd_cny, usd_hkd, fx_at, fx_stale = self._rates()
-        rates = build_rates(usd_cny, usd_hkd)
+        quote, fx_stale = self._rates()
+        rates = quote.rates
+        usd_cny, usd_hkd, fx_at = rates["CNY"], rates["HKD"], quote.fetched_at
         display_currency = settings.display_currency
+        if display_currency not in rates:
+            raise RuntimeError(f"FX rate for {display_currency} is unavailable; refresh when the reference feed recovers")
         refreshed_at = _now()
         results: dict[str, dict[str, Any]] = {}
         # The Longbridge Python SDK wraps a native runtime whose contexts are
@@ -283,10 +289,16 @@ class PortfolioService:
         accounts: list[dict[str, Any]] = []
         for source in sources:
             result = results[source.id]
-            connection, profile = self._connection_profile(source)
-            broker = profile.connector
+            if source.source_kind == "extraetf":
+                profile = None
+                profile_id = None
+                broker = "extraetf"
+            else:
+                connection, profile = self._connection_profile(source)
+                profile_id = connection.profile_id
+                broker = profile.connector
             if result["status"] != "ok":
-                accounts.append(self._failed_account(source, connection.profile_id, profile, result))
+                accounts.append(self._failed_account(source, profile_id, profile, result))
                 continue
             try:
                 broker_positions = [
@@ -327,7 +339,7 @@ class PortfolioService:
                 }
                 accounts.append(
                     self._failed_account(
-                        source, connection.profile_id, profile, failure
+                        source, profile_id, profile, failure
                     )
                 )
                 if self._progress_callback is not None:
@@ -337,9 +349,11 @@ class PortfolioService:
             accounts.append(
                 {
                     "source_id": source.id,
-                    "profile_id": connection.profile_id,
+                    "profile_id": profile_id,
                     "label": source.label,
                     "broker": broker,
+                    "source_kind": source.source_kind,
+                    "import_metadata": result.get("import_metadata"),
                     "status": "ok",
                     "last_success_at": refreshed_at,
                     "total_usd": _number(account_total),
@@ -353,8 +367,8 @@ class PortfolioService:
                     "position_count": len(broker_positions),
                     "priced_position_count": priced_count,
                     "unpriced_position_count": len(broker_positions) - priced_count,
-                    "auth": auth_metadata(profile),
-                    "portfolio_compatibility": profile_compatibility(profile),
+                    "auth": auth_metadata(profile) if profile is not None else None,
+                    "portfolio_compatibility": profile_compatibility(profile) if profile is not None else None,
                 }
             )
             positions.extend(broker_positions)
@@ -402,6 +416,8 @@ class PortfolioService:
                     code: _number(rate) for code, rate in sorted(rates.items())
                 },
                 "fetched_at": fx_at,
+                "as_of": quote.as_of,
+                "source": quote.source,
                 "stale": fx_stale,
             },
             "accounts": accounts,
@@ -419,8 +435,8 @@ class PortfolioService:
     def _failed_account(
         self,
         source: PortfolioSource,
-        profile_id: str,
-        profile: TradingProfile,
+        profile_id: str | None,
+        profile: TradingProfile | None,
         result: dict[str, Any],
     ) -> dict[str, Any]:
         """Build the account row for a source that could not be read.
@@ -444,7 +460,8 @@ class PortfolioService:
             "source_id": source.id,
             "profile_id": profile_id,
             "label": source.label,
-            "broker": profile.connector,
+            "broker": profile.connector if profile is not None else "extraetf",
+            "source_kind": source.source_kind,
             "status": "error",
             "error": result.get("error"),
             "error_code": result.get("error_code"),
@@ -455,8 +472,8 @@ class PortfolioService:
             "total_cny": None,
             "total_display": None,
             "position_count": 0,
-            "auth": auth_metadata(profile),
-            "portfolio_compatibility": profile_compatibility(profile),
+            "auth": auth_metadata(profile) if profile is not None else None,
+            "portfolio_compatibility": profile_compatibility(profile) if profile is not None else None,
         }
 
     def latest(self) -> dict[str, Any] | None:
@@ -478,6 +495,12 @@ class PortfolioService:
         if not enabled or observed != enabled:
             return None
 
+        for source in enabled_sources:
+            if source.source_kind == "extraetf" and any(row.get("source_id") == source.id and row.get("status") == "ok" for row in snapshot["accounts"]):
+                try:
+                    self.settings_store.import_store.get(source.id, require_fresh=True)
+                except ValueError:
+                    return None
         compatibility_by_source = {}
         for source in enabled_sources:
             try:
@@ -629,6 +652,7 @@ class PortfolioService:
             "unrealized_pnl_usd",
             "priced",
             "updated_at",
+            "portfolio_id", "portfolio_name", "instrument_id_kind", "source_mtime", "as_of_source",
         ]
         output = io.StringIO()
         writer = csv.DictWriter(output, fieldnames=fields, extrasaction="ignore")
@@ -660,6 +684,7 @@ class PortfolioService:
             market_value = _decimal(row.get("market_value_usd"))
             holdings.append(
                 {
+                    "canonical_id": row["canonical_id"],
                     "symbol": row["symbol"],
                     "asset_type": row["asset_type"],
                     "markets": row["markets"],
@@ -686,6 +711,11 @@ class PortfolioService:
                     "asset_provider_type": row["broker"],
                     "status": row["status"],
                     "total_usd": row.get("total_usd"),
+                    "source_kind": row.get("source_kind", "connection"),
+                    "file_evidence": {
+                        key: row["import_metadata"].get(key)
+                        for key in ("source_mtime", "as_of_source", "expires_at", "valuation_basis", "cash_included")
+                    } if row.get("import_metadata") else None,
                 }
                 for index, row in enumerate(snapshot["accounts"])
             ],
@@ -694,6 +724,15 @@ class PortfolioService:
             "warnings": snapshot["warnings"],
             "privacy": "No account numbers, credentials, order IDs, names, or local paths included.",
         }
+
+    def rebalance(self, snapshot_id: str, target_weights: dict[str, Any]) -> dict[str, Any]:
+        """Return value-only allocation changes against one explicitly pinned snapshot."""
+        from src.portfolio.rebalance import propose_rebalance
+
+        snapshot = self.snapshot_by_id(snapshot_id)
+        if snapshot is None:
+            raise ValueError("portfolio snapshot unavailable")
+        return propose_rebalance(snapshot, target_weights)
 
     @staticmethod
     def _risk_xray_symbol(position: dict[str, Any]) -> str | None:
@@ -712,6 +751,8 @@ class PortfolioService:
         Returns:
             A loader-routable symbol, or ``None`` when the market is unknown.
         """
+        if position.get("instrument_id_kind") or position.get("source_kind") == "extraetf":
+            return None  # An ISIN or exported pair is not an observed listing/venue.
         symbol = str(position.get("symbol") or "").strip().upper()
         if not symbol:
             return None
@@ -793,7 +834,8 @@ class PortfolioService:
                 if currency == "HKD" or market == "HK" or symbol.endswith(".HK")
                 else ("CRYPTO" if row.get("asset_type") in {"crypto", "stablecoin"} else "US")
             )
-            key = f"{region}:{canonical}"
+            key = (f"{row['instrument_id_kind'].upper()}:{row['instrument_id']}"
+                   if row.get("instrument_id_kind") else f"{region}:{canonical}")
             item = grouped.setdefault(
                 key,
                 {
@@ -846,6 +888,8 @@ class PortfolioService:
             RuntimeError: If the profile is not read-only, or either connector
                 read returns a non-success status.
         """
+        if source.source_kind == "extraetf":
+            return self.settings_store.import_store.collect(source)
         connection, profile = self._connection_profile(source)
         if not profile.readonly:
             raise RuntimeError("portfolio sources must use a read-only connector profile")
@@ -1013,44 +1057,42 @@ class PortfolioService:
             raise RuntimeError("Longbridge isolated reader returned an incomplete payload")
         return payload
 
-    def _rates(self) -> tuple[Decimal, Decimal, str, bool]:
-        """Return the USD/CNY and USD/HKD rates used to value this snapshot.
-
-        Returns:
-            ``(usd_cny, usd_hkd, fetched_at, stale)`` where ``stale`` marks a
-            fall back to the cached rates.
-
-        Raises:
-            RuntimeError: If the fetch fails and no cached pair exists.
-        """
+    def _rates(self) -> tuple[FxQuote, bool]:
+        """Fetch a validated quote or fall back to one coherent cached quote."""
         try:
-            usd_cny, usd_hkd, fetched_at = self._fx_fetcher()
-            self.store.save_fx("USD", "CNY", str(usd_cny), fetched_at)
-            self.store.save_fx("USD", "HKD", str(usd_hkd), fetched_at)
-            return usd_cny, usd_hkd, fetched_at, False
+            result = self._fx_fetcher()
+            if isinstance(result, FxQuote):
+                quote = result.validated()
+            else:
+                cny, hkd, fetched = result  # Backwards-compatible injected readers.
+                quote = FxQuote(build_rates(cny, hkd), fetched).validated()
+            self.store.save_fx_quote(quote.to_dict())
+            return quote, False
         except Exception:
-            cny = self.store.load_fx("USD", "CNY")
-            hkd = self.store.load_fx("USD", "HKD")
+            cached = self.store.load_fx_quote()
+            if cached is not None:
+                return FxQuote(**cached).validated(), True
+            cny, hkd = self.store.load_fx("USD", "CNY"), self.store.load_fx("USD", "HKD")
             if cny is None or hkd is None:
                 raise RuntimeError("FX service unavailable and no prior USD/CNY + USD/HKD cache exists")
-            return _decimal(cny[0]), _decimal(hkd[0]), min(cny[1], hkd[1]), True
+            return FxQuote(build_rates(Decimal(cny[0]), Decimal(hkd[0])), min(cny[1], hkd[1]),
+                           source="legacy_cache").validated(), True
 
     @staticmethod
-    def _fetch_fx() -> tuple[Decimal, Decimal, str]:
-        """Fetch USD/CNY and USD/HKD from the public reference-rate endpoint.
-
-        Returns:
-            ``(usd_cny, usd_hkd, fetched_at)``.
-        """
-        url = "https://api.frankfurter.app/latest?from=USD&to=CNY,HKD"
+    def _fetch_fx() -> FxQuote:
+        """Read Frankfurter v1's dated reference rates; no intraday FX claim."""
+        url = "https://api.frankfurter.app/latest?from=USD&to=CNY,HKD,EUR"
         request = urllib.request.Request(url, headers={"User-Agent": "Vibe-Trading/portfolio"})
         with urllib.request.urlopen(request, timeout=8) as response:  # noqa: S310 - fixed HTTPS host
             payload = json.load(response)
-        return (
-            _decimal(payload["rates"]["CNY"]),
-            _decimal(payload["rates"]["HKD"]),
-            _now(),
-        )
+        if payload.get("base") != "USD" or payload.get("amount") != 1:
+            raise RuntimeError("FX response does not declare a one-USD base")
+        observed = date.fromisoformat(payload["date"])
+        if observed > datetime.now(timezone.utc).date():
+            raise RuntimeError("FX response date is in the future")
+        rates = {code: Decimal(str(payload["rates"][code])) for code in ("CNY", "HKD", "EUR")}
+        return FxQuote({"USD": Decimal(1), **rates}, _now(), observed.isoformat(),
+                       "Frankfurter v1 reference rates").validated()
 
     @staticmethod
     def _warnings(accounts: list[dict[str, Any]], positions: list[dict[str, Any]], fx_stale: bool) -> list[str]:
@@ -1065,10 +1107,21 @@ class PortfolioService:
             English warning strings, safe to render verbatim in any UI.
         """
         warnings = []
+        for account in accounts:
+            metadata = account.get("import_metadata")
+            if metadata:
+                warnings.append(
+                    f"extraETF file modified {metadata['source_mtime']}; file mtime is not a price observation. "
+                    f"Expires {metadata['expires_at']} under your freshness policy. "
+                    "Totals cover exported holdings only; cash and unexported assets are not included. "
+                    "ISIN/venue identity is unresolved, so these holdings are excluded from risk-series tools."
+                )
+        if any(row.get("source_kind") == "extraetf" for row in accounts) and len(accounts) > 1:
+            warnings.append("Imported views may overlap other selected sources; duplicate accounts cannot be detected. Select disjoint sources only.")
         if fx_stale:
             warnings.append(
                 "Exchange-rate service unavailable; valued with the last "
-                "successfully fetched USD/CNY and USD/HKD rates."
+                "successfully fetched reference rates; see the recorded FX date."
             )
         failed = [str(row.get("label") or row["broker"]) for row in accounts if row["status"] != "ok"]
         if failed:
@@ -1097,7 +1150,7 @@ class PortfolioService:
         experimental = [
             str(row.get("label") or row.get("broker"))
             for row in accounts
-            if row.get("portfolio_compatibility", {}).get("level") == "experimental"
+            if (row.get("portfolio_compatibility") or {}).get("level") == "experimental"
         ]
         if experimental:
             warnings.append(

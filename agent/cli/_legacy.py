@@ -4198,6 +4198,10 @@ def _print_portfolio_snapshot(snapshot: dict[str, Any]) -> None:
             rich_escape(str(row.get("last_success_at") or "never")),
         )
     console.print(accounts)
+    for row in snapshot.get("accounts", []):
+        if row.get("import_metadata"):
+            meta = row["import_metadata"]
+            console.print(f"extraETF file mtime: {rich_escape(meta['source_mtime'])}; expires: {rich_escape(meta['expires_at'])}; holdings only, no cash")
 
     holdings = Table(title="Holdings (combined across sources)", box=box.SIMPLE_HEAVY, show_lines=False)
     holdings.add_column("Symbol")
@@ -4325,6 +4329,40 @@ def _dispatch_portfolio(args: argparse.Namespace) -> int:
         return cmd_portfolio_refresh()
     if sub == "sources":
         return cmd_portfolio_sources()
+    if sub == "import-extraetf":
+        from datetime import datetime, timezone
+        from src.portfolio.imports import MAX_IMPORT_BYTES
+        try:
+            path = Path(args.file).expanduser()
+            with path.open("rb") as handle:
+                data = handle.read(MAX_IMPORT_BYTES + 1)
+                modified = os.fstat(handle.fileno()).st_mtime
+            if len(data) > MAX_IMPORT_BYTES:
+                raise ValueError("extraETF export exceeds the 4 MiB import limit")
+            instance = _portfolio_service()
+            imported = instance.settings_store.import_store.create(
+                csv_text=data.decode("utf-8-sig"), label=args.label,
+                source_mtime=datetime.fromtimestamp(modified, timezone.utc).isoformat(),
+                expected_positions=args.expected_positions, max_age_days=args.max_age_days,
+            )
+            if args.select:
+                settings = instance.settings()
+                settings["sources"].append({"connection_id": imported["id"], "source_kind": "extraetf",
+                                            "label": imported["label"], "include_cash": False})
+                instance.save_settings(settings)
+            console.print_json(data=imported)
+            return 0
+        except (ValueError, OSError) as exc:
+            console.print(f"[red]{rich_escape(str(exc))}[/red]")
+            return 1
+    if sub == "rebalance":
+        try:
+            target = json.loads(Path(args.targets).read_text())
+            console.print_json(data=_portfolio_service().rebalance(args.snapshot_id, target))
+            return 0
+        except (ValueError, OSError) as exc:
+            console.print(f"[red]{rich_escape(str(exc))}[/red]")
+            return 1
     console.print(f"[red]Unknown portfolio subcommand: {sub}[/red]")
     return EXIT_USAGE_ERROR
 
@@ -5572,6 +5610,15 @@ def _build_parser() -> argparse.ArgumentParser:
     portfolio_subparsers.add_parser(
         "refresh", help="Read every enabled source now, store a new snapshot, and print it"
     )
+    import_parser = portfolio_subparsers.add_parser("import-extraetf", help="Import a local Investments CSV; never executes trades")
+    import_parser.add_argument("file")
+    import_parser.add_argument("--label", required=True)
+    import_parser.add_argument("--expected-positions", required=True, type=int)
+    import_parser.add_argument("--max-age-days", required=True, type=int)
+    import_parser.add_argument("--select", action="store_true", help="Add this import to selected portfolio sources")
+    rebalance_parser = portfolio_subparsers.add_parser("rebalance", help="Value-only proposal for a pinned snapshot")
+    rebalance_parser.add_argument("--snapshot-id", required=True)
+    rebalance_parser.add_argument("--targets", required=True, help="JSON file mapping canonical_id (or CASH) to target fraction")
     portfolio_subparsers.add_parser(
         "sources", help="List local read-only connections and whether the portfolio uses them"
     )

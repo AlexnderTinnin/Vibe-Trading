@@ -2134,7 +2134,7 @@
       "badge": "Read-only lokal · Multi-akun",
       "title": "Portofolio",
       "subtitle": "Satu valuasi untuk semua koneksi read-only yang aktif. Akun yang tidak dapat dibaca akan dilaporkan sebagai error dan tidak disertakan dalam total.",
-      "fxFresh": "USD/CNY {{rate}} · kurs live",
+      "fxFresh": "USD/CNY {{rate}} · kurs referensi",
       "fxCached": "USD/CNY {{rate}} · kurs cache",
       "manageAccounts": "Kelola akun",
       "exportCsv": "Ekspor CSV",
@@ -2299,6 +2299,30 @@
       "accountDeactivated": " · dinonaktifkan",
       "accountSave": "Gunakan akun ini",
       "accountSaved": "Akun tersimpan."
+    },
+    "imports": {
+      "title": "Impor extraETF Investments",
+      "hint": "Hanya kepemilikan, tanpa kas atau harga langsung. Waktu perubahan berkas bukan waktu pengamatan harga; tempat perdagangan ISIN belum teridentifikasi.",
+      "file": "CSV Investments",
+      "count": "Jumlah kepemilikan yang diharapkan (konfirmasi di extraETF)",
+      "age": "Usia maksimum berkas (hari)",
+      "overlap": "Pilih sumber yang tidak tumpang tindih. Tampilan extraETF mungkin sudah mencakup akun lain yang terhubung di sini.",
+      "import": "Impor berkas",
+      "importing": "Mengimpor…",
+      "success": "Berhasil diimpor. Tambahkan ekspor ini dari sumber yang tersedia di atas, lalu simpan dan segarkan.",
+      "source": "Impor berkas",
+      "mtime": "Berkas diubah: {{time}}",
+      "expires": "Berlaku hingga: {{time}}",
+      "tooLarge": "Batas impor adalah 4 MiB."
+    },
+    "rebalance": {
+      "title": "Usulan alokasi",
+      "hint": "Masukkan persentase target dengan total 100%. Perubahan hanya berupa nilai untuk ditinjau; order, jumlah unit, pajak, atau biaya tidak dihitung.",
+      "target": "Target {{id}} (%)",
+      "generate": "Hitung usulan",
+      "current": "Nilai saat ini",
+      "targetValue": "Nilai target",
+      "change": "Perubahan nilai"
     }
   },
   "analysis": {

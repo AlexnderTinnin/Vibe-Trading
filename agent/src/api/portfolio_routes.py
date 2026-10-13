@@ -9,7 +9,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictFloat, StrictInt
 
 from src.api.security import require_auth, require_settings_write_auth
 from src.portfolio.service import PortfolioService
@@ -36,6 +36,7 @@ _REFRESH_STATE = {
 
 class PortfolioSourceRequest(BaseModel):
     connection_id: str
+    source_kind: str = "connection"
     label: str
     enabled: bool = True
     order: int = 0
@@ -45,6 +46,19 @@ class PortfolioSourceRequest(BaseModel):
 class PortfolioSettingsRequest(BaseModel):
     display_currency: str = Field(default="USD", pattern="^[A-Z]{3}$")
     sources: list[PortfolioSourceRequest] = Field(default_factory=list, max_length=50)
+
+
+class ExtraEtfImportRequest(BaseModel):
+    csv_text: str = Field(max_length=4 * 1024 * 1024)
+    label: str = Field(min_length=1, max_length=80)
+    source_mtime: str
+    expected_positions: int = Field(strict=True, ge=0, le=20000)
+    max_age_days: int = Field(strict=True, ge=1, le=365)
+
+
+class RebalanceRequest(BaseModel):
+    snapshot_id: str
+    target_weights: dict[str, StrictFloat | StrictInt] = Field(max_length=20001)
 
 
 def _set_refresh_progress(source_id: str, status: str, error: str | None) -> None:
@@ -245,6 +259,21 @@ def register_portfolio_routes(app: FastAPI) -> None:
             instance = service()
             settings = instance.save_settings(payload.model_dump())
             return {"status": "ok", "settings": settings, "catalog": instance.sources()}
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/portfolio/imports/extraetf", dependencies=[Depends(require_settings_write_auth)])
+    def import_extraetf(payload: ExtraEtfImportRequest):
+        try:
+            imported = service().settings_store.import_store.create(**payload.model_dump())
+            return {"status": "ok", "import": imported}
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/portfolio/rebalance", dependencies=[Depends(require_auth)])
+    def portfolio_rebalance(payload: RebalanceRequest):
+        try:
+            return {"status": "ok", "proposal": service().rebalance(payload.snapshot_id, payload.target_weights)}
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

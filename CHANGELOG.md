@@ -7,6 +7,8 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Maintenance — 2026-10-13
 
+- extraETF Investments imports now feed portfolio snapshots, with explicit row-count/freshness checks, EUR reference-rate valuation, preserved account/ISIN identity, and non-executing allocation proposals across Web, REST, CLI and the portfolio tool.
+
 - Standalone validation preserves saved parameters and seeds across walk-forward, Monte Carlo and permutation tests (#1815).
 - Custom OpenAI-compatible providers use tested credentials in the OS vault, canonical model settings and the `provider custom` CLI; existing channel settings remain available (#1264).
 - Pixel Office shares a transactional manual task board across Web, CLI and the agent tool. Assignment does not imply execution, and ranks grant no trading permissions (#1616).

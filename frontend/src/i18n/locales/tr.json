@@ -2100,7 +2100,7 @@
       "badge": "Local read-only Â· Multi-account",
       "title": "Portföy",
       "subtitle": "One valuation across the enabled read-only connections. An account that cannot be read is reported as an error and left out of the totals.",
-      "fxFresh": "USD/CNY {{rate}} Â· live rate",
+      "fxFresh": "USD/CNY {{rate}} · referans kuru",
       "fxCached": "USD/CNY {{rate}} Â· cached rate",
       "manageAccounts": "Manage accounts",
       "exportCsv": "Export CSV",
@@ -2265,6 +2265,30 @@
       "accountDeactivated": " Â· deactivated",
       "accountSave": "Use this account",
       "accountSaved": "Account saved."
+    },
+    "imports": {
+      "title": "extraETF Investments içe aktar",
+      "hint": "Yalnızca varlıklar; nakit veya canlı fiyat içermez. Dosya değişiklik zamanı fiyat gözlem zamanı değildir; ISIN’lerin işlem yeri belirlenmemiştir.",
+      "file": "Investments CSV",
+      "count": "Beklenen varlık satırı sayısı (extraETF’te doğrulayın)",
+      "age": "Dosyanın azami yaşı (gün)",
+      "overlap": "Örtüşmeyen kaynaklar seçin. extraETF görünümü burada bağlı başka hesapları zaten içerebilir.",
+      "import": "Dosyayı içe aktar",
+      "importing": "İçe aktarılıyor…",
+      "success": "İçe aktarıldı. Bu dışa aktarımı yukarıdaki kullanılabilir kaynaklardan ekleyin, kaydedin ve yenileyin.",
+      "source": "Dosya içe aktarımı",
+      "mtime": "Dosya değişikliği: {{time}}",
+      "expires": "Geçerlilik sonu: {{time}}",
+      "tooLarge": "İçe aktarma sınırı 4 MiB’dir."
+    },
+    "rebalance": {
+      "title": "Dağılım önerisi",
+      "hint": "Toplamı %100 olan hedef yüzdeleri girin. Değişiklikler yalnızca incelenecek tutarlardır; emir, miktar, vergi veya ücret hesaplanmaz.",
+      "target": "{{id}} hedefi (%)",
+      "generate": "Öneriyi hesapla",
+      "current": "Mevcut değer",
+      "targetValue": "Hedef değer",
+      "change": "Değer değişimi"
     }
   },
   "navigation": {

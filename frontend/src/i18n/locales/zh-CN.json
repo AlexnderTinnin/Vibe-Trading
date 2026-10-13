@@ -2134,7 +2134,7 @@
       "badge": "本机只读 · 多账户",
       "title": "持仓总览",
       "subtitle": "把已启用的只读连接汇总成一份估值。读取失败的账户会标记为错误，并且不计入合计。",
-      "fxFresh": "USD/CNY {{rate}} · 实时汇率",
+      "fxFresh": "USD/CNY {{rate}} · 参考汇率",
       "fxCached": "USD/CNY {{rate}} · 缓存汇率",
       "manageAccounts": "管理账户",
       "exportCsv": "导出 CSV",
@@ -2299,6 +2299,30 @@
       "accountDeactivated": " · 已停用",
       "accountSave": "使用这个账户",
       "accountSaved": "账户已保存。"
+    },
+    "imports": {
+      "title": "导入 extraETF Investments",
+      "hint": "仅包含导出的持仓，不含现金或实时价格。文件修改时间不是行情观测时间；ISIN 尚未匹配交易场所。",
+      "file": "Investments CSV 文件",
+      "count": "预期持仓行数（请在 extraETF 中核对）",
+      "age": "文件最长有效期（天）",
+      "overlap": "请选择互不重叠的数据源。extraETF 视图可能已包含此处连接的其他账户。",
+      "import": "导入文件",
+      "importing": "正在导入…",
+      "success": "导入成功。请从上方可用来源中添加该导出，保存后刷新。",
+      "source": "文件导入",
+      "mtime": "文件修改时间：{{time}}",
+      "expires": "有效期至：{{time}}",
+      "tooLarge": "导入文件不能超过 4 MiB。"
+    },
+    "rebalance": {
+      "title": "目标配置建议",
+      "hint": "输入合计 100% 的目标比例。差额仅为供审阅的金额建议，不生成订单，也不计算数量、税费。",
+      "target": "{{id}} 目标比例（%）",
+      "generate": "计算建议",
+      "current": "当前金额",
+      "targetValue": "目标金额",
+      "change": "调整金额"
     }
   },
   "analysis": {
