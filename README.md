@@ -2435,3 +2435,5 @@ The same flow is available from `vibe-trading provider custom list`,
 `vibe-trading provider custom add --id example --label Example --base-url https://api.example.com/v1 --model example-model`
 (the key is prompted privately), and `vibe-trading provider custom activate example`.
 The configured provider is used by CLI, API, Web, and agent runs alike.
+
+RSSHub feed `code_style` transformations separate the final venue suffix from the ticker, preserving share-class dots: `BRK.B.US` becomes `BRK.B` for `bare` routes and `USBRK.B` for `exchange_prefix`; `raw` remains unchanged.

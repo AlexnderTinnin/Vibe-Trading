@@ -115,7 +115,12 @@ def test_duplicate_items_are_deduplicated() -> None:
     doubled = f'<?xml version="1.0"?><rss version="2.0"><channel>{items}{items}</channel></rss>'
     frame = _provider(doubled).query_events(["AAA"], as_of="2024-01-31")
     assert len(frame) == 2  # 4 items in, 2 unique out
-    assert frame.duplicated(subset=["ts_code", "knowable_date", "event_type", "summary"]).sum() == 0
+    assert (
+        frame.duplicated(
+            subset=["ts_code", "knowable_date", "event_type", "summary"]
+        ).sum()
+        == 0
+    )
 
 
 def test_hostile_xml_is_neutralised() -> None:
@@ -129,7 +134,9 @@ def test_unknown_feed_raises() -> None:
 
 
 def test_custom_scorer_override() -> None:
-    frame = _provider().query_events(["AAA"], as_of="2024-01-31", scorer=lambda t, s: 0.5)
+    frame = _provider().query_events(
+        ["AAA"], as_of="2024-01-31", scorer=lambda t, s: 0.5
+    )
     assert (frame["score"] == 0.5).all()
 
 
@@ -183,7 +190,11 @@ def test_per_symbol_route_applies_code_style() -> None:
     client = _FakeClient(_RSS)
     provider = RSSHubEventProvider(
         "https://rsshub.local",
-        feeds=[FeedSpec("xq", "/xueqiu/stock/{code}", "earnings", code_style="exchange_prefix")],
+        feeds=[
+            FeedSpec(
+                "xq", "/xueqiu/stock/{code}", "earnings", code_style="exchange_prefix"
+            )
+        ],
         client=client,
     )
     provider.query_events(["600519.SH"], as_of="2024-01-31")
@@ -194,7 +205,12 @@ def test_feed_specs_from_config_parses_and_validates() -> None:
     specs = feed_specs_from_config(
         [
             {"name": "a", "route_template": "/x/{code}", "event_type": "earnings"},
-            {"name": "b", "route_template": "/y", "event_type": "macro", "code_style": "bare"},
+            {
+                "name": "b",
+                "route_template": "/y",
+                "event_type": "macro",
+                "code_style": "bare",
+            },
         ]
     )
     assert [s.name for s in specs] == ["a", "b"]
@@ -233,7 +249,9 @@ def test_all_feeds_unreachable_raises(monkeypatch) -> None:
         provider.query_events(["AAA"], as_of="2024-01-31")
 
 
-def test_malformed_timeout_env_falls_back_to_default(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_malformed_timeout_env_falls_back_to_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("RSSHUB_TIMEOUT_S", "not-a-float")
     client = _FakeClient(_RSS)
     provider = RSSHubEventProvider(
@@ -248,7 +266,9 @@ def test_malformed_timeout_env_falls_back_to_default(monkeypatch: pytest.MonkeyP
     assert client.timeouts == [DEFAULT_TIMEOUT_S]
 
 
-def test_malformed_budget_env_falls_back_to_default(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_malformed_budget_env_falls_back_to_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("RSSHUB_FETCH_BUDGET_S", "not-a-float")
     client = _FakeClient(_RSS)
     provider = RSSHubEventProvider(
@@ -268,3 +288,31 @@ def test_reachable_but_empty_feed_does_not_raise() -> None:
     empty_rss = '<?xml version="1.0"?><rss version="2.0"><channel></channel></rss>'
     frame = _provider(empty_rss).query_events(["AAA"], as_of="2024-01-31")
     assert frame.empty
+
+
+@pytest.mark.parametrize(
+    "code,style,expected",
+    [
+        ("BRK.B.US", "bare", "BRK.B"),
+        ("BF.B.US", "bare", "BF.B"),
+        ("BRK.B.US", "exchange_prefix", "USBRK.B"),
+        ("BF.B.US", "exchange_prefix", "USBF.B"),
+        ("BRK.B.US", "raw", "BRK.B.US"),
+        ("600519.SH", "bare", "600519"),
+        ("600519.SH", "exchange_prefix", "SH600519"),
+        ("AAPL", "bare", "AAPL"),
+        ("AAPL", "exchange_prefix", "AAPL"),
+    ],
+)
+def test_declared_feed_route_preserves_compound_ticker(
+    code: str, style: str, expected: str
+) -> None:
+    client = _FakeClient(_RSS)
+    provider = RSSHubEventProvider(
+        "https://rsshub.local",
+        feeds=[FeedSpec("news", "/news/{code}", "sentiment", style)],
+        client=client,
+    )
+    events = provider.query_events([code], as_of="2024-01-31")
+    assert client.calls == ["https://rsshub.local/news/" + expected]
+    assert events["ts_code"].tolist() == [code, code]
