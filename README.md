@@ -2435,3 +2435,6 @@ The same flow is available from `vibe-trading provider custom list`,
 `vibe-trading provider custom add --id example --label Example --base-url https://api.example.com/v1 --model example-model`
 (the key is prompted privately), and `vibe-trading provider custom activate example`.
 The configured provider is used by CLI, API, Web, and agent runs alike.
+
+RSSHub daily event enrichment uses calendar-date keys: timezone-aware `as_of` values and daily bar labels retain their displayed date, matching the provider’s knowable-date policy. This does not convert intraday publication instants between markets.
+
