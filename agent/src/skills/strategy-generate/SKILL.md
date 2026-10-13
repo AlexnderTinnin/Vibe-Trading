@@ -158,6 +158,7 @@ Self-check after writing `signal_engine.py`:
 - `rebalance_tolerance`: drift band around the target, as a fraction of it, used only under `"rebalance"`. A resize executes once the held weight has moved further than this from its target; a **changed** target breaches any sane band on its own, so target changes always execute. Default `0.0` means no band, and then the resize test is decided by the slippage width alone — measured on a constant 20% target over 60 bars, `0.0` produced 60 fills, `0.02` produced 12, and `0.05` produced 5 while the weight never left 0.21. Use `rebalance_mask`, not tolerance, to express a strategy's execution cadence. `0.05` is a reasonable starting point, not a recommendation with evidence behind it — it is your modelling choice and the report records the value the run used.
 - `initial_cash`: default 1,000,000
 - `commission`: default 0.1%
+- `hk_lot_sizes`: optional, Hong Kong only — `{"00700.HK": 100, "02800.HK": 500}`. HK board lots are set per issuer, so without this table every HK order is rounded to 100 shares and a name whose real lot is smaller than its target trades zero times. Codes match with or without leading zeros. A symbol missing from a supplied table is sized on 100 shares and listed under `lot_assumptions` in the metrics, so the report says which lots were assumed.
 - `validation`: optional statistical validation after backtest completes. Omit to skip. Example:
   ```json
   "validation": {

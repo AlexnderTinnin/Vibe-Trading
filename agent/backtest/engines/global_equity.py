@@ -9,7 +9,7 @@ Market rules:
   HK:
     - T+0, long/short allowed
     - Stamp tax 0.1% bilateral + levies
-    - Lot-size rounding (simplified to 100 shares)
+    - Board-lot rounding per symbol from ``hk_lot_sizes``; 100 shares otherwise
     - Higher slippage than US
   Canada (TSX / TSX Venture):
     - Same-session round trips and long/short orders supported
@@ -28,12 +28,33 @@ India (NSE/BSE) is handled by the dedicated ``backtest.engines.india_equity``
 
 from __future__ import annotations
 
+import logging
 import math
 from decimal import Decimal, ROUND_HALF_UP
+from typing import Any
 
 import pandas as pd
 
 from backtest.engines.base import BaseEngine
+
+logger = logging.getLogger(__name__)
+
+#: Board lot used for an HK symbol the run has no lot size for.
+_DEFAULT_HK_BOARD_LOT = 100
+
+
+def _hk_lot_key(symbol: Any) -> str:
+    """Normalise an HK symbol so ``00700.HK``, ``0700.HK`` and ``700.hk`` match.
+
+    Args:
+        symbol: Symbol as written in config or carried by the data.
+
+    Returns:
+        Upper-cased symbol in the loaders' four-digit spelling (``0700.HK``);
+        five-digit codes such as ``80700.HK`` keep all five digits.
+    """
+    head, sep, tail = str(symbol).strip().upper().partition(".")
+    return f"{head.lstrip('0').zfill(4)}{sep}{tail}"
 
 
 class GlobalEquityEngine(BaseEngine):
@@ -46,6 +67,11 @@ class GlobalEquityEngine(BaseEngine):
       - hk_commission: default 0.00015 (万1.5)
       - hk_levy: default 0.0000565 (SFC + FRC)
       - hk_settlement: default 0.00002 (CCASS)
+      - hk_lot_sizes: ``{symbol: board lot}``. HK board lots are set per
+        issuer, so a flat 100 mis-sizes most names. When the table is given,
+        any HK symbol missing from it falls back to 100 and is reported in
+        the run metrics under ``lot_assumptions``. Without the table every HK
+        symbol uses 100, as before.
       - slippage_ca: defaults to slippage_us
       - ca_commission: broker commission rate, default 0.0
       - slippage_uk: defaults to slippage_us
@@ -67,6 +93,11 @@ class GlobalEquityEngine(BaseEngine):
         self.hk_commission: float = config.get("hk_commission", 0.00015)
         self.hk_levy: float = config.get("hk_levy", 0.0000565)
         self.hk_settlement: float = config.get("hk_settlement", 0.00002)
+        self.hk_lot_sizes: dict[str, int] = {
+            _hk_lot_key(k): int(v)
+            for k, v in (config.get("hk_lot_sizes") or {}).items()
+        }
+        self.lot_assumptions: dict[str, int] = {}
         # Canada defaults. Commission varies by broker, so the model exposes a
         # rate instead of inventing an exchange-wide charge.
         self.slippage_ca: float = config.get("slippage_ca", self.slippage_us)
@@ -83,8 +114,50 @@ class GlobalEquityEngine(BaseEngine):
         """Allow same-session trading in both directions for every market."""
         return True
 
+    def _hk_board_lot(self, symbol: str) -> int:
+        """Return the board lot for one HK symbol.
+
+        A symbol the configured table does not cover is sized on the default
+        lot, which looks exactly like data in the output, so the miss is
+        recorded and the run can state which lot sizes were assumed.
+
+        Args:
+            symbol: HK symbol of the order being sized.
+
+        Returns:
+            The configured board lot, or the default lot when none applies.
+        """
+        key = _hk_lot_key(symbol) if symbol else "<no active symbol>"
+        lot = self.hk_lot_sizes.get(key, 0)
+        if lot > 0:
+            return lot
+        if self.hk_lot_sizes and key not in self.lot_assumptions:
+            self.lot_assumptions[key] = _DEFAULT_HK_BOARD_LOT
+            logger.warning(
+                "HK symbol %r has no usable hk_lot_sizes entry; sizing it on "
+                "the default %d-share lot (reported under lot_assumptions).",
+                key,
+                _DEFAULT_HK_BOARD_LOT,
+            )
+        return _DEFAULT_HK_BOARD_LOT
+
+    def _engine_diagnostics(self) -> dict[str, Any]:
+        """Report every HK symbol this run sized on the default board lot."""
+        if not self.lot_assumptions:
+            return {}
+        return {
+            "lot_assumptions": [
+                {"symbol": symbol, "field": "board_lot", "value": lot}
+                for symbol, lot in sorted(self.lot_assumptions.items())
+            ]
+        }
+
     def round_size(self, raw_size: float, price: float) -> float:
-        """US: fractional; HK: 100-share lots; Canada/UK: whole shares.
+        """US: fractional; HK: per-symbol board lots; Canada/UK: whole shares.
+
+        HK sizing reads the lot of ``self._active_symbol``, which the base
+        engine sets before every sizing call, so the signature stays the same
+        across engines.
 
         TSX and TSXV accept odd and mixed lots through dedicated facilities,
         so forcing every order to a board lot would reject valid retail trades.
@@ -92,7 +165,8 @@ class GlobalEquityEngine(BaseEngine):
         the whole-share floor.
         """
         if self.market == "hk":
-            return max(int(raw_size / 100) * 100, 0)
+            lot = self._hk_board_lot(self._active_symbol)
+            return max(int(raw_size / lot) * lot, 0)
         if self.market in {"ca", "uk"}:
             return float(math.floor(max(raw_size, 0.0)))
         return round(max(raw_size, 0.0), 2)
