@@ -21,7 +21,8 @@
       "correlation": "여러 자산의 가격 움직임 관계를 비교합니다.",
       "scheduled": "지정한 주기로 리서치를 반복합니다.",
       "runtime": "브로커 연결과 거래 실행 상태를 확인합니다.",
-      "settings": "모델, 데이터 소스, 브로커 연결을 설정합니다."
+      "settings": "모델, 데이터 소스, 브로커 연결을 설정합니다.",
+      "pixelOffice": "리서치 작업을 계획하고 배정합니다. 배정만으로 실행되지는 않으며, 직급은 거래 권한을 부여하지 않는 표시에 불과합니다."
     },
     "instructions": {
       "reports": "먼저 도우미에게 전략 백테스트를 요청한 후 여기에서 결과를 엽니다. 대화에서 생성한 PDF 등은 원래 대화에서 다운로드하세요.",
@@ -31,7 +32,8 @@
       "correlation": "자산 코드를 두 개 이상 입력하고 기간을 선택한 다음 계산을 누르세요.",
       "scheduled": "리서치 지시와 실행 주기를 입력하고 저장하세요. 실행하려면 로컬 스케줄러가 활성화되어 있어야 하며, 결과 전달에는 채널 설정이 필요합니다.",
       "runtime": "먼저 설정 또는 보유 자산 페이지에서 브로커를 연결하세요. 사용 가능한 거래 작업은 브로커 기능과 사용자의 승인에 따라 달라집니다.",
-      "settings": "먼저 모델을 설정하세요. 필요에 따라 데이터 소스나 브로커 연결을 추가하면 됩니다. 공개 시장 리서치에는 브로커 계좌가 필요하지 않습니다."
+      "settings": "먼저 모델을 설정하세요. 필요에 따라 데이터 소스나 브로커 연결을 추가하면 됩니다. 공개 시장 리서치에는 브로커 계좌가 필요하지 않습니다.",
+      "pixelOffice": "리서치 작업을 계획하고 배정합니다. 배정만으로 실행되지는 않으며, 직급은 거래 권한을 부여하지 않는 표시에 불과합니다."
     }
   },
   "layout": {
@@ -61,7 +63,8 @@
     "sidebar": "Vibe-Trading 사이드바",
     "mainNavigation": "주 내비게이션",
     "about": "소개",
-    "sessionsLoadFailed": "대화를 불러올 수 없습니다."
+    "sessionsLoadFailed": "대화를 불러올 수 없습니다.",
+    "pixelOffice": "픽셀 오피스"
   },
   "runtime": {
     "monitorBadge": "거래 모니터",
@@ -2380,5 +2383,40 @@
     "preview": "Test passed: {{preview}}",
     "error": "Provider test failed: {{error}}",
     "waiting": "The provider is taking longer than usual ({{seconds}}s). The request will continue until the server timeout."
+  },
+  "pixelOffice": {
+    "title": "픽셀 오피스",
+    "description": "리서치 작업을 계획하고 배정합니다. 배정만으로 실행되지는 않으며, 직급은 거래 권한을 부여하지 않는 표시에 불과합니다.",
+    "refresh": "새로고침",
+    "loading": "오피스 불러오는 중…",
+    "unavailable": "오피스를 이용할 수 없습니다. 새로고침해 주세요.",
+    "floor": "사무 공간",
+    "taskCount": "미완료 작업: {{count}}",
+    "board": "작업 보드",
+    "empty": "아직 작업이 없습니다.",
+    "assignee": "담당자",
+    "unassigned": "미배정",
+    "result": "완료 결과",
+    "complete": "완료 기록",
+    "create": "작업 만들기",
+    "taskTitle": "작업 제목",
+    "instructions": "작업 지침",
+    "priority": "우선순위",
+    "ranksTitle": "조직 직급",
+    "priorities": {
+      "low": "낮음",
+      "normal": "보통",
+      "high": "높음"
+    },
+    "statuses": {
+      "queued": "대기 중",
+      "assigned": "배정됨",
+      "completed": "완료됨"
+    },
+    "ranks": {
+      "Operator": "담당자",
+      "Senior": "선임",
+      "Lead": "책임자"
+    }
   }
 }

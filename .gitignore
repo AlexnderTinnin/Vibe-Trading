@@ -177,3 +177,6 @@ agent/tests/artifacts/
 .idea/*
 
 /custom-llm-providers.json
+
+/pixel-office.sqlite3
+/pixel-office.sqlite3-*

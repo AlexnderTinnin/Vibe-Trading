@@ -21,7 +21,8 @@
       "correlation": "複数の資産の値動きの関係を比較します。",
       "scheduled": "リサーチを指定した周期で繰り返します。",
       "runtime": "ブローカーの接続と取引の稼働状況を確認します。",
-      "settings": "モデル、データソース、ブローカー接続を設定します。"
+      "settings": "モデル、データソース、ブローカー接続を設定します。",
+      "pixelOffice": "調査タスクを計画・割り当てます。割り当てでは実行は始まりません。役職はラベルであり、取引権限を付与しません。"
     },
     "instructions": {
       "reports": "まずアシスタントに戦略のバックテストを依頼し、ここで結果を開きます。会話で作成した PDF などは元の会話からダウンロードします。",
@@ -31,7 +32,8 @@
       "correlation": "資産コードを2つ以上入力し、対象期間を選んで計算します。",
       "scheduled": "リサーチ指示と周期を入力して保存します。実行にはローカルのスケジューラーを有効にする必要があり、配信にはチャネル設定も必要です。",
       "runtime": "先に設定または保有資産ページでブローカーを接続します。利用できる取引操作はブローカーの機能とあなたの許可に依存します。",
-      "settings": "まずモデルを設定します。必要に応じてデータソースやブローカー接続を追加します。公開市場のリサーチにはブローカー口座は不要です。"
+      "settings": "まずモデルを設定します。必要に応じてデータソースやブローカー接続を追加します。公開市場のリサーチにはブローカー口座は不要です。",
+      "pixelOffice": "調査タスクを計画・割り当てます。割り当てでは実行は始まりません。役職はラベルであり、取引権限を付与しません。"
     }
   },
   "layout": {
@@ -61,7 +63,8 @@
     "sidebar": "Vibe-Trading サイドバー",
     "mainNavigation": "メインナビゲーション",
     "about": "概要",
-    "sessionsLoadFailed": "会話を読み込めません。"
+    "sessionsLoadFailed": "会話を読み込めません。",
+    "pixelOffice": "ピクセルオフィス"
   },
   "runtime": {
     "monitorBadge": "取引モニター",
@@ -2380,5 +2383,40 @@
     "preview": "Test passed: {{preview}}",
     "error": "Provider test failed: {{error}}",
     "waiting": "The provider is taking longer than usual ({{seconds}}s). The request will continue until the server timeout."
+  },
+  "pixelOffice": {
+    "title": "ピクセルオフィス",
+    "description": "調査タスクを計画・割り当てます。割り当てでは実行は始まりません。役職はラベルであり、取引権限を付与しません。",
+    "refresh": "更新",
+    "loading": "オフィスを読み込み中…",
+    "unavailable": "オフィスを利用できません。再読み込みしてください。",
+    "floor": "オフィスフロア",
+    "taskCount": "未完了タスク：{{count}}",
+    "board": "タスクボード",
+    "empty": "タスクはまだありません。",
+    "assignee": "担当者",
+    "unassigned": "未割り当て",
+    "result": "完了結果",
+    "complete": "完了を記録",
+    "create": "タスクを作成",
+    "taskTitle": "タスク名",
+    "instructions": "指示",
+    "priority": "優先度",
+    "ranksTitle": "組織上の役職",
+    "priorities": {
+      "low": "低",
+      "normal": "通常",
+      "high": "高"
+    },
+    "statuses": {
+      "queued": "待機中",
+      "assigned": "割り当て済み",
+      "completed": "完了"
+    },
+    "ranks": {
+      "Operator": "担当者",
+      "Senior": "シニア",
+      "Lead": "リーダー"
+    }
   }
 }

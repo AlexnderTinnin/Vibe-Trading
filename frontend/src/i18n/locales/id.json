@@ -26,7 +26,8 @@
       "correlation": "Bandingkan hubungan pergerakan aset.",
       "scheduled": "Ulangi tugas riset sesuai jadwal.",
       "runtime": "Periksa koneksi broker dan status pelaksanaan perdagangan.",
-      "settings": "Atur model, sumber data, dan koneksi broker."
+      "settings": "Atur model, sumber data, dan koneksi broker.",
+      "pixelOffice": "Rencanakan dan tugaskan riset. Penugasan tidak memulai eksekusi; pangkat hanya label dan tidak memberikan izin transaksi."
     },
     "instructions": {
       "reports": "Minta asisten melakukan backtest strategi terlebih dahulu, lalu buka hasilnya di sini. Unduh PDF dan dokumen yang dibuat di chat dari percakapan asal.",
@@ -36,7 +37,8 @@
       "correlation": "Masukkan setidaknya dua simbol aset, pilih periode, lalu klik Hitung.",
       "scheduled": "Isi instruksi riset, pilih frekuensi, dan simpan. Penjadwal lokal harus diaktifkan agar tugas berjalan; pengiriman juga memerlukan kanal yang telah diatur.",
       "runtime": "Atur koneksi broker di Pengaturan atau Portofolio terlebih dahulu. Tindakan perdagangan yang tersedia bergantung pada kemampuan broker dan otorisasi Anda.",
-      "settings": "Atur model untuk memulai. Tambahkan data atau koneksi broker sesuai kebutuhan; riset data pasar publik tidak memerlukan akun broker."
+      "settings": "Atur model untuk memulai. Tambahkan data atau koneksi broker sesuai kebutuhan; riset data pasar publik tidak memerlukan akun broker.",
+      "pixelOffice": "Rencanakan dan tugaskan riset. Penugasan tidak memulai eksekusi; pangkat hanya label dan tidak memberikan izin transaksi."
     }
   },
   "layout": {
@@ -66,7 +68,8 @@
     "sidebar": "Sidebar Vibe-Trading",
     "mainNavigation": "Navigasi utama",
     "about": "Tentang",
-    "sessionsLoadFailed": "Percakapan tidak dapat dimuat."
+    "sessionsLoadFailed": "Percakapan tidak dapat dimuat.",
+    "pixelOffice": "Kantor piksel"
   },
   "runtime": {
     "monitorBadge": "Monitor Runtime",
@@ -2380,5 +2383,40 @@
     "preview": "Test passed: {{preview}}",
     "error": "Provider test failed: {{error}}",
     "waiting": "The provider is taking longer than usual ({{seconds}}s). The request will continue until the server timeout."
+  },
+  "pixelOffice": {
+    "title": "Kantor piksel",
+    "description": "Rencanakan dan tugaskan riset. Penugasan tidak memulai eksekusi; pangkat hanya label dan tidak memberikan izin transaksi.",
+    "refresh": "Muat ulang",
+    "loading": "Memuat kantor…",
+    "unavailable": "Kantor tidak tersedia. Coba muat ulang.",
+    "floor": "Area kantor",
+    "taskCount": "Tugas terbuka: {{count}}",
+    "board": "Papan tugas",
+    "empty": "Belum ada tugas.",
+    "assignee": "Penanggung jawab",
+    "unassigned": "Belum ditugaskan",
+    "result": "Hasil penyelesaian",
+    "complete": "Catat penyelesaian",
+    "create": "Buat tugas",
+    "taskTitle": "Judul tugas",
+    "instructions": "Instruksi",
+    "priority": "Prioritas",
+    "ranksTitle": "Pangkat organisasi",
+    "priorities": {
+      "low": "Rendah",
+      "normal": "Normal",
+      "high": "Tinggi"
+    },
+    "statuses": {
+      "queued": "Mengantre",
+      "assigned": "Ditugaskan",
+      "completed": "Selesai"
+    },
+    "ranks": {
+      "Operator": "Anggota",
+      "Senior": "Senior",
+      "Lead": "Pemimpin"
+    }
   }
 }

@@ -26,7 +26,8 @@
       "correlation": "Compare como os ativos se movimentam juntos.",
       "scheduled": "Repita uma pesquisa em horários definidos.",
       "runtime": "Confira conexões de corretoras e o estado de execução das operações.",
-      "settings": "Configure modelos, fontes de dados e conexões de corretoras."
+      "settings": "Configure modelos, fontes de dados e conexões de corretoras.",
+      "pixelOffice": "Planeje e atribua tarefas de pesquisa. A atribuição não inicia a execução; os cargos são rótulos e não concedem permissões de negociação."
     },
     "instructions": {
       "reports": "Primeiro peça ao assistente um backtest de uma estratégia e abra os resultados aqui. Baixe PDFs e documentos gerados no chat na conversa original.",
@@ -36,7 +37,8 @@
       "correlation": "Informe pelo menos dois códigos de ativos, escolha o período e clique em Calcular.",
       "scheduled": "Informe a instrução de pesquisa, escolha a frequência e salve. O agendador local deve estar habilitado para executar tarefas; a entrega também requer um canal configurado.",
       "runtime": "Primeiro configure uma conexão de corretora em Configurações ou Carteira. As operações disponíveis dependem dos recursos da corretora e da sua autorização.",
-      "settings": "Configure um modelo para começar. Adicione dados ou conexões de corretoras conforme necessário; pesquisas com dados públicos de mercado não exigem conta em corretora."
+      "settings": "Configure um modelo para começar. Adicione dados ou conexões de corretoras conforme necessário; pesquisas com dados públicos de mercado não exigem conta em corretora.",
+      "pixelOffice": "Planeje e atribua tarefas de pesquisa. A atribuição não inicia a execução; os cargos são rótulos e não concedem permissões de negociação."
     }
   },
   "layout": {
@@ -66,7 +68,8 @@
     "sidebar": "Barra lateral Vibe-Trading",
     "mainNavigation": "Navegação principal",
     "about": "Sobre",
-    "sessionsLoadFailed": "Não foi possível carregar as conversas."
+    "sessionsLoadFailed": "Não foi possível carregar as conversas.",
+    "pixelOffice": "Escritório pixel"
   },
   "runtime": {
     "monitorBadge": "Monitor de Runtime",
@@ -2380,5 +2383,40 @@
     "preview": "Test passed: {{preview}}",
     "error": "Provider test failed: {{error}}",
     "waiting": "The provider is taking longer than usual ({{seconds}}s). The request will continue until the server timeout."
+  },
+  "pixelOffice": {
+    "title": "Escritório pixel",
+    "description": "Planeje e atribua tarefas de pesquisa. A atribuição não inicia a execução; os cargos são rótulos e não concedem permissões de negociação.",
+    "refresh": "Atualizar",
+    "loading": "Carregando escritório…",
+    "unavailable": "Escritório indisponível. Tente atualizar.",
+    "floor": "Área do escritório",
+    "taskCount": "Tarefas pendentes: {{count}}",
+    "board": "Quadro de tarefas",
+    "empty": "Ainda não há tarefas.",
+    "assignee": "Responsável",
+    "unassigned": "Sem responsável",
+    "result": "Resultado da conclusão",
+    "complete": "Registrar conclusão",
+    "create": "Criar tarefa",
+    "taskTitle": "Título da tarefa",
+    "instructions": "Instruções",
+    "priority": "Prioridade",
+    "ranksTitle": "Cargos organizacionais",
+    "priorities": {
+      "low": "Baixa",
+      "normal": "Normal",
+      "high": "Alta"
+    },
+    "statuses": {
+      "queued": "Na fila",
+      "assigned": "Atribuída",
+      "completed": "Concluída"
+    },
+    "ranks": {
+      "Operator": "Membro",
+      "Senior": "Sênior",
+      "Lead": "Líder"
+    }
   }
 }

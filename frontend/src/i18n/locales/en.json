@@ -26,7 +26,8 @@
       "correlation": "Compare how assets move together.",
       "scheduled": "Repeat a research task on a schedule.",
       "runtime": "Check broker connections and trading runtime status.",
-      "settings": "Configure models, data sources, and broker connections."
+      "settings": "Configure models, data sources, and broker connections.",
+      "pixelOffice": "Plan and assign research tasks. Assignment does not start execution; ranks are labels and grant no trading permissions."
     },
     "instructions": {
       "reports": "Ask the research assistant to backtest a strategy first, then open its results here. Download PDFs and other chat-generated documents from the original conversation.",
@@ -36,7 +37,8 @@
       "correlation": "Enter at least two asset symbols, choose a lookback window, then select Compute.",
       "scheduled": "Enter a research instruction, choose its cadence, and save. The local scheduler must be enabled for jobs to run; delivery also needs a configured channel.",
       "runtime": "Configure a broker connection in Settings or Portfolio first. Available trading actions depend on that broker's capabilities and your authorization.",
-      "settings": "Configure a model to start. Add data sources or broker connections as your task needs them; public-market research does not require a broker account."
+      "settings": "Configure a model to start. Add data sources or broker connections as your task needs them; public-market research does not require a broker account.",
+      "pixelOffice": "Plan and assign research tasks. Assignment does not start execution; ranks are labels and grant no trading permissions."
     }
   },
   "layout": {
@@ -66,7 +68,8 @@
     "sidebar": "Vibe-Trading sidebar",
     "mainNavigation": "Main navigation",
     "about": "About",
-    "sessionsLoadFailed": "Cannot load conversations."
+    "sessionsLoadFailed": "Cannot load conversations.",
+    "pixelOffice": "Pixel Office"
   },
   "runtime": {
     "monitorBadge": "Runtime Monitor",
@@ -2380,5 +2383,40 @@
     "preview": "Test passed: {{preview}}",
     "error": "Provider test failed: {{error}}",
     "waiting": "The provider is taking longer than usual ({{seconds}}s). The request will continue until the server timeout."
+  },
+  "pixelOffice": {
+    "title": "Pixel Office",
+    "description": "Plan and assign research tasks. Assignment does not start execution; ranks are labels and grant no trading permissions.",
+    "refresh": "Refresh",
+    "loading": "Loading office…",
+    "unavailable": "Office unavailable. Try refreshing.",
+    "floor": "Office floor",
+    "taskCount": "Open tasks: {{count}}",
+    "board": "Task board",
+    "empty": "No tasks yet.",
+    "assignee": "Assignee",
+    "unassigned": "Unassigned",
+    "result": "Completion result",
+    "complete": "Record completion",
+    "create": "Create task",
+    "taskTitle": "Task title",
+    "instructions": "Instructions",
+    "priority": "Priority",
+    "ranksTitle": "Organizational ranks",
+    "priorities": {
+      "low": "Low",
+      "normal": "Normal",
+      "high": "High"
+    },
+    "statuses": {
+      "queued": "Queued",
+      "assigned": "Assigned",
+      "completed": "Completed"
+    },
+    "ranks": {
+      "Operator": "Operator",
+      "Senior": "Senior",
+      "Lead": "Lead"
+    }
   }
 }

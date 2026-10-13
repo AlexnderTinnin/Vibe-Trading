@@ -5428,6 +5428,9 @@ def _build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--port", type=int, default=8000, help="Listen port")
     serve_parser.add_argument("--dev", action="store_true", help="Start the Vite dev server")
 
+    office_parser = subparsers.add_parser("office", help="Manage the shared research task board")
+    office_parser.add_argument("office_args", nargs=argparse.REMAINDER)
+
     provider_parser = subparsers.add_parser("provider", help="Manage OAuth providers")
     provider_subparsers = provider_parser.add_subparsers(dest="provider_command")
     login_parser = provider_subparsers.add_parser("login", help="Authenticate with an OAuth provider")
@@ -6562,6 +6565,10 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.command == "serve":
         return serve_main(raw_argv[1:])
+    if args.command == "office":
+        from src.pixel_agents.cli import main as office_main
+        office_main(args.office_args)
+        return 0
     if args.command == "provider":
         if args.provider_command == "login":
             return cmd_provider_login(args.provider)

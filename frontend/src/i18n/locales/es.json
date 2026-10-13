@@ -26,7 +26,8 @@
       "correlation": "Compara cómo se mueven los activos entre sí.",
       "scheduled": "Repite una investigación según un horario.",
       "runtime": "Comprueba conexiones de brókeres y el estado de ejecución de operaciones.",
-      "settings": "Configura modelos, fuentes de datos y conexiones de brókeres."
+      "settings": "Configura modelos, fuentes de datos y conexiones de brókeres.",
+      "pixelOffice": "Planifica y asigna tareas de investigación. La asignación no inicia la ejecución; los rangos son etiquetas y no conceden permisos de negociación."
     },
     "instructions": {
       "reports": "Primero pide al asistente un backtest de una estrategia y abre aquí sus resultados. Descarga los PDF y documentos generados en el chat desde la conversación original.",
@@ -36,7 +37,8 @@
       "correlation": "Introduce al menos dos símbolos de activos, elige el período y pulsa Calcular.",
       "scheduled": "Introduce la instrucción de investigación, elige la frecuencia y guarda. El programador local debe estar activado para ejecutar tareas; el envío requiere un canal configurado.",
       "runtime": "Primero configura una conexión de bróker en Ajustes o Cartera. Las operaciones disponibles dependen de sus capacidades y de tu autorización.",
-      "settings": "Configura un modelo para empezar. Añade datos o conexiones de brókeres según lo necesites; investigar datos públicos de mercado no requiere una cuenta de bróker."
+      "settings": "Configura un modelo para empezar. Añade datos o conexiones de brókeres según lo necesites; investigar datos públicos de mercado no requiere una cuenta de bróker.",
+      "pixelOffice": "Planifica y asigna tareas de investigación. La asignación no inicia la ejecución; los rangos son etiquetas y no conceden permisos de negociación."
     }
   },
   "layout": {
@@ -66,7 +68,8 @@
     "sidebar": "Barra lateral de Vibe-Trading",
     "mainNavigation": "Navegación principal",
     "about": "Acerca de",
-    "sessionsLoadFailed": "No se pueden cargar las conversaciones."
+    "sessionsLoadFailed": "No se pueden cargar las conversaciones.",
+    "pixelOffice": "Oficina de píxeles"
   },
   "runtime": {
     "monitorBadge": "Monitor de Runtime",
@@ -2380,5 +2383,40 @@
     "preview": "Test passed: {{preview}}",
     "error": "Provider test failed: {{error}}",
     "waiting": "The provider is taking longer than usual ({{seconds}}s). The request will continue until the server timeout."
+  },
+  "pixelOffice": {
+    "title": "Oficina de píxeles",
+    "description": "Planifica y asigna tareas de investigación. La asignación no inicia la ejecución; los rangos son etiquetas y no conceden permisos de negociación.",
+    "refresh": "Actualizar",
+    "loading": "Cargando oficina…",
+    "unavailable": "Oficina no disponible. Intenta actualizar.",
+    "floor": "Área de oficinas",
+    "taskCount": "Tareas pendientes: {{count}}",
+    "board": "Tablero de tareas",
+    "empty": "Todavía no hay tareas.",
+    "assignee": "Responsable",
+    "unassigned": "Sin asignar",
+    "result": "Resultado de la tarea",
+    "complete": "Registrar finalización",
+    "create": "Crear tarea",
+    "taskTitle": "Título de la tarea",
+    "instructions": "Instrucciones",
+    "priority": "Prioridad",
+    "ranksTitle": "Rangos organizativos",
+    "priorities": {
+      "low": "Baja",
+      "normal": "Normal",
+      "high": "Alta"
+    },
+    "statuses": {
+      "queued": "En espera",
+      "assigned": "Asignada",
+      "completed": "Completada"
+    },
+    "ranks": {
+      "Operator": "Miembro",
+      "Senior": "Sénior",
+      "Lead": "Responsable"
+    }
   }
 }

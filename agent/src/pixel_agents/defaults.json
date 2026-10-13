@@ -1,0 +1,45 @@
+{
+  "office_name": "Pixel Trading Office",
+  "agents": [
+    {
+      "id": "research-analyst",
+      "name": "Research Analyst",
+      "role": "research",
+      "specialities": [
+        "macro",
+        "equity",
+        "crypto",
+        "news"
+      ],
+      "office": "trading-floor",
+      "rank": "Operator",
+      "color": "#c59259"
+    },
+    {
+      "id": "risk-guard",
+      "name": "Risk Guard",
+      "role": "risk",
+      "specialities": [
+        "risk",
+        "drawdown",
+        "execution"
+      ],
+      "office": "trade-ops",
+      "rank": "Operator",
+      "color": "#73a4a4"
+    },
+    {
+      "id": "execution-agent",
+      "name": "Execution Agent",
+      "role": "execution",
+      "specialities": [
+        "broker",
+        "orders",
+        "routing"
+      ],
+      "office": "live-trading",
+      "rank": "Operator",
+      "color": "#a38bae"
+    }
+  ]
+}

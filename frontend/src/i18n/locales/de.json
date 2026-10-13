@@ -26,7 +26,8 @@
       "correlation": "Vergleichen, wie sich Vermögenswerte gemeinsam bewegen.",
       "scheduled": "Eine Recherche nach Zeitplan wiederholen.",
       "runtime": "Brokerverbindungen und den Betriebsstatus des Handels prüfen.",
-      "settings": "Modelle, Datenquellen und Brokerverbindungen konfigurieren."
+      "settings": "Modelle, Datenquellen und Brokerverbindungen konfigurieren.",
+      "pixelOffice": "Plane und verteile Rechercheaufgaben. Eine Zuweisung startet keine Ausführung. Ränge sind Bezeichnungen und erteilen keine Handelsrechte."
     },
     "instructions": {
       "reports": "Bitte den Assistenten zuerst um einen Strategie-Backtest und öffne hier die Ergebnisse. Im Chat erstellte PDFs und andere Dokumente lädst du in der ursprünglichen Unterhaltung herunter.",
@@ -36,7 +37,8 @@
       "correlation": "Gib mindestens zwei Wertpapiercodes ein, wähle den Zeitraum und klicke auf Berechnen.",
       "scheduled": "Gib einen Rechercheauftrag ein, wähle die Häufigkeit und speichere. Für die Ausführung muss der lokale Planer aktiviert sein; zur Zustellung ist ein eingerichteter Kanal nötig.",
       "runtime": "Richte zuerst unter Einstellungen oder Portfolio eine Brokerverbindung ein. Verfügbare Handelsaktionen hängen von den Brokerfunktionen und deiner Autorisierung ab.",
-      "settings": "Richte zunächst ein Modell ein. Ergänze Datenquellen oder Brokerverbindungen nach Bedarf; für öffentliche Marktrecherche ist kein Brokerkonto nötig."
+      "settings": "Richte zunächst ein Modell ein. Ergänze Datenquellen oder Brokerverbindungen nach Bedarf; für öffentliche Marktrecherche ist kein Brokerkonto nötig.",
+      "pixelOffice": "Plane und verteile Rechercheaufgaben. Eine Zuweisung startet keine Ausführung. Ränge sind Bezeichnungen und erteilen keine Handelsrechte."
     }
   },
   "layout": {
@@ -66,7 +68,8 @@
     "mainNavigation": "Hauptnavigation",
     "about": "Über",
     "portfolio": "Kontopositionen",
-    "sessionsLoadFailed": "Gespräche können nicht geladen werden."
+    "sessionsLoadFailed": "Gespräche können nicht geladen werden.",
+    "pixelOffice": "Pixelbüro"
   },
   "runtime": {
     "monitorBadge": "Runtime-Monitor",
@@ -2380,5 +2383,40 @@
     "preview": "Test passed: {{preview}}",
     "error": "Provider test failed: {{error}}",
     "waiting": "The provider is taking longer than usual ({{seconds}}s). The request will continue until the server timeout."
+  },
+  "pixelOffice": {
+    "title": "Pixelbüro",
+    "description": "Plane und verteile Rechercheaufgaben. Eine Zuweisung startet keine Ausführung. Ränge sind Bezeichnungen und erteilen keine Handelsrechte.",
+    "refresh": "Aktualisieren",
+    "loading": "Büro wird geladen…",
+    "unavailable": "Büro nicht verfügbar. Bitte aktualisieren.",
+    "floor": "Bürofläche",
+    "taskCount": "Offene Aufgaben: {{count}}",
+    "board": "Aufgabenübersicht",
+    "empty": "Noch keine Aufgaben.",
+    "assignee": "Zuständig",
+    "unassigned": "Nicht zugewiesen",
+    "result": "Ergebnis",
+    "complete": "Abschluss erfassen",
+    "create": "Aufgabe erstellen",
+    "taskTitle": "Aufgabentitel",
+    "instructions": "Anweisungen",
+    "priority": "Priorität",
+    "ranksTitle": "Organisatorische Ränge",
+    "priorities": {
+      "low": "Niedrig",
+      "normal": "Normal",
+      "high": "Hoch"
+    },
+    "statuses": {
+      "queued": "Wartend",
+      "assigned": "Zugewiesen",
+      "completed": "Abgeschlossen"
+    },
+    "ranks": {
+      "Operator": "Mitglied",
+      "Senior": "Erfahren",
+      "Lead": "Leitung"
+    }
   }
 }

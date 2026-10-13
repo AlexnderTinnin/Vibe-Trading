@@ -1727,7 +1727,7 @@ Vibe-Trading/
 │   │   ├── memory/                 # Cross-session persistent memory
 │   │   │   └── persistent.py       #   file-based memory (~/.vibe-trading/memory/)
 │   │   │
-│   │   ├── tools/                  # 110 auto-discovered agent tools
+│   │   ├── tools/                  # 111 auto-discovered agent tools
 │   │   │   ├── backtest_tool.py    #   run backtests
 │   │   │   ├── remember_tool.py    #   cross-session memory (save/recall/forget)
 │   │   │   ├── skill_writer_tool.py #  skill CRUD (save/patch/delete/file)

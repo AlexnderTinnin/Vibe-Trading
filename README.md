@@ -403,45 +403,14 @@ vibe-trading --upload trades_export.csv
 vibe-trading run -p "Analyze my trading behavior, extract my shadow strategy, and compare it with my actual trades"
 ```
 
----
+### Pixel Office management
 
-## 👥 Shadow Account
-
-Shadow Account starts from your own trading records instead of a generic strategy template.
-
-Upload a broker export, let the agent summarize your behavior, then compare the actual trading path with a rule-based shadow strategy.
-
-| Step | Agent output |
-|------|--------------|
-| **1. Read your journal** | Parses broker exports from 同花顺, 东方财富, 富途, and generic CSV formats. |
-| **2. Profile your behavior** | Holding days, win rate, PnL ratio, drawdown, disposition effect, overtrading, momentum chasing, and anchoring checks. |
-| **3. Extract your rules** | Turns recurring entries/exits into an explicit strategy profile instead of a hand-wavy summary. |
-| **4. Run the shadow** | Backtests the extracted rules and highlights rule breaks, early exits, missed signals, and alternative trade paths. |
-| **5. Deliver the report** | Produces an HTML/PDF report that can be inspected, archived, or refined in a later session. |
-
-```bash
-vibe-trading --upload trades_export.csv
-vibe-trading run -p "Analyze my trading behavior, extract my shadow strategy, and compare it with my actual trades"
-```
-
----
-
-## 💼 Local Multi-Broker Portfolio
-
-The Web UI adds a read-only **Portfolio** page that aggregates holdings across the broker connections you pick. Sources are connection instances of read-only profiles declaring `account.read` and `positions.read` — set them up under **Broker Connectors** in [Detailed Capabilities](#-detailed-capabilities). Eligibility is only the safety gate; the connection center also shows how far each connector has been verified for portfolio valuation.
-
-| Behavior | What you get |
-|----------|--------------|
-| **Per-source provenance** | Every holding names the connection it came from, valued in USD with a CNY conversion. |
-| **Failed sources excluded** | A source that errors is reported as an error and left out of the totals — never carried forward — and the snapshot is marked incomplete. |
-| **Immutable snapshots** | Each refresh is stored in `~/.vibe-trading/portfolio/portfolio.sqlite3`; credential-free settings live in `~/.vibe-trading/portfolio.json` and `connections.json`. |
-| **Export & analysis** | CSV export, plus a sanitized `portfolio_summary` agent tool whose `risk_xray_args` pass straight into `portfolio_risk_xray`. The same snapshot prints in the terminal with `vibe-trading portfolio show` (`refresh` / `sources` alongside). Risk x-ray uses only observed adjacent returns; it does not bridge missing prices into artificial one-bar returns. |
-
-Broker-reported source currencies are preserved during valuation: HKD account totals and positions, including Futu `HK.*` holdings, are converted with the snapshot USD/HKD rate before USD and CNY values are displayed. Older snapshots remain stored, but value history compares only snapshots produced by the current valuation methodology to avoid false gains or losses after a valuation fix.
-
-For `portfolio_risk_xray`, weekly (`1W`) and monthly (`1M`) inputs annualize
-volatility with 52 and 12 bars per year respectively; daily bars retain the
-252-bar convention. Monthly `1M` is distinct from minute `1m`.
+Open **Pixel Office** from the feature menu to plan and assign research tasks.
+The Web page, `vibe-trading office` CLI and `pixel_office` agent tool share one
+SQLite task board under your runtime directory. Assignment does not start
+execution; organizational ranks grant no trading permissions. Record the actual
+result when completing a task. See [Pixel Office](pixel-office/README.md) for CLI
+and API examples.
 
 ### Portfolio connector compatibility
 
@@ -2155,7 +2124,7 @@ Vibe-Trading/
 │   │   ├── memory/                 # Cross-session persistent memory
 │   │   │   └── persistent.py       #   file-based memory (~/.vibe-trading/memory/)
 │   │   │
-│   │   ├── tools/                  # 110 auto-discovered agent tools
+│   │   ├── tools/                  # 111 auto-discovered agent tools
 │   │   │   ├── backtest_tool.py    #   run backtests
 │   │   │   ├── remember_tool.py    #   cross-session memory (save/recall/forget)
 │   │   │   ├── skill_writer_tool.py #  skill CRUD (save/patch/delete/file)

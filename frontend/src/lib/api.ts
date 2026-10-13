@@ -429,6 +429,9 @@ function appendQueryParam(url: string, key: string, value: string): string {
 }
 
 export const api = {
+  getPixelOffice: () => request<OfficeSnapshot>("/api/pixel-office"),
+  updatePixelOffice: (action: "create" | "assign" | "complete" | "rank", arguments_: Record<string, unknown>) =>
+    request<OfficeSnapshot>("/api/pixel-office/actions", { method: "POST", body: JSON.stringify({ action, arguments: arguments_ }) }),
   uploadFile,
   getCorrelationAnalysis: (codes: string, days: number, method: "pearson" | "spearman", includeRegime: boolean, signal?: AbortSignal) =>
     request<CorrelationAnalysisResponse>(`/correlation/analysis?${new URLSearchParams({ codes, days: String(days), method, include_regime: String(includeRegime) })}`, { signal }),
@@ -2034,4 +2037,10 @@ export interface ToolTrailItem {
   preview?: string;
   call_id?: string;
   timestamp?: number;
+}
+
+export interface OfficeSnapshot {
+  mode: "manual_planning";
+  agents: { id: string; name: string; role: string; color: string; rank: "Operator" | "Senior" | "Lead"; load: number }[];
+  tasks: { id: string; title: string; description: string; priority: "low" | "normal" | "high"; assigned_to: string | null; status: "queued" | "assigned" | "completed"; result: string }[];
 }

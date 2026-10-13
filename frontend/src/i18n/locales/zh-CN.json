@@ -21,7 +21,8 @@
       "correlation": "比较多只资产是否同涨同跌。",
       "scheduled": "按指定时间重复执行研究任务。",
       "runtime": "查看券商连接和交易运行状态。",
-      "settings": "配置模型、数据源和券商连接。"
+      "settings": "配置模型、数据源和券商连接。",
+      "pixelOffice": "规划和分配研究任务。分配任务不会启动执行；职级只是标签，不授予交易权限。"
     },
     "instructions": {
       "reports": "先在研究助手中描述策略并完成回测，再到这里打开结果。聊天生成的 PDF 等文档在原对话中下载。",
@@ -31,7 +32,8 @@
       "correlation": "输入至少两个资产代码，选择时间窗口，再点击计算。",
       "scheduled": "填写研究指令、选择执行频率并保存。任务执行需要启用本地调度服务；推送结果还需配置投递渠道。",
       "runtime": "先在设置或持仓页配置券商连接。可用的交易操作取决于该券商的能力和你的授权。",
-      "settings": "初次使用先配置模型。按任务需要添加数据源或券商连接；研究公开行情无需连接券商账户。"
+      "settings": "初次使用先配置模型。按任务需要添加数据源或券商连接；研究公开行情无需连接券商账户。",
+      "pixelOffice": "规划和分配研究任务。分配任务不会启动执行；职级只是标签，不授予交易权限。"
     }
   },
   "layout": {
@@ -61,7 +63,8 @@
     "sidebar": "Vibe-Trading 侧边栏",
     "mainNavigation": "主导航",
     "about": "关于",
-    "sessionsLoadFailed": "无法加载会话。"
+    "sessionsLoadFailed": "无法加载会话。",
+    "pixelOffice": "像素办公室"
   },
   "runtime": {
     "monitorBadge": "交易监控",
@@ -2380,5 +2383,40 @@
     "preview": "Test passed: {{preview}}",
     "error": "Provider test failed: {{error}}",
     "waiting": "The provider is taking longer than usual ({{seconds}}s). The request will continue until the server timeout."
+  },
+  "pixelOffice": {
+    "title": "像素办公室",
+    "description": "规划和分配研究任务。分配任务不会启动执行；职级只是标签，不授予交易权限。",
+    "refresh": "刷新",
+    "loading": "正在加载办公室…",
+    "unavailable": "办公室不可用，请刷新重试。",
+    "floor": "办公区",
+    "taskCount": "未完成任务：{{count}}",
+    "board": "任务板",
+    "empty": "暂无任务。",
+    "assignee": "负责人",
+    "unassigned": "未分配",
+    "result": "完成结果",
+    "complete": "记录完成",
+    "create": "创建任务",
+    "taskTitle": "任务标题",
+    "instructions": "任务说明",
+    "priority": "优先级",
+    "ranksTitle": "组织职级",
+    "priorities": {
+      "low": "低",
+      "normal": "普通",
+      "high": "高"
+    },
+    "statuses": {
+      "queued": "待分配",
+      "assigned": "已分配",
+      "completed": "已完成"
+    },
+    "ranks": {
+      "Operator": "成员",
+      "Senior": "资深成员",
+      "Lead": "负责人"
+    }
   }
 }
