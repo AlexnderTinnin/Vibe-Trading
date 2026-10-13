@@ -84,7 +84,7 @@ def test_agent_loop_executes_dsml_textual_tool_call(
             return None
 
     monkeypatch.setattr(
-        "src.agent.loop.HeartbeatTimer", _ImmediateHeartbeatTimer
+        "src.agent.tool_lifecycle.HeartbeatTimer", _ImmediateHeartbeatTimer
     )
     dsml = (
         '<｜｜DSML｜｜tool_calls>'
@@ -155,7 +155,7 @@ def test_agent_loop_never_releases_tool_call_syntax_as_a_final_answer(
             return None
 
     monkeypatch.setattr(
-        "src.agent.loop.HeartbeatTimer", _ImmediateHeartbeatTimer
+        "src.agent.tool_lifecycle.HeartbeatTimer", _ImmediateHeartbeatTimer
     )
     # The fullwidth-vbar (U+FF5C) form is what the real failure looked like; the
     # streaming DSML parser does not recognize it, so it arrives as text.
