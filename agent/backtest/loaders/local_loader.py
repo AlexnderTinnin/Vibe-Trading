@@ -160,6 +160,17 @@ def _normalize_columns(
     col_map: dict[str, str],
     date_fmt: str | None,
 ) -> pd.DataFrame | None:
+    # A DatetimeIndex carries the bar dates (parquet files, and duckdb
+    # relations whose query set one). An explicitly mapped date column wins
+    # over the index; otherwise the index becomes the date column, whatever
+    # date_fmt is configured. Dropping the index on the first path also
+    # sidesteps the reset_index crash when index and column share a name.
+    if isinstance(df.index, pd.DatetimeIndex):
+        if col_map.get("date", "date") in df.columns:
+            df = df.reset_index(drop=True)
+        else:
+            df = df.reset_index()
+            col_map = {**col_map, "date": df.columns[0]}
     rename: dict[str, str] = {}
     for std_name, src_name in col_map.items():
         if std_name == "date":
@@ -213,11 +224,6 @@ def _read_csv(path: str, col_map: dict[str, str], date_fmt: str | None) -> pd.Da
 
 def _read_parquet(path: str, col_map: dict[str, str], date_fmt: str | None) -> pd.DataFrame | None:
     df = pd.read_parquet(path)
-    if isinstance(df.index, pd.DatetimeIndex):
-        df = df.reset_index()
-        if date_fmt is None and col_map.get("date", "date") not in df.columns:
-            col_map = dict(col_map)
-            col_map["date"] = df.columns[0]
     return _normalize_columns(df, col_map, date_fmt)
 
 
