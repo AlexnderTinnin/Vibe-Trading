@@ -1384,7 +1384,10 @@ New BaseEngine `artifacts/trades.csv` files include an `event` column:
 `entry` marks an opening row and `exit` marks a completed trade, including
 zero-PnL exits. Validation and strategy-discovery readers use this marker.
 Files without it retain legacy loading; their zero-PnL exits remain ambiguous.
-The separate options-engine trade format is unchanged.
+The separate options-engine trade format is unchanged. Validation also recovers entry dates from
+matching adjacent `entry`/`exit` rows, so walk-forward trade counts and win rates
+retain entry-window attribution after reload. Unmarked or unmatched rows keep
+the legacy timestamp fallback.
 
 ```bash
 # Moving average crossover on US equities

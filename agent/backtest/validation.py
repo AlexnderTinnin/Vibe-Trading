@@ -404,8 +404,27 @@ def _load_trades(run_dir: Path) -> List[TradeRecord]:
     # Unmarked historical/other-engine files retain their legacy convention.
     trades = []
     exit_mask = df["event"].eq("exit") if "event" in df.columns else df["pnl"].ne(0)
-    exit_rows = df[exit_mask].reset_index(drop=True)
-    for _, row in exit_rows.iterrows():
+    exit_rows = df[exit_mask]
+    for row_idx, row in exit_rows.iterrows():
+        exit_time = pd.Timestamp(row.get("timestamp", "2000-01-01"))
+        entry_time = exit_time
+        # BaseEngine emits adjacent entry/exit pairs. Recover entry dates only
+        # from an explicit matching pair; legacy/exit-only files stay unchanged.
+        if "event" in df.columns and row_idx > 0:
+            entry = df.iloc[row_idx - 1]
+            expected_side = {"sell": "buy", "buy": "sell"}.get(row.get("side"))
+            if (
+                entry["event"] == "entry"
+                and entry.get("code") == row.get("code")
+                and expected_side is not None
+                and entry.get("side") == expected_side
+            ):
+                candidate_time = pd.to_datetime(entry.get("timestamp"), errors="coerce")
+                try:
+                    if pd.notna(candidate_time) and candidate_time <= exit_time:
+                        entry_time = candidate_time
+                except TypeError:
+                    pass  # Incompatible timestamp timezones cannot form a pair.
         hold = pd.to_numeric(row.get("holding_bars"), errors="coerce")
         if pd.isna(hold):
             hold = pd.to_numeric(row.get("holding_days", 0), errors="coerce")
@@ -416,8 +435,8 @@ def _load_trades(run_dir: Path) -> List[TradeRecord]:
                 direction=1 if row.get("side") == "sell" else -1,
                 entry_price=0.0,
                 exit_price=float(row.get("price", 0)),
-                entry_time=pd.Timestamp(row.get("timestamp", "2000-01-01")),
-                exit_time=pd.Timestamp(row.get("timestamp", "2000-01-01")),
+                entry_time=entry_time,
+                exit_time=exit_time,
                 size=float(row.get("qty", 0)),
                 leverage=1.0,
                 pnl=float(row.get("pnl", 0)),
