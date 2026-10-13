@@ -36,6 +36,7 @@ from src.agent.tuning import (
     _stall_timeout_seconds as _stall_timeout_seconds,
 )
 
+from src.agent.loop_streaming import TurnStream
 from src.agent.context import ContextBuilder
 from src.agent.grounding import GroundingLedger
 from src.agent.grounding.release import MAX_GROUNDING_REVISIONS
@@ -574,86 +575,11 @@ class AgentLoop(ToolCallLifecycle):
                         )
                         messages.append({"role": "system", "content": pending_directive})
 
-                # Streaming output + collect thinking text
-                thinking_chunks: List[str] = []
-                reasoning_chars = 0
-                reasoning_tail = ""
-                last_reasoning_emit: float | None = None
-                buffer_text_output = bool(
-                    self._grounding and self._grounding.should_buffer_output
+                stream = TurnStream(
+                    grounding=self._grounding, emit=self._emit, iteration=current_iter,
+                    heartbeat_interval=_heartbeat_interval_s,
+                    reasoning_interval=_reasoning_delta_min_interval_s,
                 )
-
-                streamed_chars = 0
-                stream_total = 0
-                stream_frozen = False
-
-                def _on_text_chunk(delta: str) -> None:
-                    nonlocal streamed_chars, stream_total, stream_frozen
-                    thinking_chunks.append(delta)
-                    stream_total += len(delta)
-                    if buffer_text_output or stream_frozen:
-                        return
-                    # Neither the figures block nor an unchecked measurement streams
-                    # (see streamable_length). Only a fence character or a digit
-                    # can hold text back, so any other chunk is emitted as it
-                    # arrives instead of re-parsing the whole answer.
-                    if streamed_chars + len(delta) == stream_total and not any(
-                        char in "`~" or char.isdigit() for char in delta
-                    ):
-                        self._emit("text_delta", {"delta": delta, "iter": current_iter})
-                        streamed_chars = stream_total
-                        return
-                    text = "".join(thinking_chunks)
-                    safe = (
-                        self._grounding.streamable_length(text)
-                        if self._grounding is not None
-                        else len(text)
-                    )
-                    if self._grounding is not None and safe < len(text):
-                        # Held at a measurement: nothing after it streams this turn.
-                        stream_frozen = self._grounding.measurement_start(text) == safe
-                    if safe > streamed_chars:
-                        self._emit(
-                            "text_delta",
-                            {"delta": text[streamed_chars:safe], "iter": current_iter},
-                        )
-                        streamed_chars = safe
-
-                last_waiting_emit: float | None = None
-
-                def _on_waiting_chunk() -> None:
-                    nonlocal last_waiting_emit
-                    now = _time.monotonic()
-                    if last_waiting_emit is None or now - last_waiting_emit >= _heartbeat_interval_s():
-                        last_waiting_emit = now
-                        self._emit("llm_waiting", {"iter": current_iter})
-
-                def _on_reasoning_chunk(delta: str) -> None:
-                    # Throttled: long reasoning streams produce hundreds of
-                    # chunks; emitting each one floods the SSE replay buffer
-                    # and evicts tool_call/text_delta events. The first chunk
-                    # of each iteration always emits immediately so the UI
-                    # flips to "Reasoning…" without delay.
-                    nonlocal reasoning_chars, reasoning_tail, last_reasoning_emit
-                    reasoning_chars += len(delta)
-                    # Rolling tail rides the already-throttled emit so the UI
-                    # can whisper the current thought; a bounded window keeps
-                    # replay-buffer pressure flat regardless of trace length.
-                    reasoning_tail = (reasoning_tail + delta)[-600:]
-                    now = _time.monotonic()
-                    if (
-                        last_reasoning_emit is not None
-                        and now - last_reasoning_emit < _reasoning_delta_min_interval_s()
-                    ):
-                        return
-                    last_reasoning_emit = now
-                    reasoning_event = {
-                        "iter": current_iter,
-                        "chars": reasoning_chars,
-                    }
-                    if not buffer_text_output:
-                        reasoning_event["tail"] = reasoning_tail
-                    self._emit("reasoning_delta", reasoning_event)
 
                 # The final iteration is always text-only. A grounding correction
                 # whose validator requested no explicit recovery is text-only too:
@@ -683,9 +609,9 @@ class AgentLoop(ToolCallLifecycle):
                     response = self.llm.stream_chat(
                         messages,
                         tools=tool_defs,
-                        on_text_chunk=_on_text_chunk,
-                        on_reasoning_chunk=_on_reasoning_chunk,
-                        on_waiting_chunk=_on_waiting_chunk,
+                        on_text_chunk=stream.on_text,
+                        on_reasoning_chunk=stream.on_reasoning,
+                        on_waiting_chunk=stream.on_waiting,
                         timeout=llm_timeout,
                         idle_timeout_s=llm_timeout,
                         should_cancel=self._cancel_event.is_set,
@@ -733,12 +659,7 @@ class AgentLoop(ToolCallLifecycle):
                             "retry_delay_s": retry_delay_s,
                         },
                     )
-                    thinking_chunks.clear()
-                    streamed_chars = 0
-                    stream_total = 0
-                    stream_frozen = False
-                    reasoning_chars = 0
-                    last_reasoning_emit = None
+                    stream.reset_for_retry()
                     # Wait on the cancel event, not time.sleep: the delay now
                     # escalates to the configured cap (30s by default) and a
                     # provider Retry-After can ask for that much on the first
@@ -750,9 +671,9 @@ class AgentLoop(ToolCallLifecycle):
                     response = self.llm.stream_chat(
                         messages,
                         tools=tool_defs,
-                        on_text_chunk=_on_text_chunk,
-                        on_reasoning_chunk=_on_reasoning_chunk,
-                        on_waiting_chunk=_on_waiting_chunk,
+                        on_text_chunk=stream.on_text,
+                        on_reasoning_chunk=stream.on_reasoning,
+                        on_waiting_chunk=stream.on_waiting,
                         timeout=llm_timeout,
                         idle_timeout_s=llm_timeout,
                         should_cancel=self._cancel_event.is_set,
@@ -819,7 +740,7 @@ class AgentLoop(ToolCallLifecycle):
                         except Exception as exc:  # noqa: BLE001
                             logger.debug("Goal usage accounting skipped: %s", exc)
 
-                thinking_text = "".join(thinking_chunks)
+                thinking_text = "".join(stream.thinking_chunks)
                 if thinking_text:
                     trace.write_text_entry(
                         {"type": "thinking", "iter": current_iter},
@@ -827,7 +748,7 @@ class AgentLoop(ToolCallLifecycle):
                         value=thinking_text,
                         offload_kind=f"thinking-{current_iter}",
                     )
-                    if not buffer_text_output:
+                    if not stream.buffer_text_output:
                         self._emit(
                             "thinking_done",
                             {
@@ -879,7 +800,7 @@ class AgentLoop(ToolCallLifecycle):
                             "round": grounding_revisions,
                         }
                     )
-                    if streamed_chars:
+                    if stream.streamed_chars:
                         self._emit(
                             "stream_reset",
                             {"iter": current_iter, "reason": "grounding_tool_call_blocked"},
@@ -1031,7 +952,7 @@ class AgentLoop(ToolCallLifecycle):
                                     value=final_content,
                                     offload_kind=f"answer-rejected-{current_iter}",
                                 )
-                                if not buffer_text_output and streamed_chars:
+                                if not stream.buffer_text_output and stream.streamed_chars:
                                     # The stream showed this draft up to its first unchecked
                                     # number; the next draft or the released answer replaces it.
                                     self._emit(
@@ -1168,7 +1089,7 @@ class AgentLoop(ToolCallLifecycle):
                                 "text_delta",
                                 {"delta": final_content, "iter": current_iter},
                             )
-                        elif buffer_text_output and not syntax_fallback_emitted:
+                        elif stream.buffer_text_output and not syntax_fallback_emitted:
                             self._emit(
                                 "text_delta",
                                 {"delta": final_content, "iter": current_iter},
@@ -1176,7 +1097,7 @@ class AgentLoop(ToolCallLifecycle):
                         elif not self._released_fallback and not syntax_fallback_emitted:
                             # Flush a held-back last line that never became a
                             # figures fence; a stripped block leaves nothing.
-                            shown = "".join(thinking_chunks)[:streamed_chars]
+                            shown = "".join(stream.thinking_chunks)[:stream.streamed_chars]
                             if not final_content.startswith(shown):
                                 # Stripping the block also trims the blank lines
                                 # the stream already showed before its fence.
@@ -1275,17 +1196,17 @@ class AgentLoop(ToolCallLifecycle):
                     react_trace.append({"type": "answer", "content": final_content[:500]})
                     break
 
-                if not buffer_text_output and self._grounding is not None:
+                if not stream.buffer_text_output and self._grounding is not None:
                     # The turn is over, so a held-back last line is complete: it is
                     # shown unless it opens a figures block.
-                    turn_text = "".join(thinking_chunks)
+                    turn_text = "".join(stream.thinking_chunks)
                     safe = min(len(turn_text), self._grounding.streamable_length(turn_text + "\n"))
-                    if safe > streamed_chars:
+                    if safe > stream.streamed_chars:
                         self._emit(
                             "text_delta",
-                            {"delta": turn_text[streamed_chars:safe], "iter": current_iter},
+                            {"delta": turn_text[stream.streamed_chars:safe], "iter": current_iter},
                         )
-                        streamed_chars = safe
+                        stream.streamed_chars = safe
                 assistant_message = context.format_assistant_tool_calls(
                     response.tool_calls,
                     content=response.content,
