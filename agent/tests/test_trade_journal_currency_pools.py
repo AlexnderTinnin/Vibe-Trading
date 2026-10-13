@@ -93,7 +93,7 @@ def test_dividends_join_their_own_currency_pool() -> None:
     ])
     profile = _compute_profile(df)
     assert profile["total_pnl"] == {"HKD": 1050.0, "USD": 100.0}
-    assert profile["total_dividends"] == 50.0
+    assert profile["total_dividends"] == {"HKD": 50.0, "USD": 0.0}
     assert profile["total_dividends_by_currency"] == {"HKD": 50.0, "USD": 0.0}
 
 
@@ -125,7 +125,7 @@ def test_foreign_dividend_flips_profile_to_its_currency_pool() -> None:
     ])
     profile = _compute_profile(df)
     assert profile["total_pnl"] == {"HKD": 1000.0, "USD": 25.0}
-    assert profile["total_dividends"] == 25.0
+    assert profile["total_dividends"] == {"HKD": 0.0, "USD": 25.0}
     assert profile["total_dividends_by_currency"] == {"HKD": 0.0, "USD": 25.0}
 
 
@@ -140,3 +140,61 @@ def test_unmatched_positions_do_not_break_currency_pooling() -> None:
     profile = _compute_profile(df)
     assert profile["total_pnl"] == 1000.0
     assert "currency_warning" not in profile
+    assert {row["currency"] for row in profile["top_symbols"]} == {"USD", "HKD"}
+
+
+def test_dividend_only_journal_never_adds_currencies() -> None:
+    profile = _compute_profile(_df([
+        _div("2026-01-02", "AAPL", 25),
+        _div("2026-01-03", "0700.HK", 50),
+    ]))
+    assert profile["total_pnl"] == {"HKD": 50.0, "USD": 25.0}
+    assert profile["total_dividends"] == {"HKD": 50.0, "USD": 25.0}
+    assert profile["max_drawdown"] == {"HKD": 0.0, "USD": 0.0}
+
+
+def test_pnl_ratio_never_divides_different_currencies() -> None:
+    profile = _compute_profile(_df([
+        _rec("2026-01-02", "AAPL", "buy", 10, 100),
+        _rec("2026-01-03", "AAPL", "sell", 10, 90),
+        _rec("2026-01-02", "0700.HK", "buy", 100, 400),
+        _rec("2026-01-03", "0700.HK", "sell", 100, 410),
+    ]))
+    assert profile["profit_loss_ratio"] == {"USD": 0.0, "HKD": float("inf")}
+    assert profile["max_drawdown"] == {"USD": -100.0, "HKD": 0.0}
+    assert all("currency" in row for row in profile["top_symbols"])
+
+
+def test_initial_loss_counts_towards_drawdown() -> None:
+    profile = _compute_profile(_df([
+        _rec("2026-01-02", "AAPL", "buy", 10, 100),
+        _rec("2026-01-03", "AAPL", "sell", 10, 90),
+        _rec("2026-01-04", "AAPL", "buy", 10, 90),
+        _rec("2026-01-05", "AAPL", "sell", 10, 85),
+    ]))
+    assert profile["max_drawdown"] == -150.0
+    assert profile["total_pnl"] == -150.0
+
+
+def test_behavior_compares_activity_within_currencies() -> None:
+    from src.tools.trade_journal_tool import _compute_behavior
+
+    df = _df([
+        _rec("2026-01-02", "AAPL", "buy", 10, 100),
+        _rec("2026-01-03", "AAPL", "sell", 10, 90),
+        _rec("2026-01-04", "0700.HK", "buy", 100, 400),
+        _rec("2026-01-05", "0700.HK", "sell", 100, 410),
+    ])
+    result = _compute_behavior(df)["overtrading"]
+    assert set(result["by_currency"]) == {"USD", "HKD"}
+    assert "busy_day_avg_pnl" not in result
+
+
+def test_behavior_with_only_open_positions_keeps_currency_activity_separate() -> None:
+    from src.tools.trade_journal_tool import _compute_behavior
+
+    result = _compute_behavior(_df([
+        _rec("2026-01-02", "AAPL", "buy", 10, 100),
+        _rec("2026-01-02", "0700.HK", "buy", 100, 400),
+    ]))
+    assert set(result["overtrading"]["by_currency"]) == {"USD", "HKD"}

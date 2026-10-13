@@ -237,17 +237,10 @@ def _compute_profile(df: pd.DataFrame) -> dict[str, Any]:
             dividend cash rows; those are summed into ``total_dividends`` and
             ``total_pnl`` but never counted as trades.
 
-    Money is never summed across currencies (#1808). With a single
-    settlement currency, ``total_pnl`` / ``max_drawdown`` / ``total_dividends``
-    stay plain floats and the profile is byte-for-byte the legacy shape. When
-    round-trips span more than one currency they become per-currency dicts
-    (e.g. ``{"USD": 100.0, "HKD": 1000.0}``) plus a ``currency_warning`` —
-    the same no-FX-conversion convention the shadow backtest reports
-    (#997/#1310). Ratio metrics (win_rate, profit_loss_ratio) stay
-    dimensionless on the full sample. Dividend rows settle in their symbol's
-    currency, so they join that currency's pool even when the market has no
-    round-trip here — the cash is real and dropping it would understate the
-    pool.
+    Monetary metrics and the average-win/average-loss ratio are computed
+    within each settlement currency. Single-currency journals retain scalar
+    values; mixed journals return currency-keyed mappings. Win rate and
+    holding time remain sample-wide because they do not add money amounts.
 
     Returns:
         Dict with avg_holding_days, trade_frequency_per_week, win_rate,
@@ -269,7 +262,6 @@ def _compute_profile(df: pd.DataFrame) -> dict[str, Any]:
     # silent omission (#1808).
     div_rows = df[df["side"] == "dividend"]
     dividend_amounts = div_rows["amount"]
-    total_dividends = round(float(dividend_amounts.sum()), 2)
     dividends_by_currency: dict[str, float] = {}
     for symbol, amount in div_rows.groupby("symbol")["amount"].sum().items():
         cur = code_currency(symbol)
@@ -294,52 +286,49 @@ def _compute_profile(df: pd.DataFrame) -> dict[str, Any]:
     )
     mixed = len(currencies) > 1
 
-    if not rts_df.empty:
-        wins = rts_df[rts_df["pnl"] > 0]
-        losses = rts_df[rts_df["pnl"] < 0]
-        avg_win = wins["pnl"].mean() if len(wins) else 0.0
-        avg_loss = losses["pnl"].mean() if len(losses) else 0.0
-        win_rate = round(len(wins) / len(rts_df), 4)
-        pnl_ratio = round(_safe_div(avg_win, abs(avg_loss)), 2) if avg_loss else float("inf") if avg_win else 0.0
-        avg_hold = round(rts_df["hold_days"].mean(), 2)
-        if mixed:
-            # Per-currency pools, dividends included where their market
-            # traded; no FX translation (shadow-backtest convention #997/#1310).
-            total_pnl = {
-                cur: round(float(
-                    rts_df.loc[rts_df["currency"] == cur, "pnl"].sum()
-                    + dividends_by_currency.get(cur, 0.0)
-                ), 2)
-                for cur in currencies
-            }
-            max_drawdown = {}
-            for cur in currencies:
-                pool = rts_df[rts_df["currency"] == cur].sort_values("sell_dt")
-                pnl = pool["pnl"].cumsum()
-                drawdown = (pnl - pnl.cummax()).min()
-                max_drawdown[cur] = (
-                    round(float(drawdown), 2) if pd.notna(drawdown) else 0.0
-                )
-        else:
-            total_pnl = round(float(rts_df["pnl"].sum()) + total_dividends, 2)
-            # Cumulative PnL → max drawdown
-            cum = rts_df.sort_values("sell_dt")["pnl"].cumsum()
-            running_max = cum.cummax()
-            drawdown = (cum - running_max).min()
-            max_drawdown = round(float(drawdown), 2) if pd.notna(drawdown) else 0.0
-    else:
-        win_rate = pnl_ratio = avg_hold = max_drawdown = 0.0
-        total_pnl = total_dividends
+    win_rate = round(sum(rt["pnl"] > 0 for rt in rts) / len(rts), 4) if rts else 0.0
+    avg_hold = round(float(rts_df["hold_days"].mean()), 2) if rts else 0.0
+    pnl_by_currency = {}
+    drawdown_by_currency = {}
+    ratio_by_currency = {}
+    for currency in currencies:
+        pool = sorted((rt for rt in rts if rt["currency"] == currency),
+                      key=lambda rt: rt["sell_dt"])
+        pnl = pd.Series([rt["pnl"] for rt in pool], dtype=float)
+        wins, losses = pnl[pnl > 0], pnl[pnl < 0]
+        avg_win = float(wins.mean()) if len(wins) else 0.0
+        avg_loss = float(losses.mean()) if len(losses) else 0.0
+        ratio_by_currency[currency] = (
+            round(avg_win / abs(avg_loss), 2) if avg_loss
+            else float("inf") if avg_win else 0.0
+        )
+        pnl_by_currency[currency] = round(float(pnl.sum()) + dividends_by_currency.get(currency, 0.0), 2)
+        # The realized-PnL curve starts at zero, before the first close.
+        # Otherwise a losing first trade becomes the peak and disappears.
+        cumulative = pnl.cumsum()
+        drawdown = (cumulative - cumulative.cummax().clip(lower=0)).min()
+        drawdown_by_currency[currency] = round(float(drawdown), 2) if pd.notna(drawdown) else 0.0
 
+    dividend_totals = {cur: round(dividends_by_currency.get(cur, 0.0), 2) for cur in currencies}
+    total_pnl = pnl_by_currency if mixed else next(iter(pnl_by_currency.values()), 0.0)
+    max_drawdown = drawdown_by_currency if mixed else next(iter(drawdown_by_currency.values()), 0.0)
+    pnl_ratio = ratio_by_currency if mixed else next(iter(ratio_by_currency.values()), 0.0)
+    total_dividends = dividend_totals if mixed else next(iter(dividend_totals.values()), 0.0)
+
+    mixed_trade_currencies = len({code_currency(symbol) for symbol in trades_df["symbol"]}) > 1
     top_symbols = (
         trades_df.groupby("symbol")
         .agg(trades=("symbol", "count"), total_amount=("amount", "sum"))
-        .sort_values("total_amount", ascending=False)
+        .sort_values("trades" if mixed_trade_currencies else "total_amount", ascending=False)
         .head(10)
         .round(2)
         .reset_index()
         .to_dict(orient="records")
     )
+
+    if mixed_trade_currencies:
+        for entry in top_symbols:
+            entry["currency"] = code_currency(entry["symbol"])
 
     market_dist = trades_df["market"].value_counts().to_dict()
     hourly_dist = trades_df["datetime"].dt.hour.value_counts().sort_index().to_dict()
@@ -375,7 +364,7 @@ def _compute_profile(df: pd.DataFrame) -> dict[str, Any]:
                 for cur in currencies
             },
             "currency_warning": (
-                "Round-trips span multiple settlement currencies; totals are "
+                "Journal cash flows span multiple settlement currencies; monetary metrics are "
                 "reported per currency with no FX conversion."
             ),
         } if mixed else {}),
@@ -565,9 +554,26 @@ def _compute_behavior(df: pd.DataFrame) -> dict[str, Any]:
         return {"error": "empty trade journal"}
     trades_df = df[df["side"].isin(("buy", "sell"))]
     rts_df = pd.DataFrame(pair_trades_fifo(df))
+    currencies = sorted({code_currency(symbol) for symbol in trades_df["symbol"]})
+    if len(currencies) > 1:
+        by_currency = {
+            currency: _overtrading(
+                trades_df[trades_df["symbol"].map(code_currency) == currency],
+                rts_df[rts_df["currency"] == currency] if not rts_df.empty else rts_df,
+            )
+            for currency in currencies
+        }
+        overtrading = {
+            "severity": max((result["severity"] for result in by_currency.values()),
+                            key=("low", "medium", "high").index),
+            "by_currency": by_currency,
+            "evidence": "Activity and realized PnL compared separately by settlement currency; no FX conversion.",
+        }
+    else:
+        overtrading = _overtrading(trades_df, rts_df)
     return {
         "disposition_effect": _disposition_effect(rts_df),
-        "overtrading": _overtrading(trades_df, rts_df),
+        "overtrading": overtrading,
         "chasing_momentum": _chasing_momentum(trades_df),
         "anchoring": _anchoring(trades_df),
     }

@@ -11,8 +11,9 @@ have dedicated branches:
   positions are market-suffixed symbols with a ``symbol_name``.
 
 Inside the generic path, ``binance`` and ``okx`` additionally classify holdings
-as crypto/stablecoin and quote against USDT. Everything else falls through
-unchanged, so adding a connector needs no edit to this module.
+as crypto/stablecoin and quote against USDT. Futu uses its explicit
+average_cost, because its securities cost_price includes realized gains.
+Other connectors fall through unchanged when their field semantics match.
 """
 
 from __future__ import annotations
@@ -143,6 +144,12 @@ def normalize_position(broker: str, row: dict[str, Any]) -> dict[str, Any]:
             ),
         )
     )
+    if broker == "futu":
+        # Futu's cost_price is diluted by realized gains, not the remaining
+        # position's purchase cost. Never derive unrealized P&L from it.
+        # If neither average_cost nor unrealized_pl was reported, P&L stays
+        # unavailable; the connector still preserves both raw cost bases.
+        cost = _decimal(row.get("average_cost"))
     market_price = _decimal(
         row.get(
             "market_price",

@@ -1,8 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Portfolio } from "@/pages/Portfolio";
 import { api } from "@/lib/api";
 import i18n from "@/i18n";
+
+const chartOptions = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/echarts", () => ({ echarts: { init: () => ({ setOption: chartOptions, on: vi.fn(), off: vi.fn(), resize: vi.fn(), dispose: vi.fn() }) } }));
 
 vi.mock("@/lib/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
@@ -408,4 +411,33 @@ describe("Portfolio page", () => {
     await waitFor(() => expect(mocked.reconnectPortfolioSource).toHaveBeenCalledWith("ibkr-auth"));
     expect(screen.queryByRole("button", { name: i18n.t("portfolio.accounts.retryRead") })).not.toBeInTheDocument();
   });
+  it.each(["USD", "CNY", "HKD"])("shows holdings, PnL and history in %s", async (currency) => {
+    const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(640);
+    mocked.getPortfolioSettings.mockResolvedValue({ ...portfolioConfiguration, settings: { ...portfolioConfiguration.settings, display_currency: currency } });
+    mocked.getPortfolioHistory.mockResolvedValue({ status: "ok", history: [
+      { id: "historical", created_at: snapshot.created_at, complete: 1, total_usd: "100", total_cny: "700", total_hkd: "800" },
+      { id: "legacy", created_at: snapshot.created_at, complete: 1, total_usd: "100", total_cny: "700", total_hkd: null },
+    ] });
+    try {
+      render(<Portfolio />);
+      const row = (await screen.findByText("AAPL")).closest("tr")!;
+      const format = (value: number) => new Intl.NumberFormat(i18n.language || "en", { style: "currency", currency, maximumFractionDigits: currency === "CNY" ? 0 : 2 }).format(value);
+      const rate = currency === "USD" ? 1 : currency === "CNY" ? 7.2 : 7.8;
+      expect(within(row).getByText(format(300 * rate))).toBeInTheDocument();
+      expect(within(row).getByText(format(100 * rate))).toBeInTheDocument();
+      await waitFor(() => expect(chartOptions.mock.calls.some(([option]) => option.series?.[0]?.type === "line")).toBe(true));
+      const history = chartOptions.mock.calls.map(([option]) => option).find(option => option.series?.[0]?.type === "line");
+      expect(history.series[0].data).toEqual(currency === "HKD" ? [800, null] : currency === "CNY" ? [700, 700] : [100, 100]);
+      expect(history.tooltip.formatter([{ dataIndex: 0, value: history.series[0].data[0] }])).toContain(format(history.series[0].data[0]));
+    } finally { width.mockRestore(); }
+  });
+
+  it("does not invent an FX rate for unconvertible PnL", async () => {
+    mocked.getPortfolioSettings.mockResolvedValue({ ...portfolioConfiguration, settings: { ...portfolioConfiguration.settings, display_currency: "HKD" } });
+    mocked.getPortfolio.mockResolvedValue({ status: "ok", snapshot: { ...snapshot, fx: undefined } });
+    render(<Portfolio />);
+    const row = (await screen.findByText("AAPL")).closest("tr")!;
+    expect(within(row).getAllByRole("cell")[7]).toHaveTextContent("—");
+  });
+
 });

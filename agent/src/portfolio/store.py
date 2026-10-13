@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -172,12 +173,20 @@ class PortfolioStore:
             ).fetchall()
         history = []
         for row in rows:
+            payload = json.loads(row["payload"])
             if valuation_version is not None or complete_only:
-                payload = json.loads(row["payload"])
                 if valuation_version is not None and payload.get("valuation_version") != valuation_version:
                     continue
                 if complete_only and not _derived_totals_are_complete(payload):
                     continue
+            total_hkd = None
+            try:
+                usd_hkd = Decimal(str((payload.get("fx") or {}).get("usd_hkd")))
+                usd = Decimal(row["total_usd"])
+                if usd_hkd.is_finite() and usd_hkd > 0 and usd.is_finite():
+                    total_hkd = str(usd * usd_hkd)
+            except (InvalidOperation, ValueError, TypeError):
+                pass  # Historical snapshots without FX stay explicitly unpriced.
             history.append(
                 {
                     "id": row["id"],
@@ -185,6 +194,7 @@ class PortfolioStore:
                     "complete": row["complete"],
                     "total_usd": row["total_usd"],
                     "total_cny": row["total_cny"],
+                    "total_hkd": total_hkd,
                 }
             )
             if len(history) >= row_limit:

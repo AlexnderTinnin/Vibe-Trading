@@ -7,6 +7,9 @@ The fields come from ``PositionListQuery.unpack_rsp`` in the SDK module
 field the response does not carry with ``NoneDataValue``, the string
 ``"N/A"``, rather than omitting the key.
 
+Field semantics: https://openapi.futunn.com/futu-api-doc/en/trade/get-position-list.html
+Average cost and unrealized P&L are unavailable for securities paper accounts.
+
 All rows are synthetic: invented symbols and values in the shape the SDK
 returns.
 """
@@ -130,10 +133,24 @@ def test_reported_unrealized_pl_is_the_valued_pnl() -> None:
     assert valued["unrealized_pnl_usd"] == pytest.approx(-750.0)
 
 
-def test_unreported_unrealized_pl_is_not_valued_as_zero() -> None:
-    """An unreported P&L falls back to price against cost instead of a flat 0."""
+def test_missing_average_cost_and_unrealized_pl_stay_unavailable() -> None:
+    """Diluted cost alone cannot establish the unrealized part of P&L."""
     row = normalize_position("futu", futu_sdk._position_to_dict(NEW_FIELDS_UNREPORTED))
 
     valued = value_position(row, rates=RATES)
 
-    assert valued["unrealized_pnl_usd"] == pytest.approx(-25.0)
+    assert valued["unrealized_pnl_usd"] is None
+    assert valued["cost_price"] is None
+
+
+def test_portfolio_displays_average_purchase_cost_not_diluted_cost() -> None:
+    row = normalize_position("futu", futu_sdk._position_to_dict(DILUTED_COST_WENT_NEGATIVE))
+    assert row["cost_price"] == 20.0
+    assert value_position(row, rates=RATES)["unrealized_pnl_usd"] == pytest.approx(75.0)
+
+
+def test_average_cost_can_price_pnl_when_broker_does_not_report_it() -> None:
+    payload = {**PL_VAL_MIXES_REALIZED, "unrealized_pl": "N/A"}
+    row = normalize_position("futu", futu_sdk._position_to_dict(payload))
+    assert row["cost_price"] == 12.0
+    assert value_position(row, rates=RATES)["unrealized_pnl_usd"] == pytest.approx(-750.0)

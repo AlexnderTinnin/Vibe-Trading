@@ -221,6 +221,8 @@ export interface PortfolioHistoryPoint {
   complete: number;
   total_usd: string;
   total_cny: string;
+  /** Historical HKD value at this snapshot’s FX rate; absent means unavailable. */
+  total_hkd?: string | null;
 }
 
 export interface PortfolioRefreshState {
