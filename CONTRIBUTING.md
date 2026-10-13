@@ -328,3 +328,22 @@ runtime registry. Use sparse evidence fixtures. Validation artifacts retain
 `fired_checks` and `check_findings` (name, severity, findings) from actual
 predicate execution; shared issue codes do not imply that other roles fired.
 Run the grounding suites before changing a predicate or its ordering.
+
+
+### Agent loop boundaries
+
+`src/agent/loop.py` owns the iteration and run lifecycle. Keep changes in the
+module that owns the behavior: `tool_lifecycle.py` owns authorization, caches,
+read/write batching, tool timeouts and result recording; `loop_streaming.py`
+owns each response's buffers and progress callbacks; `loop_grounding.py` owns
+the existing final-draft repair/recovery/revision/release sequence. Grounding
+policy stays in `grounding/`, and compaction transforms, usage accounting and
+write-target tracking keep their existing dedicated modules.
+
+The tool lifecycle shares the loop's run-scoped state; it must not grow a
+second cache or ledger. A grounding decision returns correction state and
+whether the loop should retry. Stream state resets at each iteration and
+retains the existing one-retry behavior. When moving a helper, update tests
+to patch the module where it executes; re-exported names preserve imports,
+not monkeypatch propagation. Verify the existing loop, stream, cancellation,
+compaction and grounding suites after an extraction.
