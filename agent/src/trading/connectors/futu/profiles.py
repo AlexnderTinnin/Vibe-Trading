@@ -22,6 +22,9 @@ from src.trading.types import (
 # runtime SDK call.
 _FUTU_READS = READ_CAPABILITIES + FUTU_EXTENDED_READ_CAPABILITIES
 
+# Market filter is omitted on purpose. Profile config overwrites futu.json, so
+# pinning HK here would hide a saved US (or other) market. Unset stays HK via
+# FutuConfig.filter_trdmarket.
 FUTU_PROFILES: tuple[TradingProfile, ...] = (
     TradingProfile(
         id="futu-paper-sdk",
@@ -31,7 +34,7 @@ FUTU_PROFILES: tuple[TradingProfile, ...] = (
         transport="broker_sdk",
         capabilities=_FUTU_READS,
         readonly=True,
-        config={"profile": "paper", "filter_trdmarket": "HK"},
+        config={"profile": "paper"},
         notes=(
             "Reads a Futu paper (SIMULATE) account via futu-api through a local OpenD "
             "gateway (default 127.0.0.1:11111). OpenD must be running and logged in. "
@@ -47,7 +50,7 @@ FUTU_PROFILES: tuple[TradingProfile, ...] = (
         transport="broker_sdk",
         capabilities=_FUTU_READS,
         readonly=True,
-        config={"profile": "live-readonly", "filter_trdmarket": "HK"},
+        config={"profile": "live-readonly"},
         notes=(
             "Reads a Futu live (REAL) account only, via futu-api through a local OpenD "
             "gateway (default 127.0.0.1:11111). OpenD must be running and logged in. "
@@ -62,7 +65,7 @@ FUTU_PROFILES: tuple[TradingProfile, ...] = (
         transport="broker_sdk",
         capabilities=_FUTU_READS + ("orders.place",),
         readonly=False,
-        config={"profile": "paper", "filter_trdmarket": "HK"},
+        config={"profile": "paper"},
         notes=(
             "Places orders on a Futu paper (SIMULATE) account via futu-api through a "
             "local OpenD gateway (default 127.0.0.1:11111). OpenD must be running and "
@@ -79,7 +82,7 @@ FUTU_PROFILES: tuple[TradingProfile, ...] = (
         transport="broker_sdk",
         capabilities=_FUTU_READS + ("orders.place.requires_mandate",),
         readonly=False,
-        config={"profile": "live", "filter_trdmarket": "HK"},
+        config={"profile": "live"},
         notes=(
             "Places orders on a Futu live (REAL) account via futu-api through a local "
             "OpenD gateway (default 127.0.0.1:11111). OpenD must be running and logged "

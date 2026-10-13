@@ -851,6 +851,52 @@ def test_futu_trd_env_mapping() -> None:
     assert ft.FutuConfig(profile="live-readonly").trd_env_name == "REAL"
 
 
+def test_futu_saved_filter_trdmarket_survives_every_profile(monkeypatch, tmp_path) -> None:
+    """A market saved in futu.json must not be overwritten by a profile.
+
+    ``build_config`` applies profile config after the saved file. Hard-coding
+    ``filter_trdmarket`` to HK on every profile therefore forces the HK trade
+    context even for a US-only account. The saved market stays, while the
+    profile still selects the paper/live environment.
+    """
+    from src.trading.connectors.futu.profiles import FUTU_PROFILES
+
+    monkeypatch.setattr(ft, "get_runtime_root", lambda: tmp_path)
+    (tmp_path / "futu.json").write_text(
+        json.dumps({"filter_trdmarket": "US", "profile": "paper"}),
+        encoding="utf-8",
+    )
+
+    assert len(FUTU_PROFILES) == 4
+    for profile in FUTU_PROFILES:
+        cfg = ft.build_config(profile.config, None)
+        assert cfg.filter_trdmarket == "US", profile.id
+        assert cfg.profile == profile.config["profile"]
+
+
+def test_futu_filter_trdmarket_defaults_to_hk(monkeypatch, tmp_path) -> None:
+    """With no saved market, every Futu profile still opens the HK default."""
+    from src.trading.connectors.futu.profiles import FUTU_PROFILES
+
+    monkeypatch.setattr(ft, "get_runtime_root", lambda: tmp_path)
+    for profile in FUTU_PROFILES:
+        cfg = ft.build_config(profile.config, None)
+        assert cfg.filter_trdmarket == "HK", profile.id
+
+
+def test_futu_filter_trdmarket_override_beats_saved_file(monkeypatch, tmp_path) -> None:
+    """An explicit override still wins over the saved market."""
+    from src.trading.connectors.futu.profiles import FUTU_PROFILES
+
+    monkeypatch.setattr(ft, "get_runtime_root", lambda: tmp_path)
+    (tmp_path / "futu.json").write_text(
+        json.dumps({"filter_trdmarket": "US"}),
+        encoding="utf-8",
+    )
+    cfg = ft.build_config(FUTU_PROFILES[0].config, {"filter_trdmarket": "SG"})
+    assert cfg.filter_trdmarket == "SG"
+
+
 def test_futu_classification() -> None:
     assert FUTU_TOOL_CLASS["place_order"] is ToolClass.WRITE
     assert FUTU_TOOL_CLASS["modify_order"] is ToolClass.WRITE
