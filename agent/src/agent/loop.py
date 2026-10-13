@@ -627,6 +627,15 @@ class AgentLoop:
                         )
                         streamed_chars = safe
 
+                last_waiting_emit: float | None = None
+
+                def _on_waiting_chunk() -> None:
+                    nonlocal last_waiting_emit
+                    now = _time.monotonic()
+                    if last_waiting_emit is None or now - last_waiting_emit >= _heartbeat_interval_s():
+                        last_waiting_emit = now
+                        self._emit("llm_waiting", {"iter": current_iter})
+
                 def _on_reasoning_chunk(delta: str) -> None:
                     # Throttled: long reasoning streams produce hundreds of
                     # chunks; emitting each one floods the SSE replay buffer
@@ -684,6 +693,7 @@ class AgentLoop:
                         tools=tool_defs,
                         on_text_chunk=_on_text_chunk,
                         on_reasoning_chunk=_on_reasoning_chunk,
+                        on_waiting_chunk=_on_waiting_chunk,
                         timeout=llm_timeout,
                         idle_timeout_s=llm_timeout,
                         should_cancel=self._cancel_event.is_set,
@@ -750,6 +760,7 @@ class AgentLoop:
                         tools=tool_defs,
                         on_text_chunk=_on_text_chunk,
                         on_reasoning_chunk=_on_reasoning_chunk,
+                        on_waiting_chunk=_on_waiting_chunk,
                         timeout=llm_timeout,
                         idle_timeout_s=llm_timeout,
                         should_cancel=self._cancel_event.is_set,

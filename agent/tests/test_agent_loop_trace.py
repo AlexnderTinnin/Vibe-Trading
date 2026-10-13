@@ -100,6 +100,7 @@ class _LongAnswerLLM:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> _LongAnswerResponse:
         del messages, tools, on_reasoning_chunk
         if on_text_chunk:

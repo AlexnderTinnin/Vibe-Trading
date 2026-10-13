@@ -52,6 +52,7 @@ class _InterleavedFilterLLM:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> LLMResponse:
         self.calls += 1
         # Calls 1 and 3: content filter triggered
@@ -97,6 +98,7 @@ class _CleanRunLLM:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> LLMResponse:
         self.calls += 1
         if self.calls < 5:

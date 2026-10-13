@@ -1337,6 +1337,7 @@ class _CorrectingLLM:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> _Response:
         self.messages_history.append(list(messages))
         response = self.responses.pop(0)

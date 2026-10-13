@@ -390,3 +390,16 @@ def test_stream_idle_timeout_allows_a_flowing_stream() -> None:
     )
     assert response.content == "ab"
 
+
+
+def test_only_explicit_provider_waiting_reaches_activity_callback():
+    from langchain_core.messages import AIMessageChunk
+
+    waiting = []
+    response = _client(_FakeStreamingLLM([
+        AIMessageChunk(content=""),
+        AIMessageChunk(content="", additional_kwargs={"provider_waiting": True}),
+        AIMessageChunk(content="final"),
+    ])).stream_chat([{"role": "user", "content": "q"}], on_waiting_chunk=lambda: waiting.append(True))
+    assert waiting == [True]
+    assert response.content == "final"

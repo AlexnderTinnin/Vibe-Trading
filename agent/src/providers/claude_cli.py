@@ -597,7 +597,7 @@ class ClaudeCliLLM:
                     # One decision is a single chunk that can take minutes. Without
                     # empty chunks meanwhile, vibe's idle timeout discards an answer
                     # that is still on its way and the stop button is never polled.
-                    yield AIMessageChunk(content="")
+                    yield AIMessageChunk(content="", additional_kwargs={"provider_waiting": True})
                     continue
                 if chunk is sentinel:
                     return

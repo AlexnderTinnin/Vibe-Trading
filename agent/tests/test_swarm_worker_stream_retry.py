@@ -67,7 +67,7 @@ class _FlakyChatLLM:
         """No-op: the stub owns no HTTP client."""
         return self
 
-    def stream_chat(self, messages, tools=None, on_text_chunk=None, timeout=None) -> LLMResponse:
+    def stream_chat(self, messages, tools=None, on_text_chunk=None, timeout=None, on_waiting_chunk=None) -> LLMResponse:
         """Raise the next queued error or return the final response.
 
         Args:

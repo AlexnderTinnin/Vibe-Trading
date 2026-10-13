@@ -136,6 +136,21 @@ describe("useSSE — event handling", () => {
     expect(reasoningEvents).toEqual([{ chars: 8 }]);
   });
 
+  it("dispatches provider waits separately from transport heartbeats", () => {
+    const waiting = vi.fn();
+    const heartbeat = vi.fn();
+    const { result } = renderHook(() => useSSE());
+    act(() => result.current.connect("http://test/events", { llm_waiting: waiting, heartbeat }));
+    const payload = { attempt_id: "attempt-wait", iter: 1 };
+    act(() => {
+      MockEventSource.latest.emit("heartbeat", {}, "evt-heartbeat");
+      MockEventSource.latest.emit("llm_waiting", payload, "evt-wait");
+      MockEventSource.latest.emit("llm_waiting", payload, "evt-wait");
+    });
+    expect(waiting).toHaveBeenCalledExactlyOnceWith(payload);
+    expect(heartbeat).toHaveBeenCalledExactlyOnceWith({});
+  });
+
   it("dispatches stream reset events", () => {
     const resetEvents: unknown[] = [];
     const { result } = renderHook(() => useSSE());

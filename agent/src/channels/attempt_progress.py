@@ -21,6 +21,7 @@ class AttemptProgress:
         self.stream_started = False
         self.reasoning_started = False
         self.last_status = ""
+        self.reasoning_chars: dict[int, int] = {}
 
     async def _send(self, content: str, **flags: Any) -> None:
         await self.bus.publish_outbound(OutboundMessage(
@@ -39,16 +40,27 @@ class AttemptProgress:
                 continue
             kind = event.event_type
             if kind == "reasoning_delta":
-                delta = data.get("delta", "")
-                if delta:
+                iteration = int(data.get("iter", 0))
+                chars = int(data.get("chars", 0))
+                seen = self.reasoning_chars.get(iteration, 0)
+                self.reasoning_chars[iteration] = max(seen, chars)
+                # AgentLoop emits a bounded cumulative tail, not a delta.
+                # A missing tail is deliberate grounding redaction: show only
+                # a status, never reconstruct text from any other payload.
+                tail = data.get("tail")
+                if isinstance(tail, str) and chars > seen and tail:
                     self.reasoning_started = True
-                    await self._send(str(delta), _reasoning_delta=True)
-                continue
+                    await self._send(tail[-min(chars - seen, len(tail)):], _reasoning_delta=True)
+                    continue
+                if tail is not None or chars <= seen:
+                    continue
             if kind in {"tool_call", "grounding_status", "attempt.completed", "attempt.failed"}:
                 await self._end_reasoning()
             tool = str(data.get("tool") or "tool")
             status = {
                 "attempt.created": "Working on your request…",
+                "reasoning_delta": "Reasoning…",
+                "llm_waiting": "Waiting for the model…",
                 "tool_call": f"Using {tool}…",
                 "tool_heartbeat": f"Still running {tool}…",
                 "grounding_status": "Checking the figures…",

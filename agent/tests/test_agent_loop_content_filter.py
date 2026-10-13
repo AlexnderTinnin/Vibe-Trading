@@ -37,6 +37,7 @@ class _ContentFilterLoopLLM:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> LLMResponse:
         self.calls += 1
         self.messages_history.append(list(messages))
@@ -69,6 +70,7 @@ class _EmptyResponseLoopLLM:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> LLMResponse:
         self.calls += 1
         return LLMResponse(content="", content_filter_triggered=False)
@@ -213,6 +215,7 @@ def test_single_empty_response_recovers_with_nudge(
             timeout: int | None = None,
             idle_timeout_s: float | None = None,
             should_cancel: Callable[[], bool] | None = None,
+            on_waiting_chunk=None,
         ) -> LLMResponse:
             self.calls += 1
             self.messages_history.append(list(messages))
@@ -322,6 +325,7 @@ class _RatioFilterLoopLLM:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> LLMResponse:
         self.calls += 1
         if self.calls <= self._filter_count:

@@ -47,6 +47,7 @@ class _StubLLM:
         timeout: Any = None,
         idle_timeout_s: Any = None,
         should_cancel: Any = None,
+        on_waiting_chunk=None,
     ) -> Any:
         messages = [m for m in messages]
         self.call_count += 1

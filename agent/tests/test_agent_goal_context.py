@@ -33,6 +33,7 @@ class _CapturingLLM:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> _AnswerResponse:
         del tools, on_text_chunk, on_reasoning_chunk
         self.messages = messages

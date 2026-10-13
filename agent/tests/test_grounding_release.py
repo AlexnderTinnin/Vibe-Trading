@@ -633,6 +633,7 @@ class _ScriptedLLM:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> _Response:
         self.calls += 1
         self.messages_history.append(list(messages))
@@ -2102,6 +2103,7 @@ class _ChunkedLLM:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> _Response:
         self.calls += 1
         if on_text_chunk:

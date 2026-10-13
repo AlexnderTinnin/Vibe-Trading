@@ -74,7 +74,7 @@ class _ScriptedLLM:
         """No-op: the stub owns no HTTP client."""
         return None
 
-    def stream_chat(self, messages, tools=None, on_text_chunk=None, timeout=None, should_cancel=None):
+    def stream_chat(self, messages, tools=None, on_text_chunk=None, timeout=None, should_cancel=None, on_waiting_chunk=None):
         """Return the scripted response, optionally cancelling "mid-stream"."""
         self.calls += 1
         self.should_cancel_seen.append(should_cancel)

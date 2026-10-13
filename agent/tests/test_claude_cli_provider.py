@@ -265,11 +265,14 @@ def test_slow_decision_outlives_the_stream_idle_timeout(fake_cli, monkeypatch) -
     monkeypatch.setattr(claude_cli, "_HEARTBEAT_S", 0.2)
     use_provider(monkeypatch)
 
+    waiting = []
     response = ChatLLM().stream_chat(
-        [{"role": "user", "content": "x"}], idle_timeout_s=1
+        [{"role": "user", "content": "x"}], idle_timeout_s=1,
+        on_waiting_chunk=lambda: waiting.append(time.monotonic()),
     )
 
     assert response.content == "slow answer"
+    assert waiting, "a real CLI child must emit waiting progress before its final response"
 
 
 def test_stop_button_ends_a_running_decision(fake_cli, monkeypatch) -> None:

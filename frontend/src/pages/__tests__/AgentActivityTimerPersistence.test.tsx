@@ -351,4 +351,30 @@ describe("Agent completion trusts the backend's attempt start", () => {
       endedAt: endedSec * 1000,
     });
   });
+  it("keeps explicit provider waiting active but still times out on transport keepalives alone", async () => {
+    const router = createMemoryRouter([{ path: "/", element: <Agent /> }], { initialEntries: ["/?session=session-one"] });
+    render(<RouterProvider router={router} />);
+    await waitFor(() => expect(sseMock.connect).toHaveBeenCalled());
+    await waitFor(() => expect(apiMock.getLLMSettings).toHaveBeenCalled());
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        const store = useAgentStore.getState();
+        store.startActivity("attempt-wait");
+        store.setStatus("streaming");
+      });
+      for (let i = 0; i < 4; i++) {
+        act(() => { vi.advanceTimersByTime(40_000); });
+        act(() => { latestHandlers().llm_waiting({ attempt_id: "attempt-wait", iter: 1 }); });
+      }
+      expect(useAgentStore.getState().status).toBe("streaming");
+      expect(useAgentStore.getState().streamingText).toBe("");
+      for (let i = 0; i < 3; i++) {
+        act(() => { vi.advanceTimersByTime(40_000); });
+        act(() => { latestHandlers().heartbeat({}); });
+      }
+      expect(useAgentStore.getState().status).toBe("idle");
+    } finally { vi.useRealTimers(); }
+  });
+
 });

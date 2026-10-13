@@ -481,6 +481,7 @@ class ChatLLM:
         timeout: Optional[int] = None,
         idle_timeout_s: Optional[float] = None,
         should_cancel: Optional[Callable[[], bool]] = None,
+        on_waiting_chunk: Optional[Callable[[], None]] = None,
     ) -> LLMResponse:
         """Stream the LLM and optionally forward text deltas (e.g. thinking).
 
@@ -497,6 +498,8 @@ class ChatLLM:
             idle_timeout_s: Optional per-chunk idle timeout; when no stream
                 delta arrives for this long the call fails as a retryable
                 timeout instead of hanging the loop silently.
+            on_waiting_chunk: Provider-confirmed waiting activity, carrying no text.
+                Plain empty chunks and transport keepalives do not invoke it.
             should_cancel: Optional predicate polled per chunk; when it returns
                 True the stream stops early and the partial response is returned.
                 Lets a caller abort a live stream promptly (cooperative cancel).
@@ -526,6 +529,8 @@ class ChatLLM:
                 if should_cancel and should_cancel():
                     cancelled = True
                     break
+                if getattr(chunk, "additional_kwargs", {}).get("provider_waiting") is True and on_waiting_chunk:
+                    on_waiting_chunk()
                 chunk_text = _text_content(chunk.content)
                 if chunk_text and on_text_chunk:
                     if possible_dsml_text:

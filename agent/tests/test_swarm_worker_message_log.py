@@ -57,7 +57,7 @@ class _ScriptedLLM:
             ),
         ]
 
-    def stream_chat(self, messages, tools=None, timeout=None, on_text_chunk=None):
+    def stream_chat(self, messages, tools=None, timeout=None, on_text_chunk=None, on_waiting_chunk=None):
         return self._responses.pop(0)
 
     def close(self) -> None:
@@ -70,7 +70,7 @@ class _ContentFilteredLLM:
     def __init__(self) -> None:
         self._remaining = 20
 
-    def stream_chat(self, messages, tools=None, timeout=None, on_text_chunk=None):
+    def stream_chat(self, messages, tools=None, timeout=None, on_text_chunk=None, on_waiting_chunk=None):
         self._remaining -= 1
         if self._remaining >= 0:
             return LLMResponse(content="", content_filter_triggered=True)
@@ -83,7 +83,7 @@ class _ContentFilteredLLM:
 class _AnswersWithoutToolCallsLLM:
     """A final answer and nothing else, for a data agent that never probed."""
 
-    def stream_chat(self, messages, tools=None, timeout=None, on_text_chunk=None):
+    def stream_chat(self, messages, tools=None, timeout=None, on_text_chunk=None, on_waiting_chunk=None):
         return LLMResponse(
             content="The market looks range-bound, so no further analysis is needed.",
             tool_calls=[],

@@ -43,6 +43,7 @@ class _FlakyLoopLLM:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> LLMResponse:
         """Raise the next queued error or return the final response.
 

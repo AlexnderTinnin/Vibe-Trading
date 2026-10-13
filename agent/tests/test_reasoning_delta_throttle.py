@@ -39,6 +39,7 @@ class _ReasoningBurstLLM:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> _StubLLMResponse:
         assert on_reasoning_chunk is not None
         for _ in range(CHUNK_COUNT):
@@ -98,3 +99,24 @@ def test_reasoning_delta_throttled_but_first_chunk_immediate(tmp_path: Path) -> 
     # Cumulative "chars" payload semantics preserved (monotonically increasing).
     chars = [d["chars"] for d in deltas]
     assert chars == sorted(chars)
+
+
+def test_provider_waiting_reaches_loop_without_answer_or_reasoning(tmp_path):
+    from langchain_core.messages import AIMessageChunk
+    from src.providers.chat import ChatLLM
+
+    class Provider:
+        def bind_tools(self, tools):
+            return self
+        def stream(self, *args, **kwargs):
+            for _ in range(100):
+                yield AIMessageChunk(content="", additional_kwargs={"provider_waiting": True})
+            yield AIMessageChunk(content="Done.")
+    llm = ChatLLM.__new__(ChatLLM)
+    llm._llm, llm.model_name = Provider(), "test-waiting"
+    events = []
+    result = _build_agent(llm, events, tmp_path / "waiting").run(user_message="say done")
+    assert result["status"] == "success"
+    waiting = [data for kind, data in events if kind == "llm_waiting"]
+    assert waiting == [{"iter": 1}]
+    assert not any(kind == "reasoning_delta" for kind, _ in events)

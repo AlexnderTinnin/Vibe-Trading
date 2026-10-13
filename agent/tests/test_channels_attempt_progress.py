@@ -22,7 +22,7 @@ class _Service:
         for attempt, kind, data in [
             ('old', 'tool_call', {'tool': 'stale_tool'}),
             ('a', 'attempt.created', {}),
-            ('a', 'reasoning_delta', {'delta': 'Let me check the source.'}),
+            ('a', 'reasoning_delta', {'iter': 1, 'chars': 24, 'tail': 'Let me check the source.'}),
             ('a', 'tool_call', {'tool': 'get_market_data'}),
             ('a', 'text_delta', {'delta': 'UNVALIDATED 987.65'}),
             ('a', 'tool_result', {'result': 'RAW_PAYLOAD'}),
@@ -87,4 +87,30 @@ def test_timeout_closes_transient_stream(tmp_path):
             messages.append(await bus.consume_outbound())
         assert any(m.metadata.get('_stream_end') for m in messages)
         assert messages[-1].metadata['error']
+    asyncio.run(scenario())
+
+
+def test_real_reasoning_tails_are_incremental_and_redaction_stays_private():
+    from src.channels.attempt_progress import AttemptProgress
+
+    async def scenario():
+        bus, events = MessageBus(), EventBus()
+        message = InboundMessage(channel="feishu", chat_id="c", sender_id="u", content="q", metadata={"_wants_stream": True})
+        progress = AttemptProgress(bus, events, message, "s", "a")
+        for data in [
+            {"iter": 1, "chars": 5, "tail": "Hello"},
+            {"iter": 1, "chars": 11, "tail": "Hello world"},
+            {"iter": 1, "chars": 11, "tail": "Hello world"},
+            {"iter": 2, "chars": 20},  # grounding withheld the text
+        ]:
+            events.emit("s", "reasoning_delta", {**data, "attempt_id": "a"})
+        events.emit("s", "llm_waiting", {"attempt_id": "a", "iter": 2})
+        await progress.poll()
+        sent = []
+        while bus.outbound_size:
+            sent.append(await bus.consume_outbound())
+        reasoning = "".join(m.content for m in sent if m.metadata.get("_reasoning_delta"))
+        assert reasoning == "Hello world"
+        assert any(m.content == "Reasoning…\n" for m in sent)
+        assert any(m.content == "Waiting for the model…\n" for m in sent)
     asyncio.run(scenario())

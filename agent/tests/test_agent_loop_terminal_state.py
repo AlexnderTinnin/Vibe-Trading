@@ -48,6 +48,7 @@ class _StubLLMNoFinal:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> _StubLLMResponse:
         return _StubLLMResponse()
 
@@ -67,6 +68,7 @@ class _StubLLMWithUsage:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> _StubLLMResponse:
         response = _StubLLMResponse()
         response.content = "done"
@@ -92,6 +94,7 @@ class _StubLLMSuccess:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> _StubLLMResponse:
         self.calls += 1
         response = _StubLLMResponse()
@@ -121,6 +124,7 @@ class _StubLLMCancelMidStream:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> _StubLLMResponse:
         # Set _cancelled on the bound agent so the next loop iteration check
         # picks it up.  We still need a valid response so the current
@@ -224,6 +228,7 @@ class _StubLLMCancelWithToolCalls:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> _StubLLMResponse:
         self._agent_ref[0]._cancel_event.set()
         resp = _StubLLMResponse()
@@ -314,6 +319,7 @@ class _StubLLMAlwaysToolCalls:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> _StubLLMResponse:
         resp = _StubLLMResponse()
         if tools is not None:
@@ -343,6 +349,7 @@ class _StubLLMIgnoresForcedTextOnly:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> _StubLLMResponse:
         resp = _StubLLMResponse()
         resp.has_tool_calls = True
@@ -365,6 +372,7 @@ class _StubLLMStreamFailure:
         timeout: int | None = None,
         idle_timeout_s: float | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        on_waiting_chunk=None,
     ) -> _StubLLMResponse:
         raise ProviderStreamError(
             provider="deepseek",

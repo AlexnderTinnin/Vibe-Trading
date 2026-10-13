@@ -761,6 +761,12 @@ export function Agent() {
         if (act().status !== "streaming") act().setStatus("streaming");
         queueStreamUpdate(String(d.delta || ""), false);
       },
+      llm_waiting: (d) => {
+        touch();
+        replayAttemptSeenRef.current = true;
+        identifyActivity(d, "thinking");
+      },
+
       reasoning_delta: (d) => {
         touch();
         replayAttemptSeenRef.current = true;
