@@ -52,14 +52,17 @@
 
 > ⚠️ **安全警告：** X 账号 `VibeTrading_HKU`、Virtuals 项目 `101845` 及代币合约 `0x640BDBF77b6447E8b7DB7894cED84BD1c40571f4` 均非 Vibe-Trading 官方。我们从未发行或背书任何代币或 meme 币。请勿购买、连接钱包或签名。[详细说明](SECURITY.md#official-channels--impersonation)。
 
+- **2026-10-13** 🧩 **组合导入、策略适配与研究工具**：只读导入 extraETF 持仓，支持带日期的欧元估值与配置建议；适配后的子策略使用自己的回测证据（[#1170](https://github.com/HKUDS/Vibe-Trading/issues/1170)、[#1149](https://github.com/HKUDS/Vibe-Trading/issues/1149)）。新增经测试的自定义模型端点、共享的 Pixel Office 手动任务板、波斯语／土耳其语界面、mStock 只读查询及聚源研究数据。
+  修正按结算币种记账、富途市场选择与成本口径、港股逐标的每手股数、已保存的验证参数和运行进度；完成声明式数值核验与 Agent 循环拆分。mStock 暂不纳入组合汇总，Robinhood 期权执行仍不可用。范围与限制见 [CHANGELOG](CHANGELOG.md)。
+
 - **2026-10-12** 🧮 **研究与回测更新**：修正开仓成交、清仓时归因、回撤时长、估值容差及因子 IC 的 SEC 财报可见时点（[#1780](https://github.com/HKUDS/Vibe-Trading/pull/1780)–[#1794](https://github.com/HKUDS/Vibe-Trading/pull/1794)）。新增 13 个基本面／估值因子、巴西数据与回测、需显式启用的 ZimaOS 模板，以及飞书运行进度。范围与数据限制见 [CHANGELOG](CHANGELOG.md)。
 
 - **2026-10-11** 🛠️ **五项优先修复**：派生数字的每个数据操作数都须有证据，不支持的实盘期权继续拦截。离线基准保持指定数据源，交易记录区分零盈亏平仓，Codex 工具保留可选参数（[#1622](https://github.com/HKUDS/Vibe-Trading/issues/1622)、[#1779](https://github.com/HKUDS/Vibe-Trading/pull/1779)、[#1781](https://github.com/HKUDS/Vibe-Trading/pull/1781)、[#1785](https://github.com/HKUDS/Vibe-Trading/pull/1785)）。
 
-- **2026-10-10** 🛠️ **Slack/Discord 配置与可复现研究**：本地化配置表单可测试机器人凭证，测试不会保存改动（[#1764](https://github.com/HKUDS/Vibe-Trading/pull/1764)、[#1777](https://github.com/HKUDS/Vibe-Trading/pull/1777)）。组合研究可复用不可变快照，Web 可导出脱敏 JSON（[#1769](https://github.com/HKUDS/Vibe-Trading/pull/1769)）。技术指标报告日期边界和输入指纹；损坏的会话记录可恢复且不重写原文件。另修复记忆召回、凭证脱敏和交易流水格式识别。详见 [CHANGELOG](CHANGELOG.md)。
-
 <details>
 <summary>更早的新闻</summary>
+
+- **2026-10-10** 🛠️ **Slack/Discord 配置与可复现研究**：本地化配置表单可测试机器人凭证，测试不会保存改动（[#1764](https://github.com/HKUDS/Vibe-Trading/pull/1764)、[#1777](https://github.com/HKUDS/Vibe-Trading/pull/1777)）。组合研究可复用不可变快照，Web 可导出脱敏 JSON（[#1769](https://github.com/HKUDS/Vibe-Trading/pull/1769)）。技术指标报告日期边界和输入指纹；损坏的会话记录可恢复且不重写原文件。另修复记忆召回、凭证脱敏和交易流水格式识别。详见 [CHANGELOG](CHANGELOG.md)。
 
 - **2026-10-09** 🛠️ **渠道设置与回测修正**：原地更新渠道设置时保留 URL 内嵌凭证和微信认证后的服务地址，Web 以九种语言说明保存与重启结果（[#1737](https://github.com/HKUDS/Vibe-Trading/pull/1737)、[#1742](https://github.com/HKUDS/Vibe-Trading/pull/1742)、[#1744](https://github.com/HKUDS/Vibe-Trading/pull/1744)）。跨市场期权波动率仅使用截至当前时点的时间戳，回撤纳入初始资金。修正加密货币／贵金属数据源路由、港股重复识别、缓存恢复、科学计数金额解析及缺失净值验证；mootdx 移出默认 A 股链。全部十三项 PR 见 [CHANGELOG](CHANGELOG.md)。
 
