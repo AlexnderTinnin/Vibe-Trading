@@ -30,7 +30,7 @@ def _matrix(header: tuple[str, ...], rows: tuple[str, ...]) -> str:
     )
 
 
-def test_complete_13_by_13_matrix_binds_both_axes() -> None:
+def test_complete_13_by_13_matrix_binds_every_cell_to_its_row_symbol() -> None:
     names = tuple(f"STK{i}" for i in range(1, 14))
     source = _matrix(names, names)
     assert all(row.symbol_column == 0 for row in table_rows(source))
@@ -40,9 +40,11 @@ def test_complete_13_by_13_matrix_binds_both_axes() -> None:
         if f.shape == "measured"
     ]
     assert len(figures) == 169
-    assert {(f.symbol, f.table_column_label) for f in figures} == {
-        (row, column.lower()) for row in names for column in names
-    }
+    assert [(f.symbol, f.value) for f in figures] == [
+        (row, 1.0 if row == column else 0.25)
+        for row in names
+        for column in names
+    ]
 
 
 def test_incomplete_duplicate_and_mismatched_axes_stay_unscoped() -> None:
