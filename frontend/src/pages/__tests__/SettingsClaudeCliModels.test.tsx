@@ -122,7 +122,9 @@ describe("Settings with the claude-cli provider", () => {
   it("narrows the levels when a model without them is picked", async () => {
     apiMock.getLLMSettings.mockResolvedValue(llmSettings());
     render(<Settings />);
-    await waitFor(() => expect(effortOptions()).toContain("xhigh"));
+    // xhigh is also offered by the provider fallback while the per-model
+    // levels are still loading, so wait for the fetch to actually land.
+    expect(await screen.findByText("Loaded 3 available models.")).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: "Model" }), {
       target: { value: "claude-haiku-4-5-20251001" },
