@@ -535,6 +535,22 @@ def calc_fill_turnover_series(
     return (traded_margin / denominator).replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
 
+def period_returns(equity_curve: pd.Series, initial_cash: float) -> pd.Series:
+    """Per-bar returns seeded with the pre-first-bar cash mark.
+
+    The account holds ``initial_cash`` before the first recorded bar, so the
+    first return measures that bar's fill from cash rather than starting the
+    series at a hard zero. ``prod(1 + r) - 1`` then reproduces
+    ``equity[-1] / initial_cash - 1`` exactly, which is what ``total_return``
+    and the drawdown path already assume. When the first bar carries no fill
+    (equity == cash) the seed is 0 and the series matches a plain pct_change.
+    """
+    ret = equity_curve.pct_change(fill_method=None)
+    if len(ret) and np.isfinite(initial_cash) and initial_cash > 0:
+        ret.iloc[0] = equity_curve.iloc[0] / float(initial_cash) - 1.0
+    return ret
+
+
 def calc_metrics(
     equity_curve: pd.Series,
     trades: List[TradeRecord],
@@ -572,7 +588,7 @@ def calc_metrics(
     else:
         bpy = bars_per_year
 
-    port_ret = equity_curve.pct_change().fillna(0.0)
+    port_ret = period_returns(equity_curve, initial_cash).fillna(0.0)
     # Equity that touches zero then recovers (100 → 0 → 50) yields non-finite
     # pct_change values; options metrics already skip risk ratios in that case.
     returns_finite = bool(np.isfinite(port_ret.to_numpy(dtype=float, copy=False)).all())

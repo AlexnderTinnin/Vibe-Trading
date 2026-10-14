@@ -29,7 +29,7 @@ import numpy as np
 import pandas as pd
 
 from backtest.engines.base import evaluation_start_index
-from backtest.metrics import effective_bars_per_year
+from backtest.metrics import effective_bars_per_year, period_returns
 from src.quantlib.options import bs_greeks, bs_price, normalise_option_type
 
 
@@ -781,7 +781,10 @@ def _calc_options_metrics(
 
     returns: pd.Series | None = None
     if n >= 2 and path_is_finite:
-        candidate_returns = equity_vals.pct_change(fill_method=None).iloc[1:]
+        # Seeded with the pre-first-bar cash mark, same convention as
+        # calc_metrics: the drawdown path below already counts that bar's
+        # loss, so the risk ratios must see it too.
+        candidate_returns = period_returns(equity_vals, initial_cash)
         if np.isfinite(candidate_returns.to_numpy()).all():
             returns = candidate_returns
         else:
