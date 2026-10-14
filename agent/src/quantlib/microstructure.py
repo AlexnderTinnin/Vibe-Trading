@@ -40,7 +40,9 @@ def roll_effective_spread(prices: Sequence[float] | np.ndarray | pd.Series) -> f
     """
     p = np.asarray(prices, dtype=float)
     if len(p) < 4:
-        raise ValueError("prices sequence must have at least 4 points to compute serial covariance")
+        raise ValueError(
+            "prices sequence must have at least 4 points to compute serial covariance"
+        )
     if not np.isfinite(p).all():
         raise ValueError("prices must contain only finite values")
     dp = np.diff(p)
@@ -75,7 +77,9 @@ def amihud_illiquidity(
     r = np.asarray(returns, dtype=float)
     v = np.asarray(dollar_volumes, dtype=float)
     if r.shape != v.shape or len(r) == 0:
-        raise ValueError("returns and dollar_volumes must be non-empty and have matching shapes")
+        raise ValueError(
+            "returns and dollar_volumes must be non-empty and have matching shapes"
+        )
     valid_mask = (v > 0.0) & np.isfinite(r) & np.isfinite(v)
     if not np.any(valid_mask):
         return float("nan")
@@ -111,9 +115,13 @@ def kyles_lambda(
     dp = np.asarray(price_changes, dtype=float)
     flow = np.asarray(signed_order_flow, dtype=float)
     if dp.shape != flow.shape or len(dp) < 2:
-        raise ValueError("price_changes and signed_order_flow must match with >= 2 observations")
+        raise ValueError(
+            "price_changes and signed_order_flow must match with >= 2 observations"
+        )
     if not np.isfinite(dp).all() or not np.isfinite(flow).all():
-        raise ValueError("price_changes and signed_order_flow must contain only finite values")
+        raise ValueError(
+            "price_changes and signed_order_flow must contain only finite values"
+        )
     flow_centered = flow - flow.mean()
     denom = float(np.sum(flow_centered**2))
     if denom == 0.0:
@@ -149,7 +157,9 @@ def vpin(
     vb = np.asarray(buy_volume, dtype=float)
     vs = np.asarray(sell_volume, dtype=float)
     if vb.shape != vs.shape or len(vb) == 0:
-        raise ValueError("buy_volume and sell_volume must have matching non-empty shapes")
+        raise ValueError(
+            "buy_volume and sell_volume must have matching non-empty shapes"
+        )
     if not np.isfinite(vb).all() or not np.isfinite(vs).all():
         raise ValueError("buy_volume and sell_volume must contain only finite values")
     if np.any(vb < 0.0) or np.any(vs < 0.0):
@@ -188,7 +198,12 @@ def vpin(
                 rem_b -= take_b
                 rem_s -= take_s
 
-            if (curr_buy + curr_sell) >= bucket_size - 1e-9:
+            # Completion tolerance must scale with the volume unit. An absolute
+            # epsilon admitted unfinished fractional-volume buckets.
+            filled = curr_buy + curr_sell
+            if filled >= bucket_size or math.isclose(
+                filled, bucket_size, rel_tol=1e-12, abs_tol=0.0
+            ):
                 bucket_imbalances.append(abs(curr_buy - curr_sell))
                 curr_buy = 0.0
                 curr_sell = 0.0
@@ -198,6 +213,9 @@ def vpin(
 
     imbalances = pd.Series(bucket_imbalances)
     rolling_imb = imbalances.rolling(window=n_buckets, min_periods=1).sum()
-    denom = pd.Series(range(1, len(bucket_imbalances) + 1)).clip(upper=n_buckets) * bucket_size
+    denom = (
+        pd.Series(range(1, len(bucket_imbalances) + 1)).clip(upper=n_buckets)
+        * bucket_size
+    )
     vpin_series = rolling_imb / denom
     return np.clip(vpin_series.to_numpy(), 0.0, 1.0)
