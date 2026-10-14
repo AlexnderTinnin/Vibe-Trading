@@ -679,7 +679,7 @@ def register_sessions_routes(app: FastAPI) -> None:
         if req.title is not None:
             session.title = req.title
         session.updated_at = datetime.now(timezone.utc).isoformat()
-        svc.store.update_session(session)
+        svc.update_session(session)
         return {"status": "updated", "session_id": session_id}
 
     @app.post("/sessions/{session_id}/title/auto", dependencies=[Depends(require_auth)])
@@ -744,9 +744,18 @@ def register_sessions_routes(app: FastAPI) -> None:
         if not title:
             raise HTTPException(status_code=502, detail="empty title from model")
 
+        # Generation yields to other requests. Reload their persisted metadata
+        # and recheck a manual rename before this synchronous commit section.
+        session = svc.store.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        current = (session.title or "").strip()
+        if current and current != auto_prefix:
+            return {"status": "kept", "session_id": session_id, "title": current}
+
         session.title = title
         session.updated_at = datetime.now(timezone.utc).isoformat()
-        svc.store.update_session(session)
+        svc.update_session(session)
         return {"status": "updated", "session_id": session_id, "title": title}
 
     @app.post("/sessions/{session_id}/messages", dependencies=[Depends(require_auth)])
