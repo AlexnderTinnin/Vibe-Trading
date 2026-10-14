@@ -147,12 +147,14 @@ def _read_pdf(path: Path, pages: str, min_text_per_page: int = _MIN_TEXT_PER_PAG
         ocr_attempted_pages = 0  # pages where OCR ran but returned empty
         skipped_pages = 0
         native_text_without_ocr = False
+        qualified_native_pages = 0
         for idx, i in enumerate(targets, start=1):
             if not 0 <= i < total_pages:
                 continue
             page = doc[i]
             text = page.get_textpage().get_text_range().strip()
             if len(text) >= min_text_per_page:
+                qualified_native_pages += 1
                 chunks.append(f"--- Page {i + 1} ---\n{text}")
                 emit_progress(
                     "reading_pdf",
@@ -163,8 +165,8 @@ def _read_pdf(path: Path, pages: str, min_text_per_page: int = _MIN_TEXT_PER_PAG
                 continue
             if not _ocr_available():
                 if text:
-                    # The threshold requests OCR; it does not invalidate the
-                    # native text already extracted from a sparse text page.
+                    # Enrich an accepted mixed document with available text;
+                    # the qualifying-page gate below preserves OCR refusal.
                     chunks.append(f"--- Page {i + 1} ---\n{text}")
                     native_text_without_ocr = True
                 else:
@@ -208,6 +210,13 @@ def _read_pdf(path: Path, pages: str, min_text_per_page: int = _MIN_TEXT_PER_PAG
                 f"extractable text, and no OCR engine is available. {hint}"
             )
         engine = _get_ocr()
+        if native_text_without_ocr and not qualified_native_pages and not ocr_pages:
+            hint = get_ocr_install_hint(engine)
+            return _err(
+                "Selected PDF pages contain only native text below "
+                f"min_text_per_page ({min_text_per_page}), and no OCR engine "
+                f"is available. {hint}"
+            )
 
         # Compute OCR quality metrics
         pages_read = len(targets)

@@ -1,4 +1,4 @@
-"""Physical PDF text survives missing OCR without hiding extraction limitations."""
+"""Accepted mixed PDFs retain text while OCR-only selections stay refused."""
 
 import json
 
@@ -45,53 +45,59 @@ def read_pdf(tmp_path, texts, **kwargs):
     )
 
 
+LONG = "A native summary longer than fifty characters is ordinarily readable."
+
+
 @pytest.mark.parametrize(
-    "texts,pages,threshold,expected,skipped",
+    "texts,pages,expected,skipped",
     [
-        (["Revenue: $42m"], "", 50, ["Revenue: $42m"], 0),
-        (
-            ["A native summary longer than fifty characters is ordinarily readable."],
-            "",
-            200,
-            ["A native summary longer than fifty characters is ordinarily readable."],
-            0,
-        ),
-        (
-            [
-                "Revenue: $42m",
-                "A native summary longer than fifty characters is ordinarily readable.",
-            ],
-            "",
-            50,
-            [
-                "Revenue: $42m",
-                "A native summary longer than fifty characters is ordinarily readable.",
-            ],
-            0,
-        ),
-        (["Revenue: $42m", "Another short note"], "2", 50, ["Another short note"], 0),
-        (["", "Revenue: $42m"], "", 50, ["Revenue: $42m"], 1),
+        (["Revenue: $42m", LONG], "", ["Revenue: $42m", LONG], 0),
+        ([LONG, "Revenue: $42m", ""], "", [LONG, "Revenue: $42m"], 1),
+        (["Unselected note", "Revenue: $42m", LONG], "2-3", ["Revenue: $42m", LONG], 0),
     ],
 )
-def test_shipping_reader_retains_short_native_text(
-    tmp_path, texts, pages, threshold, expected, skipped
+def test_accepted_mixed_pdf_retains_short_native_text(
+    tmp_path, texts, pages, expected, skipped
 ):
-    result = read_pdf(tmp_path, texts, pages=pages, min_text_per_page=threshold)
+    result = read_pdf(tmp_path, texts, pages=pages)
     assert result["status"] == "ok", result
-    for text in expected:
-        assert text in result["text"]
+    positions = [result["text"].index(text) for text in expected]
+    assert positions == sorted(positions)
     assert result["skipped_pages"] == skipped
     assert result["ocr_pages"] == 0 and result["ocr_engine"] is None
     assert result["ocr_quality"]["quality_flag"] == "no_ocr_engine"
-    if pages == "2":
-        assert "Revenue: $42m" not in result["text"]
+    if pages:
+        assert "Unselected note" not in result["text"]
+        assert result["pages_read"] == 2
+
+
+@pytest.mark.parametrize(
+    "texts,pages,threshold",
+    [
+        (["Revenue: $42m"], "", 50),
+        (["Revenue: $42m", "Another note"], "", 50),
+        (["Revenue: $42m", LONG], "1", 50),
+        ([LONG], "", 200),
+    ],
+)
+def test_below_threshold_only_selection_keeps_ocr_refusal(
+    tmp_path, texts, pages, threshold
+):
+    result = read_pdf(tmp_path, texts, pages=pages, min_text_per_page=threshold)
+    assert result["status"] == "error"
+    assert "OCR" in result["error"]
 
 
 def test_long_native_page_keeps_no_ocr_needed_control(tmp_path):
-    text = "A native summary longer than fifty characters is ordinarily readable."
-    result = read_pdf(tmp_path, [text])
-    assert result["status"] == "ok" and text in result["text"]
+    result = read_pdf(tmp_path, [LONG])
+    assert result["status"] == "ok" and LONG in result["text"]
     assert result["skipped_pages"] == 0
+    assert result["ocr_quality"]["quality_flag"] == "no_ocr_needed"
+
+
+def test_explicit_lower_threshold_keeps_existing_opt_out(tmp_path):
+    result = read_pdf(tmp_path, ["Revenue: $42m"], min_text_per_page=10)
+    assert result["status"] == "ok" and "Revenue: $42m" in result["text"]
     assert result["ocr_quality"]["quality_flag"] == "no_ocr_needed"
 
 
