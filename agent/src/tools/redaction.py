@@ -427,7 +427,8 @@ _TEXT_VALUE = r"\"[^\"\n]*\"|'[^'\n]*'|[^\s,;{}\[\]()\"']+"
 #: backreference. The negative lookahead keeps the substitution idempotent (an
 #: already-redacted value is skipped) and defers ``Bearer <jwt>`` to
 #: :data:`_TEXT_BEARER_PATTERN`, which would otherwise be consumed as the value
-#: and leave the token body visible.
+#: and leave the token body visible, and skips a scheme word that
+#: :data:`_TEXT_AUTH_SCHEME_PATTERN` already followed with the sentinel.
 #:
 #: Every quantifier applies to a bounded character class, with no nesting and
 #: no overlapping alternatives, so matching stays linear (no ReDoS surface).
@@ -441,7 +442,9 @@ _TEXT_KV_PATTERN = re.compile(
     r"(?:\b|(?<=(?-i:[A-Z0-9])_)|(?<=aws_))"
     r"(?P<name>" + _TEXT_CREDENTIAL_KEYS + r")\b(?P=q)"
     r"(?P<sep>\s*[:=]\s*)"
-    r"(?![\"']?" + re.escape(_REDACTED) + r"[\"']?|bearer\b)"
+    r"(?![\"']?" + re.escape(_REDACTED) + r"[\"']?"
+    r"|(?:bearer|basic|digest|token|negotiate|ntlm)\s+" + re.escape(_REDACTED) +
+    r"|bearer\b)"
     r"(?P<value>" + _TEXT_VALUE + r")",
     re.IGNORECASE,
 )
@@ -451,6 +454,18 @@ _TEXT_KV_PATTERN = re.compile(
 #: second pass cannot match ``Bearer [redacted]``.
 _TEXT_BEARER_PATTERN = re.compile(
     r"\b(?P<scheme>bearer)\s+(?P<value>[A-Za-z0-9._~+/-]+=*)",
+    re.IGNORECASE,
+)
+
+#: ``Authorization: Basic <base64>`` and the other non-bearer schemes. The value
+#: is ``user:password`` in base64, which the key pattern cannot see: it would
+#: redact only the scheme word and leave the credential after it. Matched only
+#: directly after an ``authorization`` label, so prose such as "basic
+#: information" is untouched. Applied before :data:`_TEXT_KV_PATTERN`.
+_TEXT_AUTH_SCHEME_PATTERN = re.compile(
+    r"(?P<head>\bauthorization[\"']?\s*[:=]\s*[\"']?)"
+    r"(?P<scheme>basic|digest|token|negotiate|ntlm)\s+"
+    r"[^\s\"',;{}]+",
     re.IGNORECASE,
 )
 
@@ -511,7 +526,7 @@ def redact_text(text: object) -> str:
 
     Used for plain-text tool results, shell output, error messages and log
     lines where :func:`redact_payload` is a no-op (it only walks structured
-    keys). Bearer header values and ``key=value`` / ``key: value`` /
+    keys). Bearer and Basic header values and ``key=value`` / ``key: value`` /
     ``"key": "value"`` credential pairs are replaced with ``'[redacted]'``,
     and URL userinfo (``scheme://user:password@host``) becomes
     ``scheme://[redacted]@host``, while the surrounding text — labels, paths,
@@ -532,6 +547,7 @@ def redact_text(text: object) -> str:
     if not s:
         return s
     s = _TEXT_BEARER_PATTERN.sub(r"\g<scheme> " + _REDACTED, s)
+    s = _TEXT_AUTH_SCHEME_PATTERN.sub(r"\g<head>\g<scheme> " + _REDACTED, s)
     s = _TEXT_URL_USERINFO_PATTERN.sub(_REDACTED + "@", s)
     s = _TEXT_KV_PATTERN.sub(_sub_credential_pair, s)
     # Bare tokens with no key label in front of them.
