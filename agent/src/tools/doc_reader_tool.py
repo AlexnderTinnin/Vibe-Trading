@@ -22,6 +22,7 @@ from typing import Any, Callable
 from src.agent.progress import emit_progress
 from src.agent.tools import BaseTool
 from src.security.scanner import with_security_warnings
+from src.tools.ocr import get_ocr_engine, get_ocr_install_hint
 from src.tools.path_utils import safe_document_path
 
 _MAX_CHARS = 15000
@@ -44,7 +45,6 @@ _TEXT_EXTS = {
     ".dockerfile", ".makefile", ".cmake",
 }
 
-from src.tools.ocr import get_ocr_engine, get_ocr_install_hint
 
 _cached_ocr_engine = None
 _cached_ocr_checked = False
@@ -271,7 +271,7 @@ def _read_excel(path: Path) -> str:
             total=total_sheets,
             message=f"sheet {name}",
         )
-        df = xls.parse(name, dtype=str)
+        df = xls.parse(name, dtype=str, keep_default_na=False, na_values=[""])
         preview = df.head(100).to_string(index=False)
         parts.append(f"--- Sheet: {name} ({len(df)} rows × {len(df.columns)} cols) ---\n{preview}")
         sheet_info.append({"name": name, "rows": len(df), "cols": len(df.columns)})
