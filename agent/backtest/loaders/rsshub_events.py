@@ -21,7 +21,6 @@ judge, as the ``event-driven`` skill describes) to override it.
 from __future__ import annotations
 
 import logging
-import os
 import time
 from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
@@ -95,7 +94,9 @@ def format_code_for_route(code: str, style: str) -> str:
         ValueError: If ``style`` is not a recognised code style.
     """
     if style not in CODE_STYLES:
-        raise ValueError(f"Unknown code_style {style!r}; expected one of {sorted(CODE_STYLES)}")
+        raise ValueError(
+            f"Unknown code_style {style!r}; expected one of {sorted(CODE_STYLES)}"
+        )
     if style == "raw":
         return code
     symbol, _, suffix = code.partition(".")
@@ -160,10 +161,18 @@ def feed_specs_from_config(entries: Iterable[Mapping[str, Any]]) -> list[FeedSpe
     seen: set[str] = set()
     for entry in entries:
         if not isinstance(entry, Mapping):
-            raise ValueError("each event feed must be a mapping with name/route_template/event_type")
-        missing = [k for k in ("name", "route_template", "event_type") if not str(entry.get(k, "")).strip()]
+            raise ValueError(
+                "each event feed must be a mapping with name/route_template/event_type"
+            )
+        missing = [
+            k
+            for k in ("name", "route_template", "event_type")
+            if not str(entry.get(k, "")).strip()
+        ]
         if missing:
-            raise ValueError(f"event feed is missing required field(s): {', '.join(missing)}")
+            raise ValueError(
+                f"event feed is missing required field(s): {', '.join(missing)}"
+            )
         name = str(entry["name"]).strip()
         if name in seen:
             raise ValueError(f"duplicate event feed name: {name!r}")
@@ -314,7 +323,9 @@ class RSSHubEventProvider:
         """
         from src.config.accessor import get_env_config
 
-        resolved = (base_url if base_url is not None else get_env_config().data.rsshub_base_url).strip()
+        resolved = (
+            base_url if base_url is not None else get_env_config().data.rsshub_base_url
+        ).strip()
         self.base_url = resolved.rstrip("/")
         specs = tuple(feeds) if feeds is not None else DEFAULT_FEEDS
         self.feeds: dict[str, FeedSpec] = {spec.name: spec for spec in specs}
@@ -323,7 +334,9 @@ class RSSHubEventProvider:
 
     def is_available(self) -> bool:
         """Whether a usable RSSHub base URL is configured."""
-        return self.base_url not in {p.rstrip("/") for p in RSSHUB_BASE_URL_PLACEHOLDERS}
+        return self.base_url not in {
+            p.rstrip("/") for p in RSSHUB_BASE_URL_PLACEHOLDERS
+        }
 
     def list_feeds(self) -> list[str]:
         """Return registered feed names in stable order."""
@@ -353,7 +366,8 @@ class RSSHubEventProvider:
         Args:
             codes: Instrument codes to query.
             as_of: Point-in-time boundary; items with ``knowable_date > as_of``
-                are excluded (no look-ahead).
+                are excluded (no look-ahead). Aware boundaries retain their
+                displayed calendar date, matching publication knowable dates.
             feeds: Feed names to query; defaults to all registered feeds.
             scorer: Optional ``scorer(title, summary) -> float`` override;
                 defaults to :func:`default_lexicon_scorer`.
@@ -364,7 +378,9 @@ class RSSHubEventProvider:
         """
         score_fn = scorer or default_lexicon_scorer
         feed_names = list(feeds) if feeds is not None else self.list_feeds()
-        as_of_date = pd.Timestamp(as_of).normalize()
+        # Knowable dates are local calendar dates, independent of an offset.
+        # Preserve that same calendar convention for aware caller boundaries.
+        as_of_date = pd.Timestamp(as_of).tz_localize(None).normalize()
 
         code_list = list(codes)
         rows: list[dict[str, Any]] = []
@@ -395,7 +411,9 @@ class RSSHubEventProvider:
 
         frame = pd.DataFrame(rows, columns=list(EVENT_COLUMNS))
         frame = frame[frame["knowable_date"] <= as_of_date]
-        frame = frame.drop_duplicates(subset=["ts_code", "knowable_date", "event_type", "summary"])
+        frame = frame.drop_duplicates(
+            subset=["ts_code", "knowable_date", "event_type", "summary"]
+        )
         frame = frame.sort_values(["ts_code", "knowable_date"]).reset_index(drop=True)
         return frame
 
@@ -407,7 +425,9 @@ class RSSHubEventProvider:
         feed so an all-feeds-unreachable run can be surfaced loudly.
         """
         if spec.is_per_symbol:
-            route = spec.route_template.format(code=format_code_for_route(code, spec.code_style))
+            route = spec.route_template.format(
+                code=format_code_for_route(code, spec.code_style)
+            )
         else:
             route = spec.route_template
         url = f"{self.base_url}{route}"
@@ -547,7 +567,10 @@ def enrich_price_frames_with_events(
 
     for code, frame in enriched.items():
         rows = events[events["ts_code"] == code]
-        bar_dates = pd.DatetimeIndex(pd.to_datetime(frame.index)).normalize()
+        # Daily bars carry calendar labels, just like the feed's knowable dates.
+        bar_dates = (
+            pd.DatetimeIndex(pd.to_datetime(frame.index)).tz_localize(None).normalize()
+        )
         scores = pd.Series(0.0, index=frame.index)
         counts = pd.Series(0, index=frame.index)
         if not rows.empty and len(frame) > 0:

@@ -115,7 +115,12 @@ def test_duplicate_items_are_deduplicated() -> None:
     doubled = f'<?xml version="1.0"?><rss version="2.0"><channel>{items}{items}</channel></rss>'
     frame = _provider(doubled).query_events(["AAA"], as_of="2024-01-31")
     assert len(frame) == 2  # 4 items in, 2 unique out
-    assert frame.duplicated(subset=["ts_code", "knowable_date", "event_type", "summary"]).sum() == 0
+    assert (
+        frame.duplicated(
+            subset=["ts_code", "knowable_date", "event_type", "summary"]
+        ).sum()
+        == 0
+    )
 
 
 def test_hostile_xml_is_neutralised() -> None:
@@ -129,7 +134,9 @@ def test_unknown_feed_raises() -> None:
 
 
 def test_custom_scorer_override() -> None:
-    frame = _provider().query_events(["AAA"], as_of="2024-01-31", scorer=lambda t, s: 0.5)
+    frame = _provider().query_events(
+        ["AAA"], as_of="2024-01-31", scorer=lambda t, s: 0.5
+    )
     assert (frame["score"] == 0.5).all()
 
 
@@ -183,7 +190,11 @@ def test_per_symbol_route_applies_code_style() -> None:
     client = _FakeClient(_RSS)
     provider = RSSHubEventProvider(
         "https://rsshub.local",
-        feeds=[FeedSpec("xq", "/xueqiu/stock/{code}", "earnings", code_style="exchange_prefix")],
+        feeds=[
+            FeedSpec(
+                "xq", "/xueqiu/stock/{code}", "earnings", code_style="exchange_prefix"
+            )
+        ],
         client=client,
     )
     provider.query_events(["600519.SH"], as_of="2024-01-31")
@@ -194,7 +205,12 @@ def test_feed_specs_from_config_parses_and_validates() -> None:
     specs = feed_specs_from_config(
         [
             {"name": "a", "route_template": "/x/{code}", "event_type": "earnings"},
-            {"name": "b", "route_template": "/y", "event_type": "macro", "code_style": "bare"},
+            {
+                "name": "b",
+                "route_template": "/y",
+                "event_type": "macro",
+                "code_style": "bare",
+            },
         ]
     )
     assert [s.name for s in specs] == ["a", "b"]
@@ -233,7 +249,9 @@ def test_all_feeds_unreachable_raises(monkeypatch) -> None:
         provider.query_events(["AAA"], as_of="2024-01-31")
 
 
-def test_malformed_timeout_env_falls_back_to_default(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_malformed_timeout_env_falls_back_to_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("RSSHUB_TIMEOUT_S", "not-a-float")
     client = _FakeClient(_RSS)
     provider = RSSHubEventProvider(
@@ -248,7 +266,9 @@ def test_malformed_timeout_env_falls_back_to_default(monkeypatch: pytest.MonkeyP
     assert client.timeouts == [DEFAULT_TIMEOUT_S]
 
 
-def test_malformed_budget_env_falls_back_to_default(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_malformed_budget_env_falls_back_to_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("RSSHUB_FETCH_BUDGET_S", "not-a-float")
     client = _FakeClient(_RSS)
     provider = RSSHubEventProvider(
@@ -268,3 +288,49 @@ def test_reachable_but_empty_feed_does_not_raise() -> None:
     empty_rss = '<?xml version="1.0"?><rss version="2.0"><channel></channel></rss>'
     frame = _provider(empty_rss).query_events(["AAA"], as_of="2024-01-31")
     assert frame.empty
+
+
+@pytest.mark.parametrize(
+    "boundary",
+    [
+        "2024-01-15T00:00:00+08:00",
+        "2024-01-15T00:00:00-05:00",
+        pd.Timestamp("2024-01-15T23:00:00+08:00"),
+        pd.Timestamp("2024-01-15T23:00:00-05:00"),
+    ],
+)
+def test_aware_as_of_uses_the_existing_local_calendar(
+    boundary: str | pd.Timestamp,
+) -> None:
+    provider = _provider()
+    actual = provider.query_events(["AAA"], as_of=boundary)
+    expected = provider.query_events(["AAA"], as_of="2024-01-15")
+    pd.testing.assert_frame_equal(actual, expected)
+    assert actual["knowable_date"].tolist() == [pd.Timestamp("2024-01-15")]
+    assert provider.query_events(["AAA"], as_of="2024-01-14T23:59:00+08:00").empty
+    assert len(provider.query_events(["AAA"], as_of="2024-01-17T00:00:00-05:00")) == 2
+
+
+@pytest.mark.parametrize("zone,hour", [("Etc/GMT-8", 0), ("Etc/GMT+5", 23)])
+def test_daily_aware_price_labels_preserve_their_calendar_date(
+    zone: str, hour: int
+) -> None:
+    from backtest.loaders.rsshub_events import enrich_price_frames_with_events
+
+    provider = _provider()
+    naive = pd.DataFrame(
+        {"close": [10.0, 11.0, 12.0]},
+        index=pd.to_datetime(["2024-01-14", "2024-01-15", "2024-01-17"]),
+    )
+    aware = naive.copy()
+    aware.index = (aware.index + pd.Timedelta(hours=hour)).tz_localize(zone)
+    expected = enrich_price_frames_with_events(
+        {"AAA": naive}, provider, as_of="2024-01-17"
+    )["AAA"]
+    actual = enrich_price_frames_with_events(
+        {"AAA": aware}, provider, as_of="2024-01-17"
+    )["AAA"]
+    assert actual["event_count"].tolist() == [0, 1, 2]
+    assert actual["event_score"].tolist() == expected["event_score"].tolist()
+    pd.testing.assert_index_equal(actual.index, aware.index)
+    pd.testing.assert_frame_equal(aware, naive.set_axis(aware.index))
