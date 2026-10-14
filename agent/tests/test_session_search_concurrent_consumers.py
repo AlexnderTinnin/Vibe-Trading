@@ -66,6 +66,9 @@ def test_writer_waits_for_native_search_cursor(tmp_path: Path):
     entered, release, writer_entered = Event(), Event(), Event()
 
     class Cursor:
+        def fetchone(self):
+            return self.cursor.fetchone()
+
         def fetchall(self):
             entered.set()
             assert release.wait(3)
@@ -122,6 +125,9 @@ def test_close_waits_for_native_search_cursor(tmp_path: Path):
     entered, release, closed = Event(), Event(), Event()
 
     class Cursor:
+        def fetchone(self):
+            return self.cursor.fetchone()
+
         def fetchall(self):
             entered.set()
             assert release.wait(3)
