@@ -22,6 +22,7 @@ from typing import Any, Callable
 from src.agent.progress import emit_progress
 from src.agent.tools import BaseTool
 from src.security.scanner import with_security_warnings
+from src.tools.ocr import get_ocr_engine, get_ocr_install_hint
 from src.tools.path_utils import safe_document_path
 
 _MAX_CHARS = 15000
@@ -44,7 +45,6 @@ _TEXT_EXTS = {
     ".dockerfile", ".makefile", ".cmake",
 }
 
-from src.tools.ocr import get_ocr_engine, get_ocr_install_hint
 
 _cached_ocr_engine = None
 _cached_ocr_checked = False
@@ -283,19 +283,35 @@ def _read_excel(path: Path) -> str:
 def _read_pptx(path: Path) -> str:
     try:
         from pptx import Presentation  # type: ignore
+        from pptx.enum.shapes import MSO_SHAPE_TYPE
     except ImportError:
         return _err("python-pptx not installed; run: pip install python-pptx")
 
     prs = Presentation(str(path))
     parts: list[str] = []
-    for idx, slide in enumerate(prs.slides, start=1):
-        parts.append(f"--- Slide {idx} ---")
-        for shape in slide.shapes:
-            if shape.has_text_frame:
+    def append_shapes(shapes) -> None:
+        """Append native text once in the existing shape-tree order."""
+        for shape in shapes:
+            if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
+                append_shapes(shape.shapes)
+            elif shape.has_table:
+                for row in shape.table.rows:
+                    cells = [
+                        cell.text.strip().replace("\n", " ")
+                        for cell in row.cells
+                        if not cell.is_spanned
+                    ]
+                    if any(cells):
+                        parts.append(" | ".join(cells))
+            elif shape.has_text_frame:
                 for para in shape.text_frame.paragraphs:
                     line = "".join(run.text for run in para.runs).strip()
                     if line:
                         parts.append(line)
+
+    for idx, slide in enumerate(prs.slides, start=1):
+        parts.append(f"--- Slide {idx} ---")
+        append_shapes(slide.shapes)
     return _envelope(path, "pptx", "\n".join(parts), slides=len(prs.slides))
 
 
