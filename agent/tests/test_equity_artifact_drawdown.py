@@ -74,3 +74,33 @@ def test_equity_csv_drawdown_counts_a_loss_on_the_first_bar(tmp_path: Path) -> N
     assert metrics["max_drawdown"] == pytest.approx(-0.10)
     assert equity["drawdown"].tolist() == pytest.approx([-0.10, -0.05, 0.0])
     assert equity["drawdown"].min() == pytest.approx(metrics["max_drawdown"])
+
+
+def test_equity_csv_ret_column_is_seeded_with_initial_cash(tmp_path: Path) -> None:
+    dates = pd.bdate_range("2025-01-06", periods=5)
+    # Same fill pattern as the drawdown test: the first evaluated bar loses 10%.
+    frame = pd.DataFrame(
+        {
+            "open": [100.0, 100.0, 100.0, 95.0, 100.0],
+            "close": [100.0, 100.0, 90.0, 95.0, 100.0],
+        },
+        index=dates,
+    )
+    metrics = _Engine({"initial_cash": 100_000.0}).run_backtest(
+        {
+            "codes": ["AAA"],
+            "start_date": str(dates[0].date()),
+            "end_date": str(dates[-1].date()),
+            "warmup_bars": 2,
+        },
+        _Loader({"AAA": frame}),
+        _AlwaysLong(),
+        tmp_path,
+    )
+    equity = pd.read_csv(tmp_path / "artifacts" / "equity.csv", index_col="timestamp")
+
+    # Row by row the ret column must agree with the drawdown column, and the
+    # series must compound back to the reported total return.
+    assert equity["ret"].iloc[0] == pytest.approx(-0.10)
+    compounded = float((1 + equity["ret"]).prod() - 1)
+    assert compounded == pytest.approx(metrics["total_return"])

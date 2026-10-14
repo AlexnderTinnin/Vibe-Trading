@@ -92,7 +92,11 @@ def test_missing_settings_keep_standalone_defaults(
         "monte_carlo": validation.monte_carlo_test(
             validation._load_trades(tmp_path), 1_000_000
         ),
-        "bootstrap": validation.bootstrap_sharpe_ci(validation._load_equity(tmp_path)),
+        # The CLI seeds bootstrap returns with its initial_cash fallback
+        # (1_000_000 when the config carries none), same as run_validation.
+        "bootstrap": validation.bootstrap_sharpe_ci(
+            validation._load_equity(tmp_path), initial_capital=1_000_000
+        ),
         "walk_forward": validation.walk_forward_analysis(
             validation._load_equity(tmp_path), validation._load_trades(tmp_path)
         ),

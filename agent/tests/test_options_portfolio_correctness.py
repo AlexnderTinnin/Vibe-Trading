@@ -195,11 +195,11 @@ def test_profit_loss_ratio_zero_without_closed_trades() -> None:
 @pytest.mark.parametrize(
     "values,mean_return,downside_mean_square",
     [
-        ([100.0, 99.0, 98.01, 100.9503], 0.01 / 3, 0.0002 / 3),
-        ([100.0, 99.0, 101.97], 0.01, 0.0001 / 2),
-        ([100.0, 99.0, 97.02, 102.8412], 0.01, 0.0005 / 3),
-        ([100.0, 99.0, 98.01], -0.01, 0.0001),
-        ([100.0, 99.0], -0.01, 0.0001),
+        ([100.0, 99.0, 98.01, 100.9503], 0.01 / 4, 0.0002 / 4),
+        ([100.0, 99.0, 101.97], 0.02 / 3, 0.0001 / 3),
+        ([100.0, 99.0, 97.02, 102.8412], 0.03 / 4, 0.0005 / 4),
+        ([100.0, 99.0, 98.01], -0.02 / 3, 0.0002 / 3),
+        ([100.0, 99.0], -0.01 / 2, 0.0001 / 2),
     ],
     ids=["equal-losses", "single-loss", "unequal-losses", "all-losses", "one-period"],
 )
@@ -214,8 +214,9 @@ def test_sortino_uses_full_sample_downside_deviation(
     )
     metrics = _calc_options_metrics(equity, 100.0, [], bars_per_year=bars_per_year)
 
-    # Hand-derived moments use observed period returns, with no initial zero.
-    # For daily observations the existing span convention counts all equity bars.
+    # Hand-derived moments use the cash-seeded period returns. equity[0] equals
+    # initial_cash in every case here, so the seed contributes one 0.0
+    # observation: every legacy denominator grows by one.
     annualization = bars_per_year
     if annualization is None:
         annualization = int(len(values) * 365.25 / (len(values) - 1))

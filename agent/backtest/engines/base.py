@@ -44,6 +44,7 @@ from backtest.metrics import (
     by_symbol_stats,
     calc_fill_turnover_series,
     calc_metrics,
+    period_returns,
 )
 from backtest.models import EquitySnapshot, FillRecord, Position, TradeRecord
 from backtest.rebalance_mask import (
@@ -2276,8 +2277,9 @@ class BaseEngine(ABC):
         for code, df in data_map.items():
             df.to_csv(out / f"ohlcv_{code}.csv")
 
-        # Equity curve
-        port_ret = equity_series.pct_change().fillna(0.0)
+        # Equity curve. Same cash-seeded returns as calc_metrics, so the ret
+        # column compounds back to total_return and agrees with drawdown.
+        port_ret = period_returns(equity_series, self.initial_capital).fillna(0.0)
         # Same high-water mark as calc_metrics: the account holds initial_capital
         # before the first recorded bar, so a loss on that bar is a drawdown too.
         peak = equity_series.cummax().clip(lower=float(self.initial_capital))

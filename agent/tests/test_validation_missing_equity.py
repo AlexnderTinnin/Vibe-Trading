@@ -67,9 +67,12 @@ def test_complete_equity_retains_sharpe_calculation() -> None:
 def test_loaded_equity_gap_reaches_validation_sample_guard(tmp_path) -> None:
     artifacts = tmp_path / "artifacts"
     artifacts.mkdir()
+    # Six rows with one interior gap: the cash seed adds the observed first
+    # bar (equity[0] == initial cash), the gap removes its two adjacent
+    # pairs, and four observed returns remain, below the bootstrap minimum.
     (artifacts / "equity.csv").write_text(
         "date,equity\n2026-01-01,100\n2026-01-02,110\n2026-01-03,\n"
-        "2026-01-04,121\n2026-01-05,120\n2026-01-06,122\n2026-01-07,123\n",
+        "2026-01-04,121\n2026-01-05,120\n2026-01-06,122\n",
         encoding="utf-8",
     )
     equity = _load_equity(tmp_path)

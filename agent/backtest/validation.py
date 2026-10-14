@@ -20,7 +20,7 @@ from typing import Any, Dict, List
 import numpy as np
 import pandas as pd
 
-from backtest.metrics import effective_bars_per_year
+from backtest.metrics import effective_bars_per_year, period_returns
 from backtest.models import TradeRecord
 
 
@@ -147,6 +147,7 @@ def bootstrap_sharpe_ci(
     confidence: float = 0.95,
     bars_per_year: int = 252,
     seed: int = 42,
+    initial_capital: float | None = None,
 ) -> Dict[str, Any]:
     """Resample daily returns to estimate Sharpe confidence interval.
 
@@ -156,6 +157,11 @@ def bootstrap_sharpe_ci(
         confidence: Confidence level (e.g. 0.95 for 95% CI).
         bars_per_year: Annualisation factor.
         seed: Random seed.
+        initial_capital: Starting capital. When given, the first return is
+            measured from this cash mark (the calc_metrics convention), so
+            ``observed_sharpe`` agrees with the report's own Sharpe on paths
+            whose first recorded bar carries real PnL. None keeps the legacy
+            adjacent-pair series.
 
     Returns:
         Dict with observed_sharpe, ci_lower, ci_upper, median_sharpe,
@@ -173,9 +179,13 @@ def bootstrap_sharpe_ci(
     if isinstance(seed, bool) or not isinstance(seed, Integral) or seed < 0:
         return {"error": f"seed must be >= 0, got {seed}"}
 
+    if initial_capital is not None:
+        series = period_returns(equity_curve, initial_capital)
+    else:
+        series = equity_curve.pct_change(fill_method=None)
     # Missing equity is not a flat observation or a one-period recovery return.
     returns = (
-        equity_curve.pct_change(fill_method=None)
+        series
         .replace([np.inf, -np.inf], 0.0)
         .dropna()
         .values
@@ -364,6 +374,7 @@ def run_validation(
             n_bootstrap=bs_cfg.get("n_bootstrap", 1000),
             confidence=bs_cfg.get("confidence", 0.95),
             seed=bs_cfg.get("seed", 42),
+            initial_capital=initial_capital,
         )
 
     if "walk_forward" in v_cfg:

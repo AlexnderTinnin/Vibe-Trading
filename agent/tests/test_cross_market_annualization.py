@@ -19,7 +19,7 @@ import pandas as pd
 import pytest
 
 from backtest.engines.options_portfolio import _calc_options_metrics
-from backtest.metrics import calc_bars_per_year, calc_metrics, effective_bars_per_year
+from backtest.metrics import calc_bars_per_year, calc_metrics, effective_bars_per_year, period_returns
 from backtest.risk_xray import compute_risk_xray
 from backtest.validation import _sharpe, run_validation
 
@@ -81,7 +81,7 @@ class TestConsumersShareTheConvention:
         equity = pd.Series(_zigzag(120, 100_000.0, 500.0, 5), index=self.idx)
         metrics = _calc_options_metrics(equity, 100_000.0, [], bars_per_year=None)
 
-        returns = equity.pct_change(fill_method=None).iloc[1:]
+        returns = period_returns(equity, 100_000.0)
         # Options metrics round their reported ratios to 4 decimals.
         assert metrics["sharpe"] == pytest.approx(
             returns.mean() / returns.std() * math.sqrt(self.expected_bpy), abs=5e-5
@@ -97,7 +97,7 @@ class TestConsumersShareTheConvention:
             bars_per_year=None,
         )
 
-        returns = equity.pct_change().dropna().to_numpy()
+        returns = period_returns(equity, 100_000.0).to_numpy()
         assert result["bootstrap"]["observed_sharpe"] == pytest.approx(
             round(_sharpe(returns, self.expected_bpy), 4)
         )
