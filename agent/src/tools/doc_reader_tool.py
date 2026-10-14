@@ -22,6 +22,7 @@ from typing import Any, Callable
 from src.agent.progress import emit_progress
 from src.agent.tools import BaseTool
 from src.security.scanner import with_security_warnings
+from src.tools.ocr import get_ocr_engine, get_ocr_install_hint
 from src.tools.path_utils import safe_document_path
 
 _MAX_CHARS = 15000
@@ -44,7 +45,6 @@ _TEXT_EXTS = {
     ".dockerfile", ".makefile", ".cmake",
 }
 
-from src.tools.ocr import get_ocr_engine, get_ocr_install_hint
 
 _cached_ocr_engine = None
 _cached_ocr_checked = False
@@ -146,12 +146,15 @@ def _read_pdf(path: Path, pages: str, min_text_per_page: int = _MIN_TEXT_PER_PAG
         ocr_pages = 0
         ocr_attempted_pages = 0  # pages where OCR ran but returned empty
         skipped_pages = 0
+        native_text_without_ocr = False
+        qualified_native_pages = 0
         for idx, i in enumerate(targets, start=1):
             if not 0 <= i < total_pages:
                 continue
             page = doc[i]
             text = page.get_textpage().get_text_range().strip()
             if len(text) >= min_text_per_page:
+                qualified_native_pages += 1
                 chunks.append(f"--- Page {i + 1} ---\n{text}")
                 emit_progress(
                     "reading_pdf",
@@ -161,12 +164,22 @@ def _read_pdf(path: Path, pages: str, min_text_per_page: int = _MIN_TEXT_PER_PAG
                 )
                 continue
             if not _ocr_available():
-                skipped_pages += 1
+                if text:
+                    # Enrich an accepted mixed document with available text;
+                    # the qualifying-page gate below preserves OCR refusal.
+                    chunks.append(f"--- Page {i + 1} ---\n{text}")
+                    native_text_without_ocr = True
+                else:
+                    skipped_pages += 1
                 emit_progress(
                     "reading_pdf",
                     current=idx,
                     total=total_targets,
-                    message=f"page {i + 1}/{total_pages} (skipped: no OCR)",
+                    message=(
+                        f"page {i + 1}/{total_pages} (native text only: no OCR)"
+                        if text
+                        else f"page {i + 1}/{total_pages} (skipped: no OCR)"
+                    ),
                 )
                 continue
             bitmap = page.render(scale=300 / 72)
@@ -197,6 +210,13 @@ def _read_pdf(path: Path, pages: str, min_text_per_page: int = _MIN_TEXT_PER_PAG
                 f"extractable text, and no OCR engine is available. {hint}"
             )
         engine = _get_ocr()
+        if native_text_without_ocr and not qualified_native_pages and not ocr_pages:
+            hint = get_ocr_install_hint(engine)
+            return _err(
+                "Selected PDF pages contain only native text below "
+                f"min_text_per_page ({min_text_per_page}), and no OCR engine "
+                f"is available. {hint}"
+            )
 
         # Compute OCR quality metrics
         pages_read = len(targets)
@@ -206,7 +226,7 @@ def _read_pdf(path: Path, pages: str, min_text_per_page: int = _MIN_TEXT_PER_PAG
             if ocr_attempted_pages > 0:
                 # OCR was attempted but returned no usable text
                 quality_flag = "degraded"
-            elif skipped_pages:
+            elif skipped_pages or native_text_without_ocr:
                 quality_flag = "no_ocr_engine"
             else:
                 quality_flag = "no_ocr_needed"
