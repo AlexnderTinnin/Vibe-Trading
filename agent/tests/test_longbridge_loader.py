@@ -192,8 +192,24 @@ def _configured_loader() -> loader_mod.LongbridgeLoader:
     return loader
 
 
+class _FactoryOnlyConfig:
+    """Mimics SDK 4.0+: ``Config(...)`` is refused, only ``from_apikey`` works."""
+
+    def __new__(cls, *args: object, **kwargs: object) -> "_FactoryOnlyConfig":
+        raise TypeError("cannot create 'builtins.Config' instances")
+
+    @staticmethod
+    def from_apikey(*args: str) -> tuple[str, ...]:
+        return args
+
+
+@pytest.mark.parametrize(
+    "config_cls",
+    [lambda *args: args, _FactoryOnlyConfig],
+    ids=["sdk-0.2-constructor", "sdk-4-from_apikey"],
+)
 def test_fetch_combines_all_windows_and_caches_complete_frame(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, config_cls: object
 ) -> None:
     calls: list[tuple[dt.date, dt.date]] = []
     cached: list[pd.DataFrame] = []
@@ -227,7 +243,7 @@ def test_fetch_combines_all_windows_and_caches_complete_frame(
             ]
 
     fake_openapi = SimpleNamespace(
-        Config=lambda *args: args,
+        Config=config_cls,
         QuoteContext=FakeQuoteContext,
         Period=SimpleNamespace(Day="day"),
         AdjustType=SimpleNamespace(NoAdjust="none"),
@@ -253,59 +269,6 @@ def test_fetch_combines_all_windows_and_caches_complete_frame(
     assert_loader_contract(result["AAPL"], context="longbridge daily")
     assert len(cached) == 1
     pd.testing.assert_frame_equal(cached[0], result["AAPL"])
-
-
-def test_fetch_uses_from_apikey_when_sdk_provides_it(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """SDK 4.0+ refuses ``Config(...)``; the loader must go through the factory."""
-    factory_calls: list[tuple[str, ...]] = []
-    built = object()
-
-    class Sdk4Config:
-        def __new__(cls, *args: object) -> "Sdk4Config":
-            raise TypeError("cannot create 'builtins.Config' instances")
-
-        @staticmethod
-        def from_apikey(*args: str) -> object:
-            factory_calls.append(args)
-            return built
-
-    class FakeQuoteContext:
-        def __init__(self, config: object) -> None:
-            assert config is built
-
-        def history_candlesticks_by_date(
-            self, *args: object, **kwargs: object
-        ) -> list[SimpleNamespace]:
-            return [
-                SimpleNamespace(
-                    timestamp=pd.Timestamp(kwargs["start"]),
-                    open=10,
-                    high=11,
-                    low=9,
-                    close=10.5,
-                    volume=100,
-                )
-            ]
-
-    fake_openapi = SimpleNamespace(
-        Config=Sdk4Config,
-        QuoteContext=FakeQuoteContext,
-        Period=SimpleNamespace(Day="day"),
-        AdjustType=SimpleNamespace(NoAdjust="none"),
-    )
-    monkeypatch.setattr(loader_mod, "_require_longbridge", lambda: fake_openapi)
-    monkeypatch.setattr(loader_mod, "loader_cache_get", lambda **kwargs: None)
-    monkeypatch.setattr(loader_mod, "loader_cache_put", lambda **kwargs: None)
-
-    result = _configured_loader().fetch(
-        ["AAPL"], "2026-01-01", "2026-01-02", interval="1D"
-    )
-
-    assert factory_calls == [("key", "secret", "token")]
-    assert list(result) == ["AAPL"]
-    assert_loader_contract(result["AAPL"], context="longbridge daily via from_apikey")
 
 
 def test_fetch_rejects_partial_history_when_a_window_fails(
