@@ -206,6 +206,8 @@ class Figure:
     column: str | None = None
     date: str | None = None
     symbol: str | None = None
+    # Raw table header for matrix columns; not an OHLC role.
+    table_column_label: str | None = None
     scale: float = 1.0
     # A currency mark or ISO code touches the digits ("$2050", "0.95 元").
     currency: bool = False
@@ -229,6 +231,7 @@ class TableRow:
     symbol_column: int | None
     # Which table of the document the row belongs to, in document order.
     table: int = 0
+    headers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -794,12 +797,45 @@ def table_rows(content: str) -> list[TableRow]:
             (position for position, name in enumerate(headers) if name in _SYMBOL_HEADERS),
             None,
         )
+        # A square matrix may use an empty corner and its first column as
+        # the row axis. Infer this identity only for complete, unique axes.
+        if symbol_column is None and len(headers) > 2 and not headers[0].strip():
+            axis = [name.strip().upper() for name in headers[1:]]
+            body = [
+                _table_cells(positions[k][0], positions[k][1])
+                for k in range(block_start + 1, index)
+            ]
+            body = [cells for cells in body if cells and not _is_separator_row(cells)]
+            row_axis = [
+                re.sub(r"^(?:\*\*|__)(.*?)(?:\*\*|__)$", r"\1", cells[0][0])
+                .strip()
+                .upper()
+                for cells in body
+                if len(cells) == len(headers)
+            ]
+            if (
+                len(body) == len(axis) == len(row_axis)
+                and all(len(cells) == len(headers) for cells in body)
+                and all(re.fullmatch(r"[A-Z][A-Z0-9.]{0,19}", x) for x in axis)
+                and len(set(axis)) == len(axis)
+                and len(set(row_axis)) == len(row_axis)
+                and set(axis) == set(row_axis)
+            ):
+                symbol_column = 0
         for line_index in range(block_start + 1, index):
             cells = _table_cells(positions[line_index][0], positions[line_index][1])
             if not cells or _is_separator_row(cells):
                 continue
             rows.append(
-                TableRow(line_index, tuple(cells), columns, date_column, symbol_column, table)
+                TableRow(
+                    line_index,
+                    tuple(cells),
+                    columns,
+                    date_column,
+                    symbol_column,
+                    table,
+                    tuple(headers),
+                )
             )
         table += 1
     return rows
@@ -1088,13 +1124,19 @@ def scan_figures(content: str, block: FiguresBlock) -> list[Figure]:
             shape = "measured"
         else:
             shape = "bare"
-        column = date_value = symbol_value = None
+        column = date_value = symbol_value = table_column_label = None
         if row is not None and not structural:
             column = row.columns.get(position)
+            if position < len(row.headers):
+                table_column_label = row.headers[position] or None
             if row.date_column is not None and row.date_column < len(row.cells):
                 date_value = row.cells[row.date_column][0] or None
             if row.symbol_column is not None and row.symbol_column < len(row.cells):
                 symbol_value = row.cells[row.symbol_column][0] or None
+                if symbol_value:
+                    symbol_value = re.sub(
+                        r"^(?:\*\*|__)(.*?)(?:\*\*|__)$", r"\1", symbol_value
+                    ).strip()
         mark_end = _currency_suffix_end(text, magnitude_suffix(text, unit_end)[1])
         figures.append(
             Figure(
@@ -1108,6 +1150,7 @@ def scan_figures(content: str, block: FiguresBlock) -> list[Figure]:
                 column=column,
                 date=date_value,
                 symbol=symbol_value,
+                table_column_label=table_column_label,
                 scale=1.0 if percent else magnitude_suffix(text, token.end)[0],
                 currency=currency,
                 digits=token.digits,
