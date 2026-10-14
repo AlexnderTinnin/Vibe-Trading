@@ -2440,3 +2440,5 @@ The same flow is available from `vibe-trading provider custom list`,
 The configured provider is used by CLI, API, Web, and agent runs alike.
 
 RSSHub daily event enrichment uses calendar-date keys: timezone-aware `as_of` values and daily bar labels retain their displayed date, matching the provider’s knowable-date policy. This does not convert intraday publication instants between markets.
+
+RSSHub feed `code_style` transformations separate the final venue suffix from the ticker, preserving share-class dots: `BRK.B.US` becomes `BRK.B` for `bare` routes and `USBRK.B` for `exchange_prefix`; `raw` remains unchanged.

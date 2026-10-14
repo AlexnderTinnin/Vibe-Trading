@@ -334,3 +334,31 @@ def test_daily_aware_price_labels_preserve_their_calendar_date(
     assert actual["event_score"].tolist() == expected["event_score"].tolist()
     pd.testing.assert_index_equal(actual.index, aware.index)
     pd.testing.assert_frame_equal(aware, naive.set_axis(aware.index))
+
+
+@pytest.mark.parametrize(
+    "code,style,expected",
+    [
+        ("BRK.B.US", "bare", "BRK.B"),
+        ("BF.B.US", "bare", "BF.B"),
+        ("BRK.B.US", "exchange_prefix", "USBRK.B"),
+        ("BF.B.US", "exchange_prefix", "USBF.B"),
+        ("BRK.B.US", "raw", "BRK.B.US"),
+        ("600519.SH", "bare", "600519"),
+        ("600519.SH", "exchange_prefix", "SH600519"),
+        ("AAPL", "bare", "AAPL"),
+        ("AAPL", "exchange_prefix", "AAPL"),
+    ],
+)
+def test_declared_feed_route_preserves_compound_ticker(
+    code: str, style: str, expected: str
+) -> None:
+    client = _FakeClient(_RSS)
+    provider = RSSHubEventProvider(
+        "https://rsshub.local",
+        feeds=[FeedSpec("news", "/news/{code}", "sentiment", style)],
+        client=client,
+    )
+    events = provider.query_events([code], as_of="2024-01-31")
+    assert client.calls == ["https://rsshub.local/news/" + expected]
+    assert events["ts_code"].tolist() == [code, code]

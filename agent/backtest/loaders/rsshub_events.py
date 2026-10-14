@@ -99,7 +99,11 @@ def format_code_for_route(code: str, style: str) -> str:
         )
     if style == "raw":
         return code
-    symbol, _, suffix = code.partition(".")
+    # Only the final dot separates the venue; share-class dots belong to
+    # the ticker (for example BRK.B.US).
+    symbol, separator, suffix = code.rpartition(".")
+    if not separator:
+        return code
     if style == "bare":
         return symbol
     return f"{suffix.upper()}{symbol}" if suffix else symbol
