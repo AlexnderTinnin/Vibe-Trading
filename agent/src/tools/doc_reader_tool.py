@@ -298,7 +298,7 @@ def _read_excel(path: Path) -> str:
             total=total_sheets,
             message=f"sheet {name}",
         )
-        df = xls.parse(name, dtype=str)
+        df = xls.parse(name, dtype=str, keep_default_na=False, na_values=[""])
         preview = df.head(100).to_string(index=False)
         parts.append(f"--- Sheet: {name} ({len(df)} rows × {len(df.columns)} cols) ---\n{preview}")
         sheet_info.append({"name": name, "rows": len(df), "cols": len(df.columns)})
