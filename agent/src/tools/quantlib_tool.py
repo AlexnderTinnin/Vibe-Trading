@@ -214,32 +214,50 @@ def _encode(value: Any, budget: _Budget) -> Any:
         return value.value
     if isinstance(value, (np.integer, np.floating, np.bool_)):
         return _encode(value.item(), budget)
+
+    def sequence(values):
+        encoded = []
+        for item in values:
+            if budget.leaves >= _MAX_RESULT_LEAVES:
+                budget.truncated = True
+                break
+            encoded.append(_encode(item, budget))
+        return encoded
+
+    def mapping(items):
+        encoded = {}
+        for key, item in items:
+            if budget.leaves >= _MAX_RESULT_LEAVES:
+                budget.truncated = True
+                break
+            encoded[str(key)] = _encode(item, budget)
+        return encoded
+
     if isinstance(value, np.ndarray):
-        return [_encode(v, budget) for v in value.tolist()]
+        return sequence(value)
     if isinstance(value, pd.Series):
         return {
             "__series__": {
-                "index": [_encode(i, budget) for i in value.index.tolist()],
-                "values": [_encode(v, budget) for v in value.tolist()],
+                "index": sequence(value.index),
+                "values": sequence(value),
             }
         }
     if isinstance(value, pd.DataFrame):
         return {
             "__dataframe__": {
-                "index": [_encode(i, budget) for i in value.index.tolist()],
-                "columns": [str(c) for c in value.columns],
-                "data": [[_encode(v, budget) for v in row] for row in value.to_numpy().tolist()],
+                "index": sequence(value.index),
+                "columns": sequence(str(c) for c in value.columns),
+                "data": sequence(value.itertuples(index=False, name=None)),
             }
         }
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        return {
-            f.name: _encode(getattr(value, f.name), budget)
-            for f in dataclasses.fields(value)
-        }
+        return mapping(
+            (f.name, getattr(value, f.name)) for f in dataclasses.fields(value)
+        )
     if isinstance(value, dict):
-        return {str(k): _encode(v, budget) for k, v in value.items()}
+        return mapping(value.items())
     if isinstance(value, (list, tuple, set, frozenset)):
-        return [_encode(v, budget) for v in value]
+        return sequence(value)
 
     budget.leaves += 1
     return str(value)
