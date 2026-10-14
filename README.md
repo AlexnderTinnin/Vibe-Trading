@@ -52,15 +52,17 @@
 
 > ⚠️ **Security warning:** The X account `VibeTrading_HKU`, Virtuals project `101845`, and token contract `0x640BDBF77b6447E8b7DB7894cED84BD1c40571f4` are not official Vibe-Trading assets. We have never launched or endorsed any token or memecoin. Do not buy, connect a wallet, or sign anything. [Details](SECURITY.md#official-channels--impersonation).
 
+- **2026-10-14** 🛠️ **Backtest, search and document fixes**: Risk ratios and equity exports now include first-bar PnL ([#1844](https://github.com/HKUDS/Vibe-Trading/pull/1844)). Session search returns distinct sessions with preserved titles and contextual snippets ([#1827](https://github.com/HKUDS/Vibe-Trading/pull/1827), [#1834](https://github.com/HKUDS/Vibe-Trading/pull/1834)). Improve PDF/Office extraction, reject unresolved evidence references, and strengthen financial-input validation and credential redaction.
+
 - **2026-10-13** 🧩 **Portfolio imports, strategy adaptation and research tools**: Read-only extraETF holdings imports support dated EUR valuation and allocation proposals; adapted strategies get their own backtest evidence ([#1170](https://github.com/HKUDS/Vibe-Trading/issues/1170), [#1149](https://github.com/HKUDS/Vibe-Trading/issues/1149)). Add tested custom model endpoints, a shared manual Pixel Office task board, Persian/Turkish UI, mStock read-only queries and Gildata research data.
   Fix settlement-currency accounting, Futu market selection and cost basis, per-symbol HK board lots, saved validation settings and run progress. Complete declared grounding checks and the agent-loop split. mStock remains excluded from portfolio aggregation; Robinhood options execution remains unavailable. See [CHANGELOG](CHANGELOG.md) for scope and limits.
 
 - **2026-10-12** 🧮 **Research and backtest updates**: Correct opening fills, liquidation-time attribution, drawdown duration, valuation tolerances and SEC filing timing in factor IC ([#1780](https://github.com/HKUDS/Vibe-Trading/pull/1780)–[#1794](https://github.com/HKUDS/Vibe-Trading/pull/1794)). Add 13 fundamental/valuation factors, Brazil data and backtests, opt-in ZimaOS templates, and Feishu run progress. See [CHANGELOG](CHANGELOG.md) for scope and data limitations.
 
-- **2026-10-11** 🛠️ **Five priority fixes**: Derived figures require evidence for every data operand; unsupported live options stay blocked. Offline benchmarks retain their selected source, trade artifacts distinguish break-even exits, and Codex tools preserve optional arguments ([#1622](https://github.com/HKUDS/Vibe-Trading/issues/1622), [#1779](https://github.com/HKUDS/Vibe-Trading/pull/1779), [#1781](https://github.com/HKUDS/Vibe-Trading/pull/1781), [#1785](https://github.com/HKUDS/Vibe-Trading/pull/1785)).
-
 <details>
 <summary>Earlier news</summary>
+
+- **2026-10-11** 🛠️ **Five priority fixes**: Derived figures require evidence for every data operand; unsupported live options stay blocked. Offline benchmarks retain their selected source, trade artifacts distinguish break-even exits, and Codex tools preserve optional arguments ([#1622](https://github.com/HKUDS/Vibe-Trading/issues/1622), [#1779](https://github.com/HKUDS/Vibe-Trading/pull/1779), [#1781](https://github.com/HKUDS/Vibe-Trading/pull/1781), [#1785](https://github.com/HKUDS/Vibe-Trading/pull/1785)).
 
 - **2026-10-10** 🛠️ **Slack/Discord setup and reproducible research**: Localized channel forms verify bot credentials without saving changes ([#1764](https://github.com/HKUDS/Vibe-Trading/pull/1764), [#1777](https://github.com/HKUDS/Vibe-Trading/pull/1777)). Portfolio research can reuse an immutable snapshot, and Web exports its sanitized JSON ([#1769](https://github.com/HKUDS/Vibe-Trading/pull/1769)). Indicators report their date boundary and exact input fingerprint; corrupted session records recover without rewriting files. Memory recall, credential redaction and trade-journal detection are corrected. See [CHANGELOG](CHANGELOG.md).
 

@@ -52,15 +52,17 @@
 
 > ⚠️ **セキュリティ警告：** Xアカウント `VibeTrading_HKU`、Virtualsプロジェクト `101845`、およびトークンコントラクト `0x640BDBF77b6447E8b7DB7894cED84BD1c40571f4` は、いずれもVibe-Trading公式のものではありません。Vibe-Tradingはこれまで、いかなるトークンやミームコインも発行・公認していません。購入、ウォレットの接続、署名は行わないでください。[詳細](SECURITY.md#official-channels--impersonation)
 
+- **2026-10-14** 🛠️ **バックテスト・検索・文書読み取りの修正**：リスク指標と資産推移のエクスポートに最初のバーの損益を反映（[#1844](https://github.com/HKUDS/Vibe-Trading/pull/1844)）。セッション検索は重複するセッションを除き、タイトルを保持して一致箇所の前後を表示します（[#1827](https://github.com/HKUDS/Vibe-Trading/pull/1827)、[#1834](https://github.com/HKUDS/Vibe-Trading/pull/1834)）。PDF／Office の内容抽出を改善し、解決できない根拠参照を拒否。金融計算の入力検証と認証情報のマスキングも強化しました。
+
 - **2026-10-13** 🧩 **ポートフォリオ取り込み・戦略適応・調査ツール**：extraETF の保有明細を読み取り専用で取り込み、日付付きのユーロ評価と資産配分案に対応。適応後の子戦略は自身のバックテスト結果を根拠に使います（[#1170](https://github.com/HKUDS/Vibe-Trading/issues/1170)、[#1149](https://github.com/HKUDS/Vibe-Trading/issues/1149)）。接続テスト済みのカスタムモデル、Pixel Office の共有手動タスクボード、ペルシャ語・トルコ語 UI、mStock の読み取り専用照会、Gildata の調査データを追加しました。
   決済通貨別の損益集計、Futu の市場選択と取得原価、香港株の銘柄別売買単位、保存済み検証設定、実行進捗を修正。数値検証ルールの明示的な登録とエージェントループの分割も完了しました。mStock は引き続きポートフォリオ集計の対象外で、Robinhood のオプション注文は未対応です。範囲と制約は [CHANGELOG](CHANGELOG.md) を参照。
 
 - **2026-10-12** 🧮 **調査とバックテストの更新**：初回約定、清算時の寄与分析、ドローダウン期間、評価許容誤差、因子 IC の SEC 開示タイミングを修正（[#1780](https://github.com/HKUDS/Vibe-Trading/pull/1780)–[#1794](https://github.com/HKUDS/Vibe-Trading/pull/1794)）。基本面・評価因子 13 種、ブラジル市場データとバックテスト、明示的に有効化する ZimaOS テンプレート、Feishu の実行進捗を追加。範囲と制約は [CHANGELOG](CHANGELOG.md) を参照。
 
-- **2026-10-11** 🛠️ **優先度の高い 5 件を修正**：導出値の各データ項に根拠を要求し、未対応の実取引オプション注文を拒否。オフライン基準は指定ソースを維持し、取引記録は損益ゼロの決済を識別、Codex ツールは任意引数を保持します（[#1622](https://github.com/HKUDS/Vibe-Trading/issues/1622)、[#1779](https://github.com/HKUDS/Vibe-Trading/pull/1779)、[#1781](https://github.com/HKUDS/Vibe-Trading/pull/1781)、[#1785](https://github.com/HKUDS/Vibe-Trading/pull/1785)）。
-
 <details>
 <summary>過去のニュース</summary>
+
+- **2026-10-11** 🛠️ **優先度の高い 5 件を修正**：導出値の各データ項に根拠を要求し、未対応の実取引オプション注文を拒否。オフライン基準は指定ソースを維持し、取引記録は損益ゼロの決済を識別、Codex ツールは任意引数を保持します（[#1622](https://github.com/HKUDS/Vibe-Trading/issues/1622)、[#1779](https://github.com/HKUDS/Vibe-Trading/pull/1779)、[#1781](https://github.com/HKUDS/Vibe-Trading/pull/1781)、[#1785](https://github.com/HKUDS/Vibe-Trading/pull/1785)）。
 
 - **2026-10-10** 🛠️ **Slack/Discord 設定と再現可能な調査**：翻訳済みフォームでボット認証情報を検証できます。テストは変更を保存しません（[#1764](https://github.com/HKUDS/Vibe-Trading/pull/1764)、[#1777](https://github.com/HKUDS/Vibe-Trading/pull/1777)）。ポートフォリオ調査は不変のスナップショットを再利用でき、Web から認証情報や口座番号を除いた JSON を出力できます（[#1769](https://github.com/HKUDS/Vibe-Trading/pull/1769)）。指標は取得日と入力の指紋を報告し、破損したセッション記録は元のファイルを書き換えずに復旧します。メモリ検索、認証情報の秘匿、取引履歴の識別も修正しました。[CHANGELOG](CHANGELOG.md) を参照。
 

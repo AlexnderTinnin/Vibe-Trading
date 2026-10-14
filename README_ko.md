@@ -52,15 +52,17 @@
 
 > ⚠️ **보안 경고:** X 계정 `VibeTrading_HKU`, Virtuals 프로젝트 `101845`, 토큰 컨트랙트 `0x640BDBF77b6447E8b7DB7894cED84BD1c40571f4`는 모두 Vibe-Trading 공식과 무관합니다. Vibe-Trading은 어떠한 토큰이나 밈코인도 발행하거나 공식적으로 지지한 적이 없습니다. 해당 토큰을 구매하거나 지갑을 연결하거나 어떠한 서명도 하지 마세요. [자세히 보기](SECURITY.md#official-channels--impersonation).
 
+- **2026-10-14** 🛠️ **백테스트·검색·문서 읽기 수정**: 위험 지표와 자산 가치 내보내기에 첫 봉의 손익을 반영합니다([#1844](https://github.com/HKUDS/Vibe-Trading/pull/1844)). 세션 검색은 세션 중복을 제거하고 제목을 유지하며 일치한 부분의 문맥을 표시합니다([#1827](https://github.com/HKUDS/Vibe-Trading/pull/1827), [#1834](https://github.com/HKUDS/Vibe-Trading/pull/1834)). PDF/Office 내용 추출을 개선하고 확인할 수 없는 근거 참조를 거부하며, 금융 계산 입력 검증과 인증 정보 마스킹을 강화했습니다.
+
 - **2026-10-13** 🧩 **포트폴리오 가져오기, 전략 적응 및 리서치 도구**: extraETF 보유 내역을 읽기 전용으로 가져와 날짜가 명시된 EUR 평가와 자산 배분 제안을 지원하며, 적응한 하위 전략은 자체 백테스트 근거를 사용합니다([#1170](https://github.com/HKUDS/Vibe-Trading/issues/1170), [#1149](https://github.com/HKUDS/Vibe-Trading/issues/1149)). 연결 테스트를 거친 사용자 지정 모델, Pixel Office 공유 수동 작업 보드, 페르시아어·튀르키예어 UI, mStock 읽기 전용 조회와 Gildata 리서치 데이터를 추가했습니다.
   결제 통화별 회계 처리, Futu 시장 선택과 취득 원가, 홍콩 주식의 종목별 거래 단위, 저장된 검증 설정과 실행 진행 표시를 수정했습니다. 명시적 수치 검증 규칙과 에이전트 루프 분리도 완료했습니다. mStock은 포트폴리오 통합 집계에서 제외되며 Robinhood 옵션 주문 실행은 아직 지원하지 않습니다. 범위와 제약은 [CHANGELOG](CHANGELOG.md)를 참고하세요.
 
 - **2026-10-12** 🧮 **리서치와 백테스트 업데이트**: 최초 체결, 청산 시 성과 귀속, 낙폭 지속 기간, 가치평가 허용 오차, 팩터 IC의 SEC 공시 반영 시점을 수정했습니다([#1780](https://github.com/HKUDS/Vibe-Trading/pull/1780)–[#1794](https://github.com/HKUDS/Vibe-Trading/pull/1794)). 기본적·가치평가 팩터 13개, 브라질 데이터와 백테스트, 선택적으로 활성화하는 ZimaOS 템플릿, Feishu 실행 진행 표시를 추가했습니다. 범위와 제약은 [CHANGELOG](CHANGELOG.md)를 참고하세요.
 
-- **2026-10-11** 🛠️ **우선순위 수정 5건**: 계산에 쓰인 각 데이터 값에 근거를 요구하고 미지원 실거래 옵션 주문을 차단합니다. 오프라인 벤치마크는 지정 소스를 유지하며, 거래 기록은 손익 0 청산을 구분하고 Codex 도구는 선택 인수를 보존합니다([#1622](https://github.com/HKUDS/Vibe-Trading/issues/1622), [#1779](https://github.com/HKUDS/Vibe-Trading/pull/1779), [#1781](https://github.com/HKUDS/Vibe-Trading/pull/1781), [#1785](https://github.com/HKUDS/Vibe-Trading/pull/1785)).
-
 <details>
 <summary>이전 뉴스</summary>
+
+- **2026-10-11** 🛠️ **우선순위 수정 5건**: 계산에 쓰인 각 데이터 값에 근거를 요구하고 미지원 실거래 옵션 주문을 차단합니다. 오프라인 벤치마크는 지정 소스를 유지하며, 거래 기록은 손익 0 청산을 구분하고 Codex 도구는 선택 인수를 보존합니다([#1622](https://github.com/HKUDS/Vibe-Trading/issues/1622), [#1779](https://github.com/HKUDS/Vibe-Trading/pull/1779), [#1781](https://github.com/HKUDS/Vibe-Trading/pull/1781), [#1785](https://github.com/HKUDS/Vibe-Trading/pull/1785)).
 
 - **2026-10-10** 🛠️ **Slack/Discord 설정과 재현 가능한 연구**: 번역된 양식에서 봇 인증 정보를 검증하며 테스트는 변경 사항을 저장하지 않습니다([#1764](https://github.com/HKUDS/Vibe-Trading/pull/1764), [#1777](https://github.com/HKUDS/Vibe-Trading/pull/1777)). 포트폴리오 연구는 불변 스냅샷을 재사용하고 Web에서 인증 정보와 계좌 번호를 제거한 JSON을 내보냅니다([#1769](https://github.com/HKUDS/Vibe-Trading/pull/1769)). 지표는 조회 날짜와 입력 지문을 보고하며 손상된 세션 기록은 원본을 다시 쓰지 않고 복구합니다. 메모리 검색, 인증 정보 마스킹, 거래 내역 식별도 수정했습니다. [CHANGELOG](CHANGELOG.md)를 참조하세요.
 

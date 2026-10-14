@@ -52,15 +52,17 @@
 
 > ⚠️ **安全警告：** X 账号 `VibeTrading_HKU`、Virtuals 项目 `101845` 及代币合约 `0x640BDBF77b6447E8b7DB7894cED84BD1c40571f4` 均非 Vibe-Trading 官方。我们从未发行或背书任何代币或 meme 币。请勿购买、连接钱包或签名。[详细说明](SECURITY.md#official-channels--impersonation)。
 
+- **2026-10-14** 🛠️ **回测、搜索与文档读取修复**：风险比率与净值导出纳入首根 K 线盈亏（[#1844](https://github.com/HKUDS/Vibe-Trading/pull/1844)）。会话搜索按不同会话返回结果，保留标题并展示匹配上下文（[#1827](https://github.com/HKUDS/Vibe-Trading/pull/1827)、[#1834](https://github.com/HKUDS/Vibe-Trading/pull/1834)）。改进 PDF／Office 内容提取，拒绝无法解析的证据引用，并加强金融计算输入校验与凭证脱敏。
+
 - **2026-10-13** 🧩 **组合导入、策略适配与研究工具**：只读导入 extraETF 持仓，支持带日期的欧元估值与配置建议；适配后的子策略使用自己的回测证据（[#1170](https://github.com/HKUDS/Vibe-Trading/issues/1170)、[#1149](https://github.com/HKUDS/Vibe-Trading/issues/1149)）。新增经测试的自定义模型端点、共享的 Pixel Office 手动任务板、波斯语／土耳其语界面、mStock 只读查询及聚源研究数据。
   修正按结算币种记账、富途市场选择与成本口径、港股逐标的每手股数、已保存的验证参数和运行进度；完成声明式数值核验与 Agent 循环拆分。mStock 暂不纳入组合汇总，Robinhood 期权执行仍不可用。范围与限制见 [CHANGELOG](CHANGELOG.md)。
 
 - **2026-10-12** 🧮 **研究与回测更新**：修正开仓成交、清仓时归因、回撤时长、估值容差及因子 IC 的 SEC 财报可见时点（[#1780](https://github.com/HKUDS/Vibe-Trading/pull/1780)–[#1794](https://github.com/HKUDS/Vibe-Trading/pull/1794)）。新增 13 个基本面／估值因子、巴西数据与回测、需显式启用的 ZimaOS 模板，以及飞书运行进度。范围与数据限制见 [CHANGELOG](CHANGELOG.md)。
 
-- **2026-10-11** 🛠️ **五项优先修复**：派生数字的每个数据操作数都须有证据，不支持的实盘期权继续拦截。离线基准保持指定数据源，交易记录区分零盈亏平仓，Codex 工具保留可选参数（[#1622](https://github.com/HKUDS/Vibe-Trading/issues/1622)、[#1779](https://github.com/HKUDS/Vibe-Trading/pull/1779)、[#1781](https://github.com/HKUDS/Vibe-Trading/pull/1781)、[#1785](https://github.com/HKUDS/Vibe-Trading/pull/1785)）。
-
 <details>
 <summary>更早的新闻</summary>
+
+- **2026-10-11** 🛠️ **五项优先修复**：派生数字的每个数据操作数都须有证据，不支持的实盘期权继续拦截。离线基准保持指定数据源，交易记录区分零盈亏平仓，Codex 工具保留可选参数（[#1622](https://github.com/HKUDS/Vibe-Trading/issues/1622)、[#1779](https://github.com/HKUDS/Vibe-Trading/pull/1779)、[#1781](https://github.com/HKUDS/Vibe-Trading/pull/1781)、[#1785](https://github.com/HKUDS/Vibe-Trading/pull/1785)）。
 
 - **2026-10-10** 🛠️ **Slack/Discord 配置与可复现研究**：本地化配置表单可测试机器人凭证，测试不会保存改动（[#1764](https://github.com/HKUDS/Vibe-Trading/pull/1764)、[#1777](https://github.com/HKUDS/Vibe-Trading/pull/1777)）。组合研究可复用不可变快照，Web 可导出脱敏 JSON（[#1769](https://github.com/HKUDS/Vibe-Trading/pull/1769)）。技术指标报告日期边界和输入指纹；损坏的会话记录可恢复且不重写原文件。另修复记忆召回、凭证脱敏和交易流水格式识别。详见 [CHANGELOG](CHANGELOG.md)。
 
