@@ -528,4 +528,96 @@ describe("Runtime page", () => {
     expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
     expect(apiMock.verifyConnector).not.toHaveBeenCalled();
   });
+
+  describe("connector order", () => {
+    function broker(
+      name: string,
+      auth: Partial<LiveBrokerStatus["auth"]> = {},
+      extra: Partial<LiveBrokerStatus> = {},
+    ): LiveBrokerStatus {
+      return {
+        auth: { broker: name, oauth_token_present: false, is_live_broker: false, transport: "broker_sdk", ...auth },
+        runner: { broker: name, alive: false, last_tick: null, last_tick_age_seconds: null },
+        mandate: null,
+        halted: false,
+        ...extra,
+      };
+    }
+
+    async function renderedOrder(brokers: LiveBrokerStatus[], globalHalted = false): Promise<string[]> {
+      apiMock.getLiveStatus.mockResolvedValue(makeStatus({ global_halted: globalHalted, brokers }));
+      render(<Runtime />);
+      await screen.findByText("Live / Paper Runtime Status");
+      return screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent ?? "");
+    }
+
+    it("lists connected, then failed, then ready, then unconfigured SDK connectors", async () => {
+      const order = await renderedOrder([
+        broker("alpha", { connection_state: "not_configured" }),
+        broker("bravo", { connection_state: "ready" }),
+        broker("charlie", { connection_state: "error" }),
+        broker("delta", { connection_state: "connected" }),
+      ]);
+
+      expect(order).toEqual(["delta", "charlie", "bravo", "alpha"]);
+    });
+
+    it("ranks an SDK connector by the state its status pill shows", async () => {
+      const order = await renderedOrder([
+        broker("alpha", { connection_state: "error", configured: false }),
+        broker("bravo", { connection_state: "ready" }),
+      ]);
+
+      expect(order).toEqual(["bravo", "alpha"]);
+    });
+
+    it("ranks an OAuth broker with a token or a live runner ahead of unconnected SDK connectors", async () => {
+      const order = await renderedOrder([
+        broker("alpha", { sdk_installed: true }),
+        broker("ibkr", { transport: "local_tws" }),
+        broker("kraken", { transport: "remote_mcp" }, {
+          runner: { broker: "kraken", alive: true, last_tick: null, last_tick_age_seconds: null },
+        }),
+        broker("robinhood", { transport: "remote_mcp", oauth_token_present: true }),
+      ]);
+
+      expect(order).toEqual(["kraken", "robinhood", "alpha", "ibkr"]);
+    });
+
+    it("moves only an OAuth broker with its own kill switch, since SDK cards show no halt", async () => {
+      const order = await renderedOrder([
+        broker("alpha"),
+        broker("bravo", { transport: "remote_mcp" }, { halted: true }),
+        broker("charlie", { connection_state: "connected" }),
+        broker("delta", {}, { halted: true }),
+      ]);
+
+      expect(order).toEqual(["charlie", "bravo", "alpha", "delta"]);
+    });
+
+    it("keeps the same order under the global kill switch, which marks every broker halted", async () => {
+      const order = await renderedOrder(
+        [
+          broker("alpha"),
+          broker("bravo", { transport: "remote_mcp" }),
+          broker("charlie", { connection_state: "ready" }),
+          broker("delta", { connection_state: "connected" }),
+        ].map((item) => ({ ...item, halted: true })),
+        true,
+      );
+
+      expect(order).toEqual(["delta", "charlie", "alpha", "bravo"]);
+    });
+
+    it("puts unreported connectors with the SDK installed first and otherwise keeps the backend order", async () => {
+      const order = await renderedOrder([
+        broker("alpha", { sdk_installed: false }),
+        broker("bravo", { sdk_installed: true }),
+        broker("charlie", { sdk_installed: null }),
+        broker("delta", { sdk_installed: true }),
+      ]);
+
+      expect(order).toEqual(["bravo", "delta", "alpha", "charlie"]);
+    });
+  });
 });
