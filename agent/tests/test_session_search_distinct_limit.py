@@ -47,6 +47,9 @@ def test_ranked_cursor_stops_after_requested_distinct_sessions(tmp_path: Path) -
         consumed = []
 
         class Cursor:
+            def fetchone(self):
+                return self.cursor.fetchone()
+
             def __iter__(self):
                 for row in self.cursor:
                     consumed.append(row)
