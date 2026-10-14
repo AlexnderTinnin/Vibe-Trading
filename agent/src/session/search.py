@@ -16,6 +16,7 @@ import re
 import sqlite3
 import threading as _threading
 import time
+from bisect import bisect_left
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -40,21 +41,69 @@ def _prepare_search_text(text: str) -> str:
     return _EAST_ASIAN_CHAR.sub(lambda match: f" {match[0]} ", text)
 
 
-def _search_snippet(content: str, query: str) -> str:
-    """Highlight query terms in the original text, never in expanded tokens."""
-    terms = sorted(set(_QUERY_TERM.findall(query)), key=len, reverse=True)
-    pattern = (
-        re.compile("|".join(re.escape(term) for term in terms), re.IGNORECASE)
-        if terms
-        else None
-    )
-    first = pattern.search(content) if pattern else None
-    start = max(0, first.start() - 100) if first else 0
+def _search_snippet(
+    conn: sqlite3.Connection, message_id: int, content: str, fts_query: str
+) -> str:
+    """Map native FTS match spans back to the original, bounded excerpt."""
+    # Markers cannot be mistaken for literal source text. Their brackets also
+    # avoid partial overlaps when a control-character run borders a match.
+    opening, closing = "<\x01>", "<\x02>"
+    while opening in content or closing in content:
+        opening = "<" + opening[1:-1] * 2 + ">"
+        closing = "<" + closing[1:-1] * 2 + ">"
+    row = conn.execute(
+        "SELECT highlight(messages_fts, 0, ?, ?) FROM messages_fts "
+        "WHERE messages_fts MATCH ? AND rowid = ?",
+        (opening, closing, fts_query, message_id),
+    ).fetchone()
+    highlighted = row[0] if row else ""
+
+    # Only inserted spaces need offsets; Latin messages allocate no per-char
+    # mapping. A boundary loses one position for each insertion before it.
+    insertions = []
+    for index, match in enumerate(_EAST_ASIAN_CHAR.finditer(content)):
+        position = match.start() + 2 * index
+        insertions.extend((position, position + 2))
+
+    spans = []
+    cursor = prepared_offset = 0
+    while True:
+        marker_start = highlighted.find(opening, cursor)
+        if marker_start < 0:
+            break
+        prepared_offset += marker_start - cursor
+        match_start = marker_start + len(opening)
+        marker_end = highlighted.find(closing, match_start)
+        if marker_end < 0:
+            break
+        prepared_end = prepared_offset + marker_end - match_start
+        start = prepared_offset - bisect_left(insertions, prepared_offset)
+        end = prepared_end - bisect_left(insertions, prepared_end)
+        if start < end:
+            spans.append((start, end))
+        prepared_offset = prepared_end
+        cursor = marker_end + len(closing)
+
+    start = max(0, spans[0][0] - 100) if spans else 0
     end = min(len(content), start + 400)
-    excerpt = content[start:end]
-    if pattern:
-        excerpt = pattern.sub(lambda match: f">>>{match[0]}<<<", excerpt)
-    return ("..." if start else "") + excerpt + ("..." if end < len(content) else "")
+    pieces = []
+    cursor = start
+    for match_start, match_end in spans:
+        if match_start >= end:
+            break
+        match_start, match_end = max(match_start, start), min(match_end, end)
+        if match_end <= cursor:
+            continue
+        pieces.extend(
+            (content[cursor:match_start], ">>>", content[match_start:match_end], "<<<")
+        )
+        cursor = match_end
+    pieces.append(content[cursor:end])
+    return (
+        ("..." if start else "")
+        + "".join(pieces)
+        + ("..." if end < len(content) else "")
+    )
 
 
 @dataclass(frozen=True)
@@ -294,7 +343,8 @@ class SessionSearchIndex:
                     s.started_at,
                     s.message_count,
                     m.content,
-                    rank
+                    rank,
+                    m.id
                 FROM messages_fts
                 JOIN messages m ON m.id = messages_fts.rowid
                 JOIN sessions s ON s.id = m.session_id
@@ -317,7 +367,7 @@ class SessionSearchIndex:
                 title=row[1] or "(untitled)",
                 started_at=self._format_time(row[2]),
                 message_count=row[3],
-                snippet=_search_snippet(row[4] or "", query),
+                snippet=_search_snippet(conn, row[6], row[4] or "", fts_query),
                 rank=row[5],
             )
             if len(seen) >= max_sessions:
