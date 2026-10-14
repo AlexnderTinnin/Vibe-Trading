@@ -173,10 +173,15 @@ def accrued_interest(
         Accrued interest in the same currency units as ``face``.
 
     Raises:
-        ValueError: If ``freq`` is not positive, if the coupon dates are not
-            ordered, if ``settlement`` falls outside the coupon period, or if
-            ``day_count`` is not a recognised convention.
+        ValueError: If any numeric input is non-finite, if ``freq`` is not
+            positive, if the coupon dates are not ordered, if ``settlement``
+            falls outside the coupon period, or if ``day_count`` is not a
+            recognised convention.
     """
+    # Before the endpoint shortcuts: settling exactly on a coupon date returns
+    # a constant, which would otherwise launder a NaN face or rate into a
+    # clean-looking 0.0.
+    _require_finite(face=face, coupon_rate=coupon_rate, freq=freq)
     if freq <= 0:
         raise ValueError(f"freq must be positive, got {freq}")
     if not last_coupon < next_coupon:
@@ -227,10 +232,13 @@ def bond_cashflows(
         ``periods / freq``.
 
     Raises:
-        ValueError: If ``face`` is not positive, if ``n_periods`` is not a
-            positive integer, or if ``freq`` is not positive.
+        ValueError: If any numeric input is non-finite, if ``face`` is not
+            positive, if ``n_periods`` is not a positive integer, or if
+            ``freq`` is not positive.
     """
-    _require_finite(face=face, coupon_rate=coupon_rate)
+    # freq too: with an infinite frequency every coupon collapses to zero and
+    # the schedule reprices to a plausible-looking par.
+    _require_finite(face=face, coupon_rate=coupon_rate, freq=freq)
     if face <= 0:
         raise ValueError(f"face must be positive, got {face}")
     if isinstance(n_periods, bool) or not isinstance(n_periods, (int, np.integer)) or n_periods <= 0:
@@ -321,9 +329,13 @@ def ytm_solve(
         Annual yield to maturity as a decimal.
 
     Raises:
-        ValueError: If the price is not reachable inside ``bracket``.
+        ValueError: If ``price`` or a bracket bound is non-finite, or if the
+            price is not reachable inside ``bracket``.
     """
     low, high = bracket
+    # NaN fails ``low >= high`` and every solver evaluation; name the input
+    # instead of reporting a bracket that "cannot reprice" it.
+    _require_finite(price=price, bracket_low=low, bracket_high=high)
     if low >= high:
         raise ValueError(f"bracket must be increasing, got {bracket}")
 
@@ -424,11 +436,15 @@ def key_rate_duration(
         Dict mapping each key rate tenor (float) to its Key Rate Duration (float in years).
 
     Raises:
-        ValueError: If key_rates is empty or not strictly increasing, or schedule/compounding invalid.
+        ValueError: If key_rates is empty, non-finite or not strictly
+            increasing, or schedule/compounding invalid.
     """
     kr = np.asarray(key_rates, dtype=float)
     if kr.size == 0:
         raise ValueError("key_rates must contain at least one tenor")
+    # A NaN tenor is neither empty nor non-increasing, so it sailed past both
+    # checks and came back as a NaN key in the result dict.
+    _require_finite(key_rates=kr)
     if (np.diff(kr) <= 0.0).any():
         raise ValueError(f"key_rates must be strictly increasing, got {key_rates}")
 
@@ -528,10 +544,14 @@ def dv01(
         positive number.
 
     Raises:
-        ValueError: If ``face`` is zero, or the schedule/compounding is invalid.
+        ValueError: If ``face`` is zero, if ``par_amount`` is non-finite, or
+            the schedule/compounding is invalid.
     """
     if face == 0:
         raise ValueError("face must be non-zero")
+    # face itself is admitted by the schedule checks downstream; par_amount
+    # never reaches them, so a NaN position size would scale into a NaN hedge.
+    _require_finite(par_amount=par_amount)
     d_mod = modified_duration(face, coupon_rate, ytm, n_periods, freq, compounding)
     price = bond_price(face, coupon_rate, ytm, n_periods, freq, compounding)
     return d_mod * (price / face) * 1e-4 * par_amount

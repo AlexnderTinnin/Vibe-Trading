@@ -575,6 +575,20 @@ def test_fit_yield_curve_rejects_nonfinite_observations(bad):
         (lambda bad: nelson_siegel(bad, 0.04, -0.01, 0.01, 2.0), "maturities"),
         (lambda bad: nelson_siegel(5.0, 0.04, bad, 0.01, 2.0), "beta1"),
         (lambda bad: svensson(5.0, 0.04, -0.01, 0.01, 0.01, 2.0, bad), "decay"),
+        # An infinite frequency priced a bullet bond at par: every coupon
+        # collapses to zero and each discount factor to one.
+        (lambda bad: bond_price(100.0, 0.05, 0.05, 10, freq=bad), "freq"),
+        (lambda bad: bond_cashflows(100.0, 0.05, 10, freq=bad), "freq"),
+        (lambda bad: macaulay_duration(100.0, 0.05, 0.05, 10, freq=bad), "freq"),
+        # NaN fails ``low >= high`` and every solver probe; the old error
+        # blamed the bracket for an unreachable price.
+        (lambda bad: ytm_solve(bad, 100.0, 0.05, 10), "price"),
+        (lambda bad: ytm_solve(95.0, 100.0, 0.05, 10, bracket=(bad, 10.0)), "bracket_low"),
+        (lambda bad: ytm_solve(95.0, 100.0, 0.05, 10, bracket=(-0.5, bad)), "bracket_high"),
+        # Neither empty nor non-increasing, so a NaN tenor passed both checks.
+        (lambda bad: key_rate_duration(100.0, 0.05, 0.05, 10, key_rates=[1.0, bad]), "key_rates"),
+        # par_amount never reaches the schedule checks downstream.
+        (lambda bad: dv01(100.0, 0.05, 0.05, 10, par_amount=bad), "par_amount"),
     ],
 )
 @pytest.mark.parametrize("bad", [np.nan, np.inf])
@@ -582,3 +596,30 @@ def test_a_non_finite_input_is_named_not_priced(call, name, bad):
     """Each range check is a comparison, and NaN fails none of them: it came out as a NaN price."""
     with pytest.raises(ValueError, match=f"{name} must be finite"):
         call(bad)
+
+
+@pytest.mark.parametrize("field", ["face", "coupon_rate", "freq"])
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
+@pytest.mark.parametrize(
+    "settlement", [dt.date(2026, 1, 1), dt.date(2026, 4, 1), dt.date(2026, 7, 1)]
+)
+def test_accrued_interest_rejects_non_finite_inputs(field, bad, settlement):
+    """The on-coupon-date shortcuts return constants, so admission must run
+    before them or a NaN face laundered into a clean 0.0."""
+    params = dict(
+        face=100.0,
+        coupon_rate=0.05,
+        freq=2,
+        last_coupon=dt.date(2026, 1, 1),
+        settlement=settlement,
+        next_coupon=dt.date(2026, 7, 1),
+    )
+    params[field] = bad
+    with pytest.raises(ValueError, match=f"{field} must be finite"):
+        accrued_interest(**params)
+
+
+def test_bond_price_with_infinite_frequency_is_not_par():
+    """freq=inf used to price every bullet bond at exactly face."""
+    with pytest.raises(ValueError, match="freq must be finite"):
+        bond_price(100.0, 0.05, 0.04, 4, freq=np.inf)

@@ -243,11 +243,24 @@ def probabilistic_sharpe_ratio(
         Probability in ``[0, 1]``.
 
     Raises:
-        ValueError: If ``n_observations`` is below :data:`MIN_OBSERVATIONS`, if
-            ``kurtosis`` is below 1 (impossible for any distribution), or if the
-            variance term is non-positive, which means the supplied moments are
-            mutually inconsistent rather than merely extreme.
+        ValueError: If any summary input is non-finite, if ``n_observations``
+            is below :data:`MIN_OBSERVATIONS`, if ``kurtosis`` is below 1
+            (impossible for any distribution), or if the variance term is
+            non-positive, which means the supplied moments are mutually
+            inconsistent rather than merely extreme.
     """
+    # Every check below is a comparison, and a comparison with NaN is False:
+    # without this admission, a NaN benchmark returned NaN as "confidence" and
+    # an infinite one returned a clean 0.0 or 1.0.
+    for name, value in (
+        ("observed_sharpe", observed_sharpe),
+        ("n_observations", n_observations),
+        ("benchmark_sharpe", benchmark_sharpe),
+        ("skew", skew),
+        ("kurtosis", kurtosis),
+    ):
+        if not np.isfinite(value):
+            raise ValueError(f"{name} must be finite, got {value}")
     if n_observations < MIN_OBSERVATIONS:
         raise ValueError(
             f"need at least {MIN_OBSERVATIONS} observations, got {n_observations}"
@@ -257,8 +270,6 @@ def probabilistic_sharpe_ratio(
             f"kurtosis must be the non-excess fourth moment (>= 1, 3 for a "
             f"Gaussian), got {kurtosis}. Excess kurtosis was probably passed."
         )
-    if not np.isfinite(observed_sharpe):
-        raise ValueError(f"observed_sharpe must be finite, got {observed_sharpe}")
 
     variance_term = (
         1.0 - skew * observed_sharpe + (kurtosis - 1.0) / 4.0 * observed_sharpe**2
@@ -300,9 +311,16 @@ def expected_maximum_sharpe(n_trials: int, trial_sharpe_std: float) -> float:
         ``trial_sharpe_std`` is zero.
 
     Raises:
-        ValueError: If ``n_trials`` is below 1 or ``trial_sharpe_std`` is
-            negative.
+        ValueError: If either input is non-finite, if ``n_trials`` is below 1
+            or ``trial_sharpe_std`` is negative.
     """
+    # NaN fails every comparison below and norm.ppf(1 - 1/inf) is inf: the
+    # first surfaces as a NaN bar, the second as an unbeatably infinite one,
+    # and deflated_sharpe_ratio reports both as an ordinary pass/fail verdict.
+    if not np.isfinite(n_trials):
+        raise ValueError(f"n_trials must be finite, got {n_trials}")
+    if not np.isfinite(trial_sharpe_std):
+        raise ValueError(f"trial_sharpe_std must be finite, got {trial_sharpe_std}")
     if n_trials < 1:
         raise ValueError(f"n_trials must be at least 1, got {n_trials}")
     if trial_sharpe_std < 0.0:
