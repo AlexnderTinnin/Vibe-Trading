@@ -1844,6 +1844,19 @@ class _PolicyMixin:
         # belongs to no instrument, named by the ref, can anchor it then — a
         # difference between two backtests' Sharpes is a portfolio figure.
         unattributed = not symbol and len({record.symbol for record in records if record.symbol}) > 1
+        # A nonempty single ref that names no call, tool, field or artifact
+        # must not borrow a coincidentally equal value from session pools.
+        # Keep observed instrument symbols as valid legacy refs, and keep the
+        # established no_symbol diagnostic for unattributed multi-symbol data.
+        ref = declaration.ref.strip()
+        if ref and not re.search(r"[,;]", ref) and not unattributed:
+            scoped_ref = self._referenced(ref, symbol, None, pool_ambiguous=True)
+            if (scoped_ref is None or (not scoped_ref[0] and not scoped_ref[1])) and not any(
+                _normalize_symbol(ref) == _normalize_symbol(record.symbol)
+                for record in self._evidence
+                if record.symbol and record.status == "observed"
+            ):
+                return "no_evidence"
         anchors: list[float] = []
         if not unattributed:
             # A money-marked result is derived from money: an RSI or a volume
