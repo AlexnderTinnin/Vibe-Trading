@@ -16,9 +16,12 @@ import re
 import sqlite3
 import threading as _threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from functools import wraps
 from pathlib import Path
+from typing import Any
 
 from src.config.paths import get_runtime_root
 
@@ -85,6 +88,17 @@ class SearchMatch:
         }
 
 
+def _serialized_operation(fn: Callable[..., Any]) -> Callable[..., Any]:
+    """Keep each shared-connection operation and its cursor consumption together."""
+
+    @wraps(fn)
+    def wrapped(self: SessionSearchIndex, *args: Any, **kwargs: Any) -> Any:
+        with self._operation_lock:
+            return fn(self, *args, **kwargs)
+
+    return wrapped
+
+
 class SessionSearchIndex:
     """SQLite FTS5 index for cross-session search.
 
@@ -100,6 +114,7 @@ class SessionSearchIndex:
         Args:
             db_path: Path to SQLite database file.
         """
+        self._operation_lock = _threading.RLock()
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn: sqlite3.Connection | None = None
@@ -175,6 +190,7 @@ class SessionSearchIndex:
                     "INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')"
                 )
 
+    @_serialized_operation
     def index_session(
         self,
         session_id: str,
@@ -208,6 +224,7 @@ class SessionSearchIndex:
         )
         conn.commit()
 
+    @_serialized_operation
     def index_message(
         self, session_id: str, role: str, content: str, tool_name: str | None = None
     ) -> None:
@@ -255,6 +272,7 @@ class SessionSearchIndex:
         ]
         return " OR ".join(f'"{token}"' for token in tokens) if tokens else '""'
 
+    @_serialized_operation
     def search(self, query: str, max_sessions: int = 3) -> list[SearchMatch]:
         """Full-text search across all sessions.
 
@@ -319,14 +337,18 @@ class SessionSearchIndex:
         if not store_base_dir.exists():
             return 0
 
-        conn = self._get_conn()
-        conn.execute("DELETE FROM messages")
-        conn.execute("DELETE FROM sessions")
-        try:
-            conn.execute("INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')")
-        except sqlite3.OperationalError:
-            pass
-        conn.commit()
+        # Only SQLite work is serialized; source-file reads remain outside.
+        with self._operation_lock:
+            conn = self._get_conn()
+            conn.execute("DELETE FROM messages")
+            conn.execute("DELETE FROM sessions")
+            try:
+                conn.execute(
+                    "INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')"
+                )
+            except sqlite3.OperationalError:
+                pass
+            conn.commit()
 
         count = 0
         for session_dir in store_base_dir.iterdir():
@@ -382,6 +404,7 @@ class SessionSearchIndex:
         except (OSError, ValueError):
             return "unknown"
 
+    @_serialized_operation
     def close(self) -> None:
         """Close the database connection."""
         if self._conn:
