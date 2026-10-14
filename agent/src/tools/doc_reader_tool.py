@@ -259,16 +259,23 @@ def _read_pdf(path: Path, pages: str, min_text_per_page: int = _MIN_TEXT_PER_PAG
 def _read_docx(path: Path) -> str:
     try:
         import docx  # type: ignore
+        from docx.text.paragraph import Paragraph
     except ImportError:
         return _err("python-docx not installed; run: pip install python-docx")
 
     doc = docx.Document(str(path))
-    parts: list[str] = [p.text for p in doc.paragraphs if p.text.strip()]
-    for t_idx, table in enumerate(doc.tables, start=1):
-        parts.append(f"\n--- Table {t_idx} ---")
-        for row in table.rows:
-            cells = [c.text.strip().replace("\n", " ") for c in row.cells]
-            parts.append(" | ".join(cells))
+    parts: list[str] = []
+    table_count = 0
+    for block in doc.iter_inner_content():
+        if isinstance(block, Paragraph):
+            if block.text.strip():
+                parts.append(block.text)
+        else:
+            table_count += 1
+            parts.append(f"\n--- Table {table_count} ---")
+            for row in block.rows:
+                cells = [c.text.strip().replace("\n", " ") for c in row.cells]
+                parts.append(" | ".join(cells))
     return _envelope(path, "docx", "\n".join(parts), paragraphs=len(doc.paragraphs), tables=len(doc.tables))
 
 
