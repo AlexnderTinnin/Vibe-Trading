@@ -22,6 +22,7 @@ from typing import Any, Callable
 from src.agent.progress import emit_progress
 from src.agent.tools import BaseTool
 from src.security.scanner import with_security_warnings
+from src.tools.ocr import get_ocr_engine, get_ocr_install_hint
 from src.tools.path_utils import safe_document_path
 
 _MAX_CHARS = 15000
@@ -44,7 +45,6 @@ _TEXT_EXTS = {
     ".dockerfile", ".makefile", ".cmake",
 }
 
-from src.tools.ocr import get_ocr_engine, get_ocr_install_hint
 
 _cached_ocr_engine = None
 _cached_ocr_checked = False
@@ -239,16 +239,23 @@ def _read_pdf(path: Path, pages: str, min_text_per_page: int = _MIN_TEXT_PER_PAG
 def _read_docx(path: Path) -> str:
     try:
         import docx  # type: ignore
+        from docx.text.paragraph import Paragraph
     except ImportError:
         return _err("python-docx not installed; run: pip install python-docx")
 
     doc = docx.Document(str(path))
-    parts: list[str] = [p.text for p in doc.paragraphs if p.text.strip()]
-    for t_idx, table in enumerate(doc.tables, start=1):
-        parts.append(f"\n--- Table {t_idx} ---")
-        for row in table.rows:
-            cells = [c.text.strip().replace("\n", " ") for c in row.cells]
-            parts.append(" | ".join(cells))
+    parts: list[str] = []
+    table_count = 0
+    for block in doc.iter_inner_content():
+        if isinstance(block, Paragraph):
+            if block.text.strip():
+                parts.append(block.text)
+        else:
+            table_count += 1
+            parts.append(f"\n--- Table {table_count} ---")
+            for row in block.rows:
+                cells = [c.text.strip().replace("\n", " ") for c in row.cells]
+                parts.append(" | ".join(cells))
     return _envelope(path, "docx", "\n".join(parts), paragraphs=len(doc.paragraphs), tables=len(doc.tables))
 
 
