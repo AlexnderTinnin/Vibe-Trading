@@ -25,6 +25,18 @@ def _error(exc: Exception) -> str:
     return json.dumps({"status": "error", "error": str(exc)}, ensure_ascii=False)
 
 
+def _rules_text(value: Any) -> Any:
+    """Join a list of rules into the one-rule-per-line text the store keeps.
+
+    The rule fields are plain text, but an agent following an extraction step
+    may hand them over as a list; binding a list would fail the registration.
+    An empty list means nothing was stated, so it is stored as ``None``.
+    """
+    if isinstance(value, list):
+        return "\n".join(str(item) for item in value) or None
+    return value
+
+
 class SdmRegisterTool(BaseTool):
     """Register a new factor or strategy into the strategy store."""
 
@@ -76,6 +88,26 @@ class SdmRegisterTool(BaseTool):
             "signal_definition": {
                 "type": "string",
                 "description": "Signal logic description (strategy only)",
+            },
+            # A strategy record that names only its signal cannot be reviewed
+            # or acted on; these say how it trades.
+            "entry_rules": {
+                "type": "string",
+                "description": (
+                    "What opens a position, one rule per line (strategy only)"
+                ),
+            },
+            "exit_rules": {
+                "type": "string",
+                "description": (
+                    "What closes a position, one rule per line (strategy only)"
+                ),
+            },
+            "position_sizing": {
+                "type": "string",
+                "description": (
+                    "How capital is allocated across selections (strategy only)"
+                ),
             },
             "signal_engine_path": {
                 "type": "string",
@@ -187,6 +219,9 @@ class SdmRegisterTool(BaseTool):
                 theme=theme,
                 columns_required=columns_required,
                 signal_definition=kwargs.get("signal_definition"),
+                entry_rules=_rules_text(kwargs.get("entry_rules")),
+                exit_rules=_rules_text(kwargs.get("exit_rules")),
+                position_sizing=_rules_text(kwargs.get("position_sizing")),
                 signal_engine_path=kwargs.get("signal_engine_path"),
                 hypothesis_id=kwargs.get("hypothesis_id"),
                 status=ArtifactStatus.CREATED,

@@ -262,8 +262,8 @@ columns_required:
   - close
   - volume
   - <additional columns>
-entry_rules: <clear boolean condition>
-exit_rules: <clear boolean condition or list of conditions>
+entry_rules: <clear boolean condition; several conditions one per line>
+exit_rules: <clear boolean condition; several conditions one per line>
 position_sizing: <method and parameters>
 risk_management: <constraints or "defaults applied: ...">
 signal_definition: <full description including defaults>
