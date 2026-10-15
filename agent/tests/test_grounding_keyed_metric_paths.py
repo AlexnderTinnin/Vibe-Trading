@@ -55,6 +55,13 @@ def test_contribution_map_keeps_exact_instrument_identity(tmp_path, key, symbol)
     assert ledger._metric_pool("MSFT.US") == []
 
 
+def test_scalar_contribution_is_not_reclassified_as_an_instrument_map(tmp_path):
+    ledger = _ledger(tmp_path, {"contribution_pct": 0.125})
+    (entry,) = ledger._analysis_metrics
+    assert entry["instrument_scoped"] is False
+    assert ledger._metric_pool("AAPL.US") == [0.125]
+
+
 def test_correlation_matrix_cells_have_two_axes_and_no_single_symbol(tmp_path):
     ledger = _ledger(
         tmp_path,

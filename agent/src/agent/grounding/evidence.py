@@ -772,7 +772,7 @@ class _EvidenceMixin:
                     parent_kind = _ANALYSIS_KIND_ALIASES.get(key_text.casefold())
                     child_metric_map = (
                         parent_kind
-                        if parent_kind in {"contribution", "correlation"}
+                        if isinstance(child, dict) and parent_kind in {"contribution", "correlation"}
                         else metric_map
                     )
                     child_symbol = keyed_symbol
