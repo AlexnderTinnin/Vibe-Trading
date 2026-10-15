@@ -69,6 +69,21 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
 # ===================================================================
 
 
+@pytest.mark.parametrize("value", ["0", "-1"])
+def test_session_iteration_cap_rejects_nonpositive_values(monkeypatch, value: str) -> None:
+    """A nonpositive cap must not silently become an unlimited loop."""
+    monkeypatch.setenv("VIBE_TRADING_AGENT_MAX_ITERATIONS", value)
+    with pytest.raises(ValidationError):
+        get_env_config()
+
+
+@pytest.mark.parametrize("value", ["2.5", "invalid"])
+def test_session_iteration_cap_uses_safe_default_for_malformed_env(monkeypatch, value: str) -> None:
+    """Unparseable env values follow the shared numeric-default contract."""
+    monkeypatch.setenv("VIBE_TRADING_AGENT_MAX_ITERATIONS", value)
+    assert get_env_config().agent_tuning.vibe_trading_agent_max_iterations == 50
+
+
 class TestEnvConfigDefaults:
     """Verify every field defaults correctly when no env vars are set."""
 

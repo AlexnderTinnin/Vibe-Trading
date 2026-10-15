@@ -6,6 +6,8 @@ import asyncio
 import time
 from pathlib import Path
 
+import pytest
+
 from src.session.events import EventBus
 from src.session.models import Attempt
 from src.session.service import SessionService
@@ -29,10 +31,24 @@ class _DummyAgentLoop:
         return {"status": "completed"}
 
 
+@pytest.mark.parametrize(("configured_cap", "expected_cap"), [(None, 50), ("73", 73)])
 def test_run_with_agent_keeps_event_loop_responsive_during_registry_build(
     monkeypatch,
     tmp_path: Path,
+    configured_cap: str | None,
+    expected_cap: int,
 ) -> None:
+    monkeypatch.setattr("src.config.accessor._instance", None)
+    if configured_cap is None:
+        monkeypatch.delenv("VIBE_TRADING_AGENT_MAX_ITERATIONS", raising=False)
+    else:
+        monkeypatch.setenv("VIBE_TRADING_AGENT_MAX_ITERATIONS", configured_cap)
+    received_caps: list[int] = []
+
+    def _agent_factory(**kwargs):
+        received_caps.append(kwargs["max_iterations"])
+        return _DummyAgentLoop(**kwargs)
+
     def _slow_build_registry(**kwargs):
         del kwargs
         time.sleep(0.25)
@@ -42,7 +58,7 @@ def test_run_with_agent_keeps_event_loop_responsive_during_registry_build(
     monkeypatch.setattr("src.tools.build_registry", _slow_build_registry)
     monkeypatch.setattr("src.providers.chat.ChatLLM", lambda: object())
     monkeypatch.setattr("src.memory.persistent.PersistentMemory", lambda: object())
-    monkeypatch.setattr("src.agent.loop.AgentLoop", _DummyAgentLoop)
+    monkeypatch.setattr("src.agent.loop.AgentLoop", _agent_factory)
     monkeypatch.setattr("src.config.loader.load_runtime_agent_config", lambda overrides=None: object())
     monkeypatch.setattr("src.config.loader.sanitize_session_overrides", lambda overrides: dict(overrides))
 
@@ -68,5 +84,6 @@ def test_run_with_agent_keeps_event_loop_responsive_during_registry_build(
     tick_times, result = asyncio.run(_exercise())
 
     assert result["status"] == "completed"
+    assert received_caps == [expected_cap]
     assert tick_times, "Expected the event loop ticker to run while registry build was pending"
     assert tick_times[0] < 0.18, f"Registry build blocked the event loop for too long: {tick_times[0]:.3f}s"
