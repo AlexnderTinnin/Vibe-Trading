@@ -134,9 +134,12 @@ _FX_RE = _re.compile(
 
 def _detect_market_for_align(code: str) -> str:
     """Lightweight market detection for ffill_limit calculation."""
-    if _CRYPTO_RE.match(code):
+    from backtest.engines._market_hooks import _detect_market
+
+    market = _detect_market(code.strip().upper())
+    if market == "crypto":
         return "crypto"
-    if _FX_RE.match(code):
+    if market == "forex":
         return "forex"
     return "equity"
 

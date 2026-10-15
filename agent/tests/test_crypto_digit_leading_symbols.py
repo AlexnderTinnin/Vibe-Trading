@@ -13,6 +13,7 @@ import pytest
 from backtest.correlation import _normalize_symbol, infer_market
 from backtest.engines._market_hooks import _detect_market
 from backtest.engines.base import _CRYPTO_RE
+from backtest.engines.base import _detect_market_for_align
 from src.market_data import detect_source, normalize_crypto_symbol
 
 DIGIT_LEADING_PAIRS = [
@@ -80,3 +81,11 @@ def test_digit_only_base_is_never_crypto(code: str) -> None:
     assert _detect_market(code) != "crypto"
     assert not _CRYPTO_RE.match(code)
     assert normalize_crypto_symbol(code) == code
+
+
+@pytest.mark.parametrize("code", [
+    "1INCH-USDT", "1000PEPE-USDT-PERP", "BTC-USDT-PERP", "ETH/USDC",
+    "BTC-BUSD", "BTCUSDC", "BTC/USD",
+])
+def test_combined_crypto_fixes_reach_signal_alignment(code):
+    assert _detect_market_for_align(code) == "crypto"
