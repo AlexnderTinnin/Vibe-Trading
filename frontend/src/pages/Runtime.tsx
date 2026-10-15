@@ -96,7 +96,7 @@ export function Runtime() {
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">{t("runtime.title")}</h1>
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-                {t("runtime.subtitlePre")} <span className="font-mono">/live/status</span>
+                {t("runtime.subtitlePre")}
                 {t("runtime.subtitlePost")}
               </p>
             </div>
