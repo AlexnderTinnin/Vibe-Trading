@@ -743,6 +743,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ broker }),
     }),
+  saveRunnerSettings: (broker: string, settings: LiveDecisionSettings) =>
+    request<LiveDecisionBudget>(`/live/runner/settings?broker=${encodeURIComponent(broker)}`, {
+      method: "PUT",
+      body: JSON.stringify(settings),
+    }),
   stopLiveRunner: (broker: string) =>
     request<LiveRunnerResponse>("/live/runner/stop", {
       method: "POST",
@@ -2024,6 +2029,25 @@ export interface LiveBrokerStatus {
   mandate?: LiveMandateStatus | null;
   runner: LiveRunnerLiveness;
   halted: boolean;
+  decision_budget?: LiveDecisionBudget | null;
+}
+
+export interface LiveDecisionSettings {
+  interval_seconds: number;
+  daily_at: string | null;
+  timezone: string;
+  max_daily_turns: number;
+  max_daily_tokens: number;
+  max_daily_cost_usd: number | null;
+  input_usd_per_million: number | null;
+  output_usd_per_million: number | null;
+}
+
+export interface LiveDecisionBudget {
+  settings?: LiveDecisionSettings;
+  usage?: { day: string; turns: number; tokens: number; estimated_cost_usd: number | null; unaccounted_turns: number };
+  projected_daily_cost_usd?: number | null;
+  error?: string;
 }
 
 /** Response of `GET /live/status` (SPEC §7.5 runner status panel + C2). */

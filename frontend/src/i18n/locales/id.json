@@ -2445,5 +2445,27 @@
       "Senior": "Senior",
       "Lead": "Pemimpin"
     }
+  },
+  "runnerBudget": {
+    "unavailable": "Status biaya model tidak tersedia.",
+    "warning": "Panggilan model tetap berbiaya meski tidak ada transaksi.",
+    "summary": "Setiap {{minutes}} menit; maksimum {{turns}} keputusan dan {{tokens}} token per hari UTC.",
+    "dailySummary": "Setiap hari pukul {{time}} ({{timezone}}); menggantikan interval.",
+    "usage": "Hari ini: {{turns}} keputusan · {{tokens}} token · perkiraan {{cost}}.",
+    "estimateUnknown": "Harga dan penggunaan terukur diperlukan untuk perkiraan biaya harian.",
+    "estimate": "Perkiraan biaya model harian: sekitar ${{cost}}, berdasarkan penggunaan.",
+    "configure": "Jadwal dan batas biaya model",
+    "interval_seconds": "Interval keputusan (detik)",
+    "max_daily_turns": "Keputusan maksimum per hari UTC",
+    "max_daily_tokens": "Token maksimum per hari UTC",
+    "max_daily_cost_usd": "Batas perkiraan USD harian (opsional)",
+    "input_usd_per_million": "USD per juta token masukan (opsional)",
+    "output_usd_per_million": "USD per juta token keluaran (opsional)",
+    "daily_at": "Waktu harian (opsional)",
+    "timezone": "Zona waktu jadwal",
+    "save": "Simpan pengaturan",
+    "limitsNote": "Setiap keputusan memakai percakapan baru. Batas diperiksa setelah respons dan dapat terlampaui sebesar respons itu. Penggunaan yang hilang atau anggaran terlampaui memicu sakelar penghentian yang ada.",
+    "pricesNote": "Harga adalah perkiraan operator. Gunakan tarif masukan/penulisan cache tertinggi; diskon cache dan panggilan tambahan tidak termasuk.",
+    "stopToEdit": "Hentikan runner sebelum mengubah pengaturan."
   }
 }

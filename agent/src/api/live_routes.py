@@ -32,6 +32,8 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from src.live.runtime.decision_budget import DecisionBudget, DecisionSettings
+
 logger = logging.getLogger(__name__)
 
 
@@ -154,6 +156,7 @@ class LiveBrokerStatus(BaseModel):
     mandate: Optional[ActiveMandateState] = None
     runner: RunnerLivenessState
     halted: bool = Field(..., description="Per-broker OR global kill switch is tripped")
+    decision_budget: Optional[Dict[str, Any]] = None
 
 
 class LiveStatusResponse(BaseModel):
@@ -562,7 +565,22 @@ def _runner_liveness_state(broker: str) -> RunnerLivenessState:
     return RunnerLivenessState(broker=broker, alive=alive, last_tick=tick, last_tick_age_seconds=age)
 
 
-async def _run_live_session_attempt(svc: Any, session_id: str, prompt: str) -> Dict[str, Any]:
+def _decision_budget_state(broker: str) -> Dict[str, Any] | None:
+    """Read model spending controls without probing broker credentials."""
+    from src.trading.service import broker_supports_live_runner
+
+    if not broker_supports_live_runner(broker):
+        return None
+    try:
+        return DecisionBudget(broker).snapshot(datetime.now(timezone.utc))
+    except Exception:
+        logger.warning("could not read live model spending state", exc_info=True)
+        return {"error": "model spending state is unreadable; runner cannot start"}
+
+
+async def _run_live_session_attempt(
+    svc: Any, session_id: str, prompt: str, *, usage_callback: Any = None,
+) -> Dict[str, Any]:
     """Own a queued session attempt until completion or cooperative cancellation.
 
     Args:
@@ -583,6 +601,15 @@ async def _run_live_session_attempt(svc: Any, session_id: str, prompt: str) -> D
     early_results: Dict[str, Dict[str, Any]] = {}
 
     def on_terminal(event: Any) -> None:
+        if event.session_id == session_id and usage_callback is not None and event.event_type in {
+            "llm_usage", "llm_usage_unavailable"
+        }:
+            try:
+                usage_callback(event.data if event.event_type == "llm_usage" else {})
+            except Exception:
+                svc.cancel_current(session_id)
+                logger.warning("live model budget stopped the active decision", exc_info=True)
+            return
         if event.session_id != session_id or event.event_type not in {
             "attempt.completed", "attempt.failed", "attempt.cancelled", "attempt.interrupted"
         }:
@@ -751,8 +778,47 @@ def _build_live_runner(broker: str) -> Any:
     session = svc.create_session(title=f"live-runner:{broker}")
     session_id = session.session_id
 
+    budget = DecisionBudget(broker)
+    settings = budget.settings()
+
     async def _agent_caller(sid: str, prompt: str) -> Dict[str, Any]:
-        return await _run_live_session_attempt(svc, sid, prompt)
+        from src.live.halt import trip_halt
+
+        decision = None
+        failed = False
+        try:
+            decision = budget.begin(settings, datetime.now(timezone.utc))
+            if decision is None:
+                return {"status": "waiting"}
+            # Broker state and the pinned mandate are reconstructed each tick.
+            # Previous model conversations are neither authority nor input.
+            tick_session = svc.create_session(title=f"live-decision:{broker}")
+
+            def record_usage(data: Dict[str, Any]) -> None:
+                try:
+                    budget.record(decision, data, settings, datetime.now(timezone.utc))
+                except Exception:
+                    trip_halt(by="file", reason="live model spending limit or usage accounting failure", broker=broker)
+                    raise
+
+            return await _run_live_session_attempt(
+                svc, tick_session.session_id, prompt, usage_callback=record_usage,
+            )
+        except asyncio.CancelledError:
+            failed = True
+            raise
+        except Exception:
+            failed = True
+            trip_halt(by="file", reason="live model decision stopped; inspect runtime usage", broker=broker)
+            raise
+        finally:
+            if decision is not None:
+                try:
+                    budget.finish(decision, settings, datetime.now(timezone.utc))
+                except Exception:
+                    trip_halt(by="file", reason="live model budget exhausted or provider usage missing", broker=broker)
+                    if not failed:
+                        raise
 
     def _audit_with_bus(event: Any) -> Dict[str, Any]:
         return write_live_action(
@@ -1212,6 +1278,7 @@ def register_live_routes(
                     mandate=h._active_mandate_state(key),
                     runner=_runner_liveness_state(key),
                     halted=halt_flag_set(broker=key),
+                    decision_budget=_decision_budget_state(key),
                 )
             )
 
@@ -1284,6 +1351,31 @@ def register_live_routes(
 
         report = h._check_connector_status(profile_id, force=force)
         return report
+
+    def runner_settings_store(broker: str) -> DecisionBudget:
+        from src.trading.service import broker_supports_live_runner
+
+        key = broker.strip().lower()
+        if not broker_supports_live_runner(key):
+            raise HTTPException(status_code=400, detail=f"live runner is not supported for {key}")
+        return DecisionBudget(key)
+
+    @app.get("/live/runner/settings", dependencies=[Depends(require_auth)])
+    async def get_runner_settings(broker: str = Query(..., min_length=1, max_length=64)):
+        """Preview cadence, budgets and measured cost before starting a runner."""
+        return runner_settings_store(broker).snapshot(datetime.now(timezone.utc))
+
+    @app.put("/live/runner/settings", dependencies=[Depends(require_auth)])
+    async def put_runner_settings(
+        payload: DecisionSettings, broker: str = Query(..., min_length=1, max_length=64),
+    ):
+        """Save operator settings while stopped; spending history is retained."""
+        store = runner_settings_store(broker)
+        task = _host()._runner_tasks.get(broker.strip().lower())
+        if task is not None and not task.done():
+            raise HTTPException(status_code=409, detail="stop the runner before changing its settings")
+        store.save_settings(payload)
+        return store.snapshot(datetime.now(timezone.utc))
 
     @app.post("/live/runner/start", dependencies=[Depends(require_auth)])
     async def start_runner_endpoint(payload: LiveRunnerControlRequest):

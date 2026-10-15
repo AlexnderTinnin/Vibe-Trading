@@ -2010,6 +2010,38 @@ The agent exposes connector-scoped tools named `trading_connections`,
 Live-broker raw MCP tools are not registered directly as `mcp_<broker>_*`.
 No IBKR order-placement tool is registered.
 
+### Live runner model spending
+
+Model calls are billed even when a mandate permits only one trade or the agent
+places no orders. The runner checks safety every minute, but defaults to a model
+decision every **15 minutes**, at most **26 decisions / 1,000,000 reported tokens
+per UTC day**. Each decision starts a fresh conversation and reconstructs broker
+state under the existing mandate gate.
+
+Configure cadence, a once-daily wall-clock time/timezone, and daily budgets in
+**Runtime → Model schedule and spending limits**, or the chat runner panel.
+Stop the runner before editing. The CLI uses the same authenticated API:
+
+```bash
+vibe-trading connector runner-settings --profile robinhood-live-mcp
+vibe-trading connector runner-settings --profile robinhood-live-mcp --file runner-settings.json
+```
+
+The JSON accepts `interval_seconds`, optional `daily_at` (`HH:MM`) and `timezone`
+(IANA, default `America/New_York`), `max_daily_turns`, `max_daily_tokens`, and
+optional `max_daily_cost_usd`, `input_usd_per_million`, `output_usd_per_million`.
+Both prices are required for a dollar limit. Use the highest applicable input or
+cache-write price; estimates ignore cache discounts and auxiliary model calls.
+Daily projections need measured usage and configured prices; unknown costs stay
+unknown. The same settings are exposed by `GET` / `PUT /live/runner/settings?broker=robinhood`.
+
+Spending history survives restarts. Limits are checked **after each provider
+response**, so a response can overshoot a token or estimated-dollar budget.
+Exhaustion or missing usage trips the existing kill switch and cancels the active
+decision before its tool calls. Existing halt/cancel/flatten behavior applies;
+inspect the broker and usage before resuming. An unfinished decision after a
+crash is blocked for inspection, never silently counted as free.
+
 ### 🔐 TAP Mode — full credential isolation & human-approved writes
 
 **Opt-in, off by default.** If the `TAP_*` variables below are unset, the

@@ -2445,5 +2445,27 @@
       "Senior": "선임",
       "Lead": "책임자"
     }
+  },
+  "runnerBudget": {
+    "unavailable": "모델 비용 상태를 불러올 수 없습니다.",
+    "warning": "거래가 없어도 모델 호출에는 비용이 발생합니다.",
+    "summary": "{{minutes}}분 간격. UTC 일별 최대 {{turns}}회 결정, {{tokens}} 토큰.",
+    "dailySummary": "매일 {{time}}({{timezone}})에 실행하며 간격 설정을 대체합니다.",
+    "usage": "오늘: {{turns}}회 · {{tokens}} 토큰 · 추정 {{cost}}.",
+    "estimateUnknown": "요금과 실제 사용량이 있어야 일일 비용을 추정할 수 있습니다.",
+    "estimate": "실제 사용량 기준 일일 모델 비용: 약 ${{cost}}.",
+    "configure": "모델 일정 및 비용 한도",
+    "interval_seconds": "결정 간격(초)",
+    "max_daily_turns": "UTC 일별 최대 결정 횟수",
+    "max_daily_tokens": "UTC 일별 최대 토큰",
+    "max_daily_cost_usd": "일일 추정 USD 한도(선택)",
+    "input_usd_per_million": "입력 100만 토큰당 USD(선택)",
+    "output_usd_per_million": "출력 100만 토큰당 USD(선택)",
+    "daily_at": "매일 실행 시간(선택)",
+    "timezone": "일정 시간대",
+    "save": "설정 저장",
+    "limitsNote": "결정마다 새 대화를 사용합니다. 응답 후 사용량을 확인하므로 해당 응답만큼 초과할 수 있습니다. 사용량 누락이나 예산 초과 시 기존 중지 스위치가 작동합니다.",
+    "pricesNote": "요금은 운영자 추정값입니다. 입력/캐시 쓰기의 가장 높은 요금을 사용하세요. 캐시 할인과 보조 모델 호출은 추정에 포함되지 않습니다.",
+    "stopToEdit": "설정을 변경하기 전에 실행기를 중지하세요."
   }
 }

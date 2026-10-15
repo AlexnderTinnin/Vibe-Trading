@@ -2445,5 +2445,27 @@
       "Senior": "资深成员",
       "Lead": "负责人"
     }
+  },
+  "runnerBudget": {
+    "unavailable": "无法读取模型费用状态。",
+    "warning": "即使没有成交，调用模型也会产生费用。",
+    "summary": "每 {{minutes}} 分钟决策一次；每个 UTC 日最多 {{turns}} 次决策、{{tokens}} 个 token。",
+    "dailySummary": "每日 {{time}}（{{timezone}}）执行一次，替代间隔调度。",
+    "usage": "今日：{{turns}} 次决策 · {{tokens}} 个 token · 估算 {{cost}}。",
+    "estimateUnknown": "配置费率并取得实际用量后，才能估算每日费用。",
+    "estimate": "按实测用量估算，每日模型费用约 ${{cost}}。",
+    "configure": "模型调度和费用限制",
+    "interval_seconds": "决策间隔（秒）",
+    "max_daily_turns": "每个 UTC 日的决策次数上限",
+    "max_daily_tokens": "每个 UTC 日的 token 上限",
+    "max_daily_cost_usd": "每日估算美元上限（可选）",
+    "input_usd_per_million": "每百万输入 token 美元费率（可选）",
+    "output_usd_per_million": "每百万输出 token 美元费率（可选）",
+    "daily_at": "每日执行时间（可选）",
+    "timezone": "调度时区",
+    "save": "保存设置",
+    "limitsNote": "每次决策使用新会话。收到响应后检查用量，可能超出该次响应的费用。用量缺失或预算超限会触发现有停机开关。",
+    "pricesNote": "费率由用户配置。输入使用适用的最高输入／缓存写入费率；估算不包含缓存折扣和辅助模型调用。",
+    "stopToEdit": "请先停止 runner，再修改设置。"
   }
 }

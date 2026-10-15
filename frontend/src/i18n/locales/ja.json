@@ -2445,5 +2445,27 @@
       "Senior": "シニア",
       "Lead": "リーダー"
     }
+  },
+  "runnerBudget": {
+    "unavailable": "モデル費用の状態を取得できません。",
+    "warning": "取引がなくてもモデル呼び出しには費用がかかります。",
+    "summary": "{{minutes}} 分間隔。UTC 日ごとに最大 {{turns}} 回、{{tokens}} トークン。",
+    "dailySummary": "毎日 {{time}}（{{timezone}}）に実行し、間隔設定を置き換えます。",
+    "usage": "今日：{{turns}} 回 · {{tokens}} トークン · 推定 {{cost}}。",
+    "estimateUnknown": "料金と実測使用量が揃うまで日額を推定できません。",
+    "estimate": "実測使用量に基づく日額：約 ${{cost}}。",
+    "configure": "モデルの実行予定と費用上限",
+    "interval_seconds": "判断間隔（秒）",
+    "max_daily_turns": "UTC 日ごとの判断回数上限",
+    "max_daily_tokens": "UTC 日ごとのトークン上限",
+    "max_daily_cost_usd": "推定日額上限 USD（任意）",
+    "input_usd_per_million": "入力100万トークンの USD 料金（任意）",
+    "output_usd_per_million": "出力100万トークンの USD 料金（任意）",
+    "daily_at": "毎日の実行時刻（任意）",
+    "timezone": "実行タイムゾーン",
+    "save": "設定を保存",
+    "limitsNote": "判断ごとに新しい会話を使います。応答後に上限を確認するため、その応答分を超過する場合があります。使用量不明や超過時は既存の停止スイッチが作動します。",
+    "pricesNote": "料金は利用者が設定する推定値です。入力・キャッシュ書込の最高料金を使ってください。キャッシュ割引と補助モデル呼び出しは推定に含みません。",
+    "stopToEdit": "変更する前にランナーを停止してください。"
   }
 }

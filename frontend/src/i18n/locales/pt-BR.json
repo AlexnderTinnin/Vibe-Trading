@@ -2445,5 +2445,27 @@
       "Senior": "Sênior",
       "Lead": "Líder"
     }
+  },
+  "runnerBudget": {
+    "unavailable": "Estado de custos do modelo indisponível.",
+    "warning": "Chamadas ao modelo custam dinheiro mesmo sem operações.",
+    "summary": "A cada {{minutes}} minutos; até {{turns}} decisões e {{tokens}} tokens por dia UTC.",
+    "dailySummary": "Diariamente às {{time}} ({{timezone}}); substitui o intervalo.",
+    "usage": "Hoje: {{turns}} decisões · {{tokens}} tokens · estimativa {{cost}}.",
+    "estimateUnknown": "São necessários preços e uso medido para estimar o custo diário.",
+    "estimate": "Custo diário projetado: cerca de ${{cost}}, conforme o uso medido.",
+    "configure": "Agenda e limites de gastos do modelo",
+    "interval_seconds": "Intervalo de decisão (segundos)",
+    "max_daily_turns": "Máximo de decisões por dia UTC",
+    "max_daily_tokens": "Máximo de tokens por dia UTC",
+    "max_daily_cost_usd": "Limite diário estimado em USD (opcional)",
+    "input_usd_per_million": "USD por milhão de tokens de entrada (opcional)",
+    "output_usd_per_million": "USD por milhão de tokens de saída (opcional)",
+    "daily_at": "Horário diário (opcional)",
+    "timezone": "Fuso horário",
+    "save": "Salvar configurações",
+    "limitsNote": "Cada decisão usa uma nova conversa. Os limites são verificados após a resposta e podem exceder pelo valor dessa resposta. Uso desconhecido ou excesso aciona a parada de emergência existente.",
+    "pricesNote": "Os preços são estimativas do operador. Use a maior tarifa de entrada/gravação em cache; descontos de cache e chamadas auxiliares não estão incluídos.",
+    "stopToEdit": "Pare o executor antes de alterar as configurações."
   }
 }

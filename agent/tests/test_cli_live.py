@@ -93,6 +93,26 @@ def _write_mandate(root: Path, broker: str = "robinhood", *, schema_version: int
 
 
 class TestConnectorLiveDispatch:
+    def test_runner_settings_json_reaches_authenticated_api(self, tmp_path):
+        from cli._legacy import cmd_connector_runner_settings
+
+        source = tmp_path / "settings.json"
+        source.write_text('{"daily_at":"10:00","max_daily_turns":1}')
+        with patch("cli._legacy._live_api_call", return_value={"settings": {}}) as api:
+            assert cmd_connector_runner_settings("robinhood-live-mcp", str(source)) == 0
+        args, kwargs = api.call_args
+        assert args == ("PUT", "/live/runner/settings?broker=robinhood")
+        assert kwargs["body"]["daily_at"] == "10:00"
+        assert kwargs["body"]["max_daily_turns"] == 1
+
+    @pytest.mark.parametrize("command", ["cmd_live_start", "cmd_live_run"])
+    def test_no_start_if_spending_preview_fails(self, command):
+        from cli import _legacy
+
+        with patch("cli._legacy._live_api_call", return_value={"status": "error"}) as api:
+            assert getattr(_legacy, command)("robinhood") == _legacy.EXIT_RUN_FAILED
+        api.assert_called_once_with("GET", "/live/runner/settings?broker=robinhood")
+
     def _dispatch(self, argv: list[str]) -> int:
         from cli._legacy import _build_parser, _dispatch_connector
 

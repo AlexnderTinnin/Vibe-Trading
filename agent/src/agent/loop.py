@@ -715,6 +715,12 @@ class AgentLoop(ToolCallLifecycle):
                             "iter": current_iter,
                         },
                     )
+                else:
+                    self._emit("llm_usage_unavailable", {"iter": current_iter})
+                # A caller's spending monitor can cancel synchronously on the
+                # usage event. Do not execute tools from that paid response.
+                if self._cancel_event.is_set():
+                    break
                 if active_goal_id and session_id:
                     token_delta = int(usage_delta.get("total_tokens") or 0) if usage_delta else 0
                     turn_delta = 0 if goal_turn_accounted else 1

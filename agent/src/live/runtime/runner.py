@@ -536,6 +536,9 @@ class LiveRunner:
                 audit_id=audit_id,
             ).to_dict()
 
+        if result.get("status") == "waiting":
+            return TickResult(outcome="waiting", broker=self.broker, reason="decision cadence").to_dict()
+
         audit_id = self._audit(
             kind="order_placed",
             outcome="accepted",

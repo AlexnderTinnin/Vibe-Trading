@@ -2445,5 +2445,27 @@
       "Senior": "Erfahren",
       "Lead": "Leitung"
     }
+  },
+  "runnerBudget": {
+    "unavailable": "Modellkostenstatus nicht verfügbar.",
+    "warning": "Modellaufrufe kosten auch ohne Handelsausführung Geld.",
+    "summary": "Alle {{minutes}} Minuten; höchstens {{turns}} Entscheidungen und {{tokens}} Token pro UTC-Tag.",
+    "dailySummary": "Täglich um {{time}} ({{timezone}}); ersetzt das Intervall.",
+    "usage": "Heute: {{turns}} Entscheidungen · {{tokens}} Token · geschätzt {{cost}}.",
+    "estimateUnknown": "Eine Tagesschätzung benötigt Preise und gemessenen Verbrauch.",
+    "estimate": "Geschätzte tägliche Modellkosten: etwa ${{cost}}, anhand des Verbrauchs.",
+    "configure": "Modellzeitplan und Kostenlimits",
+    "interval_seconds": "Entscheidungsintervall (Sekunden)",
+    "max_daily_turns": "Maximale Entscheidungen pro UTC-Tag",
+    "max_daily_tokens": "Maximale Token pro UTC-Tag",
+    "max_daily_cost_usd": "Geschätztes USD-Tageslimit (optional)",
+    "input_usd_per_million": "USD pro Million Eingabetoken (optional)",
+    "output_usd_per_million": "USD pro Million Ausgabetoken (optional)",
+    "daily_at": "Tägliche Uhrzeit (optional)",
+    "timezone": "Zeitzone des Zeitplans",
+    "save": "Einstellungen speichern",
+    "limitsNote": "Jede Entscheidung beginnt eine neue Unterhaltung. Limits werden nach der Antwort geprüft und können um diese Antwort überschritten werden. Fehlender Verbrauch oder eine Überschreitung löst den vorhandenen Notstopp aus.",
+    "pricesNote": "Preise sind Betreiberschätzungen. Den höchsten Eingabe-/Cache-Schreibpreis verwenden; Cache-Rabatte und zusätzliche Modellaufrufe sind nicht enthalten.",
+    "stopToEdit": "Vor Änderungen den Runner stoppen."
   }
 }

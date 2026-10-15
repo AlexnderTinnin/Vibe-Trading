@@ -2445,5 +2445,27 @@
       "Senior": "Kıdemli",
       "Lead": "Lider"
     }
+  },
+  "runnerBudget": {
+    "unavailable": "Model harcama durumu okunamıyor.",
+    "warning": "İşlem yapılmasa da model çağrıları ücretlidir.",
+    "summary": "{{minutes}} dakikada bir; UTC günü başına en fazla {{turns}} karar ve {{tokens}} token.",
+    "dailySummary": "Her gün {{time}} ({{timezone}}); aralık ayarının yerini alır.",
+    "usage": "Bugün: {{turns}} karar · {{tokens}} token · tahmini {{cost}}.",
+    "estimateUnknown": "Günlük tahmin için fiyatlar ve ölçülen kullanım gerekir.",
+    "estimate": "Ölçülen kullanıma göre günlük tahmini model maliyeti: ${{cost}}.",
+    "configure": "Model zamanlaması ve harcama sınırları",
+    "interval_seconds": "Karar aralığı (saniye)",
+    "max_daily_turns": "UTC günü başına azami karar",
+    "max_daily_tokens": "UTC günü başına azami token",
+    "max_daily_cost_usd": "Günlük tahmini USD sınırı (isteğe bağlı)",
+    "input_usd_per_million": "Milyon girdi tokenı başına USD (isteğe bağlı)",
+    "output_usd_per_million": "Milyon çıktı tokenı başına USD (isteğe bağlı)",
+    "daily_at": "Günlük saat (isteğe bağlı)",
+    "timezone": "Zamanlama saat dilimi",
+    "save": "Ayarları kaydet",
+    "limitsNote": "Her karar yeni bir konuşma başlatır. Sınırlar yanıttan sonra kontrol edilir ve o yanıt kadar aşılabilir. Eksik kullanım veya aşım mevcut durdurma anahtarını tetikler.",
+    "pricesNote": "Fiyatlar operatör tahminidir. En yüksek girdi/önbellek yazma ücretini kullanın; önbellek indirimleri ve yardımcı çağrılar dahil değildir.",
+    "stopToEdit": "Ayarları değiştirmeden önce çalıştırıcıyı durdurun."
   }
 }

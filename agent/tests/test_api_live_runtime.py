@@ -178,6 +178,30 @@ def test_runner_start_requires_committed_mandate(tmp_path: Path, monkeypatch) ->
     assert "mandate" in response.json()["detail"].lower()
 
 
+def test_runner_settings_roundtrip_and_running_guard(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    path = "/live/runner/settings?broker=robinhood"
+    first = client.get(path)
+    assert first.status_code == 200
+    settings = first.json()["settings"]
+    assert settings["interval_seconds"] == 900
+    assert first.json()["projected_daily_cost_usd"] is None
+    settings.update(daily_at="10:00", max_daily_tokens=300000)
+    assert client.put(path, json=settings).status_code == 200
+    assert client.get(path).json()["settings"] == settings
+    state = client.get("/live/status?broker=robinhood").json()["brokers"][0]
+    assert state["decision_budget"]["settings"] == settings
+    monkeypatch.setattr(api_server, "_runner_tasks", {"robinhood": SimpleNamespace(done=lambda: False)})
+    assert client.put(path, json=settings).status_code == 409
+    assert client.get("/live/runner/settings?broker=ibkr").status_code == 400
+
+
+def test_runner_dollar_budget_requires_explicit_prices(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    response = client.put("/live/runner/settings?broker=robinhood", json={"max_daily_cost_usd": 5})
+    assert response.status_code == 422
+
+
 def test_runner_start_rejects_readonly_connector_without_runner(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -822,6 +846,67 @@ def test_build_live_runner_wires_a_real_runner(tmp_path, monkeypatch) -> None:
     assert runner.runner_id == "robinhood"
 
 
+@pytest.mark.parametrize("exhaust", [False, True])
+def test_real_runner_factory_uses_fresh_sessions_and_persistent_budget(tmp_path, monkeypatch, exhaust):
+    from datetime import datetime, timedelta, timezone
+    import src.api.live_routes as routes
+    from src.live.halt import halt_flag_set
+    from src.live.runtime.decision_budget import DecisionBudget, DecisionSettings
+    from src.session.events import EventBus
+    from src.session.service import SessionService
+    from src.session.store import SessionStore
+
+    _live_env(tmp_path, monkeypatch)
+    class Clock(datetime):
+        current = datetime(2026, 10, 15, 14, tzinfo=timezone.utc)
+        @classmethod
+        def now(cls, tz=None):
+            return cls.current
+    monkeypatch.setattr(routes, "datetime", Clock)
+    monkeypatch.setattr(api_server, "_mandate_account_ref", lambda broker: "acct_test")
+    monkeypatch.setattr(api_server, "_live_broker_adapter", lambda broker: SimpleNamespace(call_tool=lambda *args: {}))
+    budget = DecisionBudget("robinhood")
+    budget.save_settings(DecisionSettings(interval_seconds=60, max_daily_tokens=100 if exhaust else 1000))
+
+    async def scenario():
+        bus = EventBus()
+        bus.set_loop(asyncio.get_running_loop())
+        svc = SessionService(SessionStore(base_dir=tmp_path / "sessions"), bus, runs_dir=tmp_path / "runs")
+        sessions = []
+        async def attempt(attempt, **kwargs):
+            sessions.append(attempt.session_id)
+            cancelled = False
+            def cancel():
+                nonlocal cancelled
+                cancelled = True
+            svc._active_loops[attempt.session_id] = SimpleNamespace(cancel=cancel)
+            try:
+                bus.emit(attempt.session_id, "llm_usage", {"iter": 1, "input_tokens": 100, "output_tokens": 10, "total_tokens": 110})
+                return {"status": "cancelled" if cancelled else "success", "content": "hold"}
+            finally:
+                svc._active_loops.pop(attempt.session_id, None)
+        monkeypatch.setattr(svc, "_run_with_agent", attempt)
+        monkeypatch.setattr(api_server, "_get_session_service", lambda: svc)
+        runner = api_server._build_live_runner("robinhood")
+        if exhaust:
+            with pytest.raises(RuntimeError):
+                await runner._agent_caller(runner._session_id, "decision")
+            assert halt_flag_set("robinhood")
+            assert budget.snapshot(Clock.current)["usage"]["tokens"] == 110
+        else:
+            assert (await runner._agent_caller(runner._session_id, "decision"))["status"] == "success"
+            Clock.current += timedelta(seconds=1)
+            assert (await runner._agent_caller(runner._session_id, "decision"))["status"] == "waiting"
+            Clock.current += timedelta(seconds=60)
+            assert (await runner._agent_caller(runner._session_id, "decision"))["status"] == "success"
+            assert len(set(sessions)) == 2
+            for sid in sessions:
+                assert len([m for m in svc.get_messages(sid) if m.role == "user"]) == 1
+            assert budget.snapshot(Clock.current)["usage"]["tokens"] == 220
+        assert not bus._listeners
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize("cancel,phase,fails", [
     (False, "registry", False), (True, "registry", False),
     (True, "agent", False), (False, "agent", True),
@@ -845,6 +930,7 @@ def test_live_runner_owns_its_actual_background_session_attempt(tmp_path, monkey
                                  runs_dir=tmp_path / "runs")
         started, release = asyncio.Event(), asyncio.Event()
         cancelled = False
+        attempt_sessions = []
 
         def cooperative_cancel() -> None:
             nonlocal cancelled
@@ -852,6 +938,7 @@ def test_live_runner_owns_its_actual_background_session_attempt(tmp_path, monkey
             release.set()
 
         async def controlled_attempt(attempt, **kwargs):
+            attempt_sessions.append(attempt.session_id)
             if phase == "agent":
                 service._active_loops[attempt.session_id] = SimpleNamespace(cancel=cooperative_cancel)
             started.set()
@@ -859,6 +946,10 @@ def test_live_runner_owns_its_actual_background_session_attempt(tmp_path, monkey
                 await release.wait()
                 if fails:
                     return {"status": "failed", "reason": "execution failed"}
+                if not cancelled:
+                    bus.emit(attempt.session_id, "llm_usage", {
+                        "iter": 1, "input_tokens": 100, "output_tokens": 10, "total_tokens": 110,
+                    })
                 return {"status": "cancelled" if cancelled else "success", "content": "completed analysis"}
             finally:
                 service._active_loops.pop(attempt.session_id, None)
@@ -874,7 +965,7 @@ def test_live_runner_owns_its_actual_background_session_attempt(tmp_path, monkey
                 driver.cancel()
                 with pytest.raises(asyncio.CancelledError):
                     await driver
-                session = service.get_session(runner._session_id)
+                session = service.get_session(attempt_sessions[-1])
                 attempt = service.store.get_attempt(session.session_id, session.last_attempt_id)
                 assert attempt.status.value == "cancelled"
                 assert not service._active_tasks
@@ -889,6 +980,7 @@ def test_live_runner_owns_its_actual_background_session_attempt(tmp_path, monkey
                     result = await asyncio.wait_for(driver, 1)
                     assert result["status"] == "success"
                     assert result["content"] == "completed analysis"
+                    assert attempt_sessions[-1] != runner._session_id
             assert not bus._listeners
         finally:
             release.set()

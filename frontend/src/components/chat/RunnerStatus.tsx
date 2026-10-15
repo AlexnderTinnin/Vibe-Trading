@@ -1,4 +1,5 @@
 import i18n from '@/i18n';
+import { RunnerBudgetControls } from "./RunnerBudgetControls";
 import { memo, useCallback, useEffect, useState } from "react";
 import {
   Activity,
@@ -300,7 +301,7 @@ function BrokerRow({
             <button
               type="button"
               onClick={toggleRunner}
-              disabled={busy || halted || !mandate}
+              disabled={busy || (!runnerAlive && (halted || !mandate || countdown.expired || !!broker.decision_budget?.error))}
               className={[
                 "inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors disabled:opacity-40",
                 runnerAlive
@@ -315,6 +316,7 @@ function BrokerRow({
           </div>
         </>
       ) : null}
+      {isOAuthLiveBroker(auth) && <RunnerBudgetControls broker={brokerKey} budget={broker.decision_budget} running={runnerAlive} onRefresh={onRefresh} />}
     </div>
   );
 }

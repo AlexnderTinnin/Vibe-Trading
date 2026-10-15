@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { RunnerBudgetControls } from "@/components/chat/RunnerBudgetControls";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -293,6 +294,7 @@ function BrokerRuntimeCard({
           <p className="text-sm text-muted-foreground">{risk.description}</p>
         </RuntimePanel>
       </div>
+      <div className="mt-3"><RunnerBudgetControls broker={brokerKey} budget={broker.decision_budget} running={runnerAlive} onRefresh={() => { void onRefresh(); }} /></div>
     </article>
   );
 }

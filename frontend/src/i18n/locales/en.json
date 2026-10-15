@@ -2445,5 +2445,27 @@
       "Senior": "Senior",
       "Lead": "Lead"
     }
+  },
+  "runnerBudget": {
+    "unavailable": "Model spending state is unavailable.",
+    "warning": "Model calls cost money even when no trades are placed.",
+    "summary": "Every {{minutes}} minutes; up to {{turns}} decisions and {{tokens}} tokens per UTC day.",
+    "dailySummary": "Daily schedule: {{time}} ({{timezone}}); replaces the interval.",
+    "usage": "Today: {{turns}} decisions · {{tokens}} tokens · estimated {{cost}}.",
+    "estimateUnknown": "Daily cost cannot be estimated until prices and measured usage are available.",
+    "estimate": "Projected daily model cost: about ${{cost}}, based on measured usage.",
+    "configure": "Model schedule and spending limits",
+    "interval_seconds": "Decision interval (seconds)",
+    "max_daily_turns": "Maximum decisions per UTC day",
+    "max_daily_tokens": "Maximum tokens per UTC day",
+    "max_daily_cost_usd": "Estimated USD limit per day (optional)",
+    "input_usd_per_million": "Input USD per million tokens (optional)",
+    "output_usd_per_million": "Output USD per million tokens (optional)",
+    "daily_at": "Once daily at (optional)",
+    "timezone": "Schedule timezone",
+    "save": "Save settings",
+    "limitsNote": "Each decision starts a fresh conversation. Usage limits stop after a response and may overshoot by that response. Missing usage or an exceeded budget trips the existing kill switch.",
+    "pricesNote": "Prices are operator estimates. Use the highest applicable input/cache-write rate; cache discounts and auxiliary model calls are not included in the estimate.",
+    "stopToEdit": "Stop the runner before editing these settings."
   }
 }
