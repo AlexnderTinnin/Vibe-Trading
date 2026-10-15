@@ -295,11 +295,17 @@ def _unanchored_term(tree: ast.Expression, observed: Callable[[float], bool]) ->
     return visit(tree.body, False)
 
 
-def _evaluate_formula(expression: str) -> tuple[float, list[float], ast.Expression] | None:
+def _evaluate_formula(
+    expression: str,
+    *,
+    operand_transform: Callable[[float], float] | None = None,
+) -> tuple[float, list[float], ast.Expression] | None:
     """Evaluate a numeric ``+ - * /`` expression without executing code.
 
     Args:
         expression: An arithmetic run, possibly using ``× ÷ −`` and commas.
+        operand_transform: Optional unit conversion for numeric operands;
+            recorded input magnitudes and power exponents remain unchanged.
 
     Returns:
         ``(result, operands, parsed tree)``, or None when the run is not a
@@ -332,13 +338,13 @@ def _evaluate_formula(expression: str) -> tuple[float, list[float], ast.Expressi
         return None
     inputs: list[float] = []
 
-    def visit(node: ast.AST) -> float:
+    def visit(node: ast.AST, *, unit_one: bool = False, factor: bool = False) -> float:
         if isinstance(node, ast.Expression):
             return visit(node.body)
         if isinstance(node, ast.Constant) and _is_number(node.value):
             value = float(node.value)
             inputs.append(value)
-            return value
+            return operand_transform(value) if operand_transform and not (unit_one and value == 1) else value
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
             value = visit(node.operand)
             return value if isinstance(node.op, ast.UAdd) else -value
@@ -351,8 +357,14 @@ def _evaluate_formula(expression: str) -> tuple[float, list[float], ast.Expressi
         if isinstance(node, ast.BinOp) and isinstance(
             node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div)
         ):
-            left = visit(node.left)
-            right = visit(node.right)
+            multiplicative = isinstance(node.op, (ast.Mult, ast.Div))
+            unit_factor = factor and _is_unit_factor(node)
+            left = visit(node.left, factor=multiplicative, unit_one=(
+                multiplicative or unit_factor or (isinstance(node.right, ast.BinOp) and isinstance(node.right.op, ast.Div))
+            ))
+            right = visit(node.right, factor=multiplicative, unit_one=(
+                multiplicative or unit_factor or (isinstance(node.left, ast.BinOp) and isinstance(node.left.op, ast.Div))
+            ))
             if isinstance(node.op, ast.Add):
                 return left + right
             if isinstance(node.op, ast.Sub):
@@ -1857,7 +1869,6 @@ class _PolicyMixin:
         # Normalize ONLY an outer, trailing literal *100 back to a fraction;
         # do not broaden result matching or exempt any inner data operand.
         # Numeric magnitude elsewhere never decides whether an operand is data.
-        normalized_x100 = False
         if (
             percent
             and isinstance(tree.body, ast.BinOp)
@@ -1869,7 +1880,6 @@ class _PolicyMixin:
             result /= 100
             operands = operands[:-1]
             tree = ast.Expression(body=tree.body.left)
-            normalized_x100 = True
         # Two instruments' bars and no resolved symbol: arithmetic anchored on
         # the session's pools, or on one instrument's prints the ref names,
         # would look anchored with nothing to anchor it to. Only evidence that
@@ -1958,11 +1968,26 @@ class _PolicyMixin:
         # trailing *100 was normalized above, anything else is a fraction.
         points = (
             percent
-            and not normalized_x100
             and self._operands_read_as_points(
                 operands, symbol, records, scalar_parameters
             )
         )
+        if points:
+            # Convert the inputs before evaluating: two point-valued inputs
+            # divided by each other yield a fraction, not another point value.
+            # Keep the original magnitudes for all anchoring checks above.
+            def as_fraction(value: float) -> float:
+                if any(
+                    math.isclose(abs(value), abs(parameter), rel_tol=1e-12, abs_tol=0.0)
+                    for parameter in scalar_parameters
+                ):
+                    return value
+                return value / 100.0
+
+            normalized = _evaluate_formula(ast.unparse(tree), operand_transform=as_fraction)
+            if normalized is None:
+                return "formula_not_evaluable"
+            result = normalized[0] * 100.0
         return result, operands, points
 
     def _operands_read_as_points(
@@ -1984,8 +2009,7 @@ class _PolicyMixin:
         data = [
             operand
             for operand in operands
-            if operand != 1
-            and not any(
+            if not any(
                 math.isclose(abs(operand), abs(parameter), rel_tol=1e-12, abs_tol=0.0)
                 for parameter in scalar_parameters
             )
@@ -2019,6 +2043,8 @@ class _PolicyMixin:
                         saw_percent = True
                     else:
                         saw_plain = True
+            if operand == 1 and not saw_percent and not saw_plain:
+                continue  # Structural multiplicative identity, not a data unit.
             if not saw_percent or saw_plain:
                 return False
         return True

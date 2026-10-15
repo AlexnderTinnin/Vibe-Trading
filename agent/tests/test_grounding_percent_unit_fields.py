@@ -18,6 +18,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from src.agent.grounding import GroundingLedger
 
 
@@ -123,3 +125,40 @@ def test_mixed_fields_keep_the_fraction_reading(tmp_path: Path) -> None:
     valid, reasons = _verdict(ledger, "1.93%", "0.52 + 1.41")
     assert not valid
     assert "derivation_result_mismatch" in reasons
+
+
+@pytest.mark.parametrize(
+    "expression,correct,wrong",
+    [
+        ("0.52 / 1.41", "36.88%", "0.37%"),
+        ("0.52 / 1.41 * 100", "36.88%", "0.37%"),
+        ("(0.52 - 1.41) / 1.41", "-63.12%", "-0.63%"),
+        ("0.52 * 1.41", "0.007332%", "0.7332%"),
+        ("(1 + 0.52) * (1 + 1.41)", "101.937332%", "366.32%"),
+    ],
+)
+def test_percent_operand_units_follow_the_formula(
+    tmp_path: Path, expression: str, correct: str, wrong: str
+) -> None:
+    """Percentage-point inputs are converted before arithmetic, not after it."""
+    ledger = _ledger_with_rows(
+        tmp_path,
+        [
+            {"trade_date": "2026-08-03", "changepercent": 0.52},
+            {"trade_date": "2026-08-04", "changepercent": 1.41},
+        ],
+    )
+    valid, reasons = _verdict(ledger, correct, expression)
+    assert valid, reasons
+    valid, reasons = _verdict(ledger, wrong, expression)
+    assert not valid
+    assert "derivation_result_mismatch" in reasons
+
+
+def test_one_point_is_data_in_an_additive_sum(tmp_path):
+    ledger = _ledger_with_rows(tmp_path, [
+        {"trade_date": "2026-08-03", "changepercent": 1.0},
+        {"trade_date": "2026-08-04", "changepercent": 2.0},
+    ])
+    assert _verdict(ledger, "3%", "1 + 2")[0]
+    assert not _verdict(ledger, "102%", "1 + 2")[0]
