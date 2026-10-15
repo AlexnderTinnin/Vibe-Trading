@@ -7,6 +7,41 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Maintenance — 2026-10-15
+
+- Separate live safety polling from model decisions (#1854): safety checks keep
+  their 60-second cadence, while decisions default to every 15 minutes and use
+  a fresh session. Per-broker daily budgets persist across restarts (26 decisions
+  and 1,000,000 reported tokens by default). Optional daily scheduling and
+  operator-priced USD estimates are configurable through Web, REST and CLI.
+  Usage is checked after a response, so one response can exceed a threshold;
+  estimates exclude auxiliary calls and are not a provider billing cap. Missing
+  usage or exhausted limits trigger the existing HALT path, including its
+  cancel/flatten behavior. Interrupted reservations require operator inspection.
+- Load bounded run previews and move blocking artifact reads off the async
+  event loop (#1853); preserve full trade history for display/export, defaulting
+  to newest first while retaining same-time fill order (#1865).
+- Preserve instrument identity in ticker-keyed evidence without mis-scoping
+  scalar contributions (#1851). Normalize percentage-point operands before
+  arithmetic, including ratios and compound factors; retain evidence and sign
+  validation (#1823).
+- Record declared backtests in strategy history with atomic measurement-based
+  deduplication; copied directories cannot satisfy decay-history sample
+  requirements, while different evaluation windows remain distinct (#1849).
+- Combine digit-leading crypto bases, separated USDC/BUSD quotes and perpetual
+  symbols in shared market classification, including signal alignment (#1861,
+  #1862, #1864). Emit swing signals only after confirmation (#1873), and compute
+  zero-target downside deviation over the complete return sample (#1875).
+- Correct fiat-pair classification and accounting-negative amounts in trade
+  journals (#1871, #1872). Deliver Telegram final replies when a preview was
+  unavailable (#1860), correlate CLI tool progress by call ID (#1859), and keep
+  saved skill names consistent with their front matter (#1858).
+- Expand private-key, cloud/platform-token and Cookie redaction, including
+  quoted Cookie values, while preserving public keys and idempotence (#1874).
+- Make session-based ReAct iteration limits configurable through
+  `VIBE_TRADING_AGENT_MAX_ITERATIONS`; the default remains 50 and values below
+  one are rejected (#1833). This does not disable progress or spending limits.
+
 ### Maintenance — 2026-10-13
 
 - extraETF Investments imports now feed portfolio snapshots, with explicit row-count/freshness checks, EUR reference-rate valuation, preserved account/ISIN identity, and non-executing allocation proposals across Web, REST, CLI and the portfolio tool.
