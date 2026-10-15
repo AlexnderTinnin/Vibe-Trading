@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ci_grep_gates.sh — repo-wide safety floor enforced in CI.
 #
-# Four gates run sequentially; any failure exits non-zero and names the
+# Gates run sequentially; any failure exits non-zero and names the
 # offending files. Run locally before pushing:
 #
 #     bash tools/ci_grep_gates.sh
@@ -20,6 +20,9 @@
 #   (e) No raw `os.getenv` / `os.environ.get` / `os.environ["KEY"]` reads
 #       outside the centralized config layer (`agent/src/config/`).
 #       AST-based; uses `tools/ci_env_var_gate.py`.
+#   (f) No process-wide os patches in tests.
+#   (g) No internal documents in the Git index, even if force-added.
+#       Uses `tools/ci_private_files_gate.py`; ignored local files are allowed.
 #
 # Exclusions: .git, node_modules, __pycache__, .venv, dist, build, this
 # script itself. The HTML scan in (c) is scoped to wiki/alpha-library/**
@@ -58,8 +61,8 @@ fi
 # -------------------------------------------------------------- gate (b)
 # docs/ is excluded: those are internal planning docs that discuss the
 # trademark policy itself (e.g. "the string 'WorldQuant' must not appear in
-# user-facing artifacts"). docs/ is not shipped to PyPI / public consumers
-# (memory: feedback_no_push_docs). The gate's real target is source code,
+# user-facing artifacts"). Gate (g) prevents these local documents from
+# being tracked. This gate's target is source code,
 # READMEs, HTML/JSON manifests, and the wiki.
 echo "[gate b] no 'WorldQuant' trademark string in shipped artifacts ..."
 B_HITS=$(grep -rni --include='*.py' --include='*.md' --include='*.html' --include='*.json' \
@@ -160,6 +163,12 @@ if [ -n "$F_OUTPUT" ]; then
     FAILED=1
 else
     echo "${GREEN}ok${NC}"
+fi
+
+# -------------------------------------------------------------- gate (g)
+echo "[gate g] no tracked internal documents ..."
+if ! python tools/ci_private_files_gate.py; then
+    FAILED=1
 fi
 
 # --------------------------------------------------------------- result

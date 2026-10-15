@@ -116,8 +116,8 @@ jobs:
       - name: Repository safety gates
         run: bash tools/ci_grep_gates.sh
 
-      - name: Test environment variable gate
-        run: pytest tools/test_ci_env_var_gate.py -q
+      - name: Test repository safety gates
+        run: pytest tools/test_ci_env_var_gate.py tools/test_ci_private_files_gate.py -q
 
       - name: Syntax check
         run: |

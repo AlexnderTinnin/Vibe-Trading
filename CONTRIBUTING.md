@@ -55,6 +55,27 @@ For AI-assisted or automation-assisted contributions, also see
 local checks, higher-risk broker/MCP/credential surfaces, and the expected PR
 risk notes for agent-authored changes.
 
+## Keep internal documents local
+
+The repository-root `docs/` directory holds local working notes and must not
+be committed. Local agent instructions and memory files (`AGENTS.md`,
+`AGENTS.override.md`, `CLAUDE.md`, `CLAUDE.local.md`, `MEMORY.md`,
+`CODEX_MEMORY.md`, and `NOTES.md`) must also remain untracked at any depth.
+Publish project documentation in `wiki/docs/` or the relevant source directory.
+
+Before committing, run:
+
+```bash
+python tools/ci_private_files_gate.py
+```
+
+This check also runs through `bash tools/ci_grep_gates.sh` in CI on pushes and
+pull requests. It reads the Git index, so force-adding an ignored document is
+still rejected; ignored local files and public documentation are allowed.
+It prints filenames only, never document contents. If a file was accidentally
+staged, use `git rm --cached -- <path>` to stop tracking it while preserving the
+local copy. This does not erase copies in previous commits.
+
 ## Developer Certificate of Origin (DCO)
 
 Every commit in a community pull request MUST carry a `Signed-off-by:`
