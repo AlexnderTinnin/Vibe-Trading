@@ -11,21 +11,16 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from datetime import date, datetime, timedelta, timezone, tzinfo
 from typing import Awaitable, Callable, Optional
-from zoneinfo import ZoneInfo
 
 from src.config.accessor import get_env_config
 from src.channels.bus.events import DeliveryReceipt
 from src.scheduled_research.models import (
-    CRON_BOUNDS,
     DeliveryRecord,
     DeliveryStatus,
     JobStatus,
     ScheduledResearchJob,
-    parse_cron_field,
     validate_schedule,
-    validate_timezone,
 )
 from src.scheduled_research.store import ScheduledResearchJobStore
 from src.scheduled_research.verdict import (
@@ -36,6 +31,24 @@ from src.scheduled_research.verdict import (
 
 from dataclasses import replace as _dc_replace
 from src.tools.redaction import redact_internal_paths, redact_text
+
+# --- Schedule math, moved to src.scheduling.triggers (scheduler unification) ---
+# Re-exported here so existing ``from src.scheduled_research.executor import ...``
+# keeps working (same convention as src/agent/loop.py's llm_usage re-export).
+from src.scheduling.triggers import (
+    CRON_BOUNDS as CRON_BOUNDS,
+    CRON_SEARCH_LIMIT_DAYS as CRON_SEARCH_LIMIT_DAYS,
+    _CRON_SEARCH_LIMIT_DAYS as _CRON_SEARCH_LIMIT_DAYS,
+    _day_matches as _day_matches,
+    _local_wall_time_to_epoch_ms as _local_wall_time_to_epoch_ms,
+    _next_cron_due as _next_cron_due,
+    day_matches as day_matches,
+    local_wall_time_to_epoch_ms as local_wall_time_to_epoch_ms,
+    next_cron_due as next_cron_due,
+    next_due as next_due,
+    parse_cron_field as parse_cron_field,
+    validate_timezone as validate_timezone,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,12 +70,6 @@ BriefingReader = Callable[[str], Optional[tuple[str, str]]]
 ChannelSender = Callable[..., Awaitable[DeliveryReceipt | None]]
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
-# Search by day, not by minute, so an impossible date (e.g. Feb 31) fails fast
-# instead of scanning years of minutes on the event loop. Four years covers any
-# real recurrence, including a Feb-29 leap day; the extra headroom absorbs a
-# yearly occurrence landing in a DST spring-forward gap (skipped by policy)
-# several years in a row before a real instant exists again.
-_CRON_SEARCH_LIMIT_DAYS = 6 * 366 + 1
 
 
 def _now_ms() -> int:
@@ -116,79 +123,6 @@ def _persisted_error(exc: Exception) -> str:
     if len(safe) <= _MAX_PERSISTED_ERROR_CHARS:
         return safe
     return f"{safe[: _MAX_PERSISTED_ERROR_CHARS - 3]}..."
-
-
-def next_due(schedule: str, after_ms: int, tz: str | None = None) -> int:
-    """Return the first due epoch-ms strictly after ``after_ms``.
-
-    Supports the scheduled-research schedule format: a bare positive integer
-    string for interval milliseconds, or a simplified 5-field cron expression.
-    Cron is evaluated on the wall clock of *tz* (an IANA timezone key) when
-    one is given, in UTC otherwise — the semantics every job had before the
-    field existed. Interval schedules ignore *tz* entirely.
-    """
-    validate_schedule(schedule)
-    spec = schedule.strip()
-    if spec.isdigit():
-        # Before the timezone check: interval schedules must keep advancing
-        # even when the stored key cannot resolve on this host.
-        return after_ms + int(spec)
-    validate_timezone(tz)
-    return _next_cron_due(spec, after_ms, tz)
-
-
-def _next_cron_due(schedule: str, after_ms: int, tz: str | None = None) -> int:
-    minutes, hours, doms, months, dows = (
-        parse_cron_field(part, low, high) for part, (low, high) in zip(schedule.split(), CRON_BOUNDS)
-    )
-    zone = timezone.utc if tz is None else ZoneInfo(tz)
-    # Walk candidates on the *local* calendar of ``zone`` so field matching —
-    # the weekday in particular — follows the authoring wall clock. Ascending
-    # wall order maps to ascending UTC order under a fixed fold policy, so
-    # "strictly after" stays a plain epoch comparison.
-    day = datetime.fromtimestamp(after_ms / 1000.0, zone).date()
-    for offset in range(_CRON_SEARCH_LIMIT_DAYS):
-        candidate_day = day + timedelta(days=offset)
-        if not _day_matches(candidate_day, doms, months, dows):
-            continue
-        for hour in sorted(hours) if hours is not None else range(24):
-            for minute in sorted(minutes) if minutes is not None else range(60):
-                fire_ms = _local_wall_time_to_epoch_ms(candidate_day, hour, minute, zone)
-                if fire_ms is not None and fire_ms > after_ms:
-                    return fire_ms
-    raise ValueError(f"cron schedule has no matching time within search window: {schedule!r}")
-
-
-def _local_wall_time_to_epoch_ms(day: date, hour: int, minute: int, zone: tzinfo) -> int | None:
-    """Resolve one local wall time to a UTC epoch-ms instant.
-
-    DST policy (#953): a nonexistent wall time — the spring-forward gap —
-    returns ``None`` so the occurrence is skipped; ``ZoneInfo`` would
-    otherwise silently map it past the transition (PEP 495) and run it. An
-    ambiguous wall time — the fall-back fold — resolves with ``fold=0``, the
-    first occurrence, so it runs exactly once.
-    """
-    local = datetime(day.year, day.month, day.day, hour, minute, tzinfo=zone)
-    as_utc = local.astimezone(timezone.utc)
-    if as_utc.astimezone(zone).replace(tzinfo=None) != local.replace(tzinfo=None):
-        return None  # wall time does not exist in this zone (DST gap)
-    return int(as_utc.timestamp() * 1000)
-
-
-def _day_matches(dt: date, doms: set[int] | None, months: set[int] | None, dows: set[int] | None) -> bool:
-    if months is not None and dt.month not in months:
-        return False
-
-    cron_day_of_week = (dt.weekday() + 1) % 7  # cron convention: Sunday == 0
-    day_of_month_matches = doms is None or dt.day in doms
-    day_of_week_matches = dows is None or cron_day_of_week in dows
-
-    # Standard five-field cron treats day-of-month and day-of-week as an OR
-    # when both fields are restricted. A wildcard in either field keeps the
-    # other field authoritative.
-    if doms is not None and dows is not None:
-        return day_of_month_matches or day_of_week_matches
-    return day_of_month_matches and day_of_week_matches
 
 
 class ScheduledResearchExecutor:
