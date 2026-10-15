@@ -43,6 +43,16 @@ InteractiveContext = main.InteractiveContext
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def block_unstubbed_http(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep CLI unit tests independent of any server on the developer's machine."""
+    def unexpected_request(*args, **kwargs):
+        pytest.fail("CLI runtime test made an unstubbed HTTP request")
+
+    monkeypatch.setattr("httpx.get", unexpected_request)
+    monkeypatch.setattr("httpx.post", unexpected_request)
+
+
 @pytest.fixture()
 def live_root(tmp_path: Path):
     """Redirect the live-channel runtime root to a tmp dir for the test."""
@@ -96,6 +106,22 @@ class _FakeResp:
 
     def json(self) -> Dict[str, Any]:
         return self._payload
+
+
+@pytest.fixture()
+def spending_preview(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Serve the budget read while recording that it precedes runner startup."""
+    from src.live.runtime.decision_budget import DecisionSettings
+
+    calls: list[str] = []
+
+    def get_settings(url: str, headers: Dict[str, str], timeout: float) -> _FakeResp:
+        assert url.endswith("/live/runner/settings?broker=robinhood")
+        calls.append(url)
+        return _FakeResp({"settings": DecisionSettings().model_dump()})
+
+    monkeypatch.setattr("httpx.get", get_settings)
+    return calls
 
 
 # ---------------------------------------------------------------------------
@@ -165,7 +191,7 @@ class TestRunnerControlEndpoints:
         assert captured["url"].endswith("/live/status")
         assert captured["headers"] == {"Authorization": "Bearer live-secret"}
 
-    def test_start_posts_to_runner_start(self) -> None:
+    def test_start_posts_to_runner_start(self, spending_preview: list[str]) -> None:
         from cli._legacy import EXIT_SUCCESS, cmd_live_start
 
         captured: Dict[str, Any] = {}
@@ -176,6 +202,7 @@ class TestRunnerControlEndpoints:
             headers: Dict[str, str],
             timeout: float,
         ) -> _FakeResp:
+            assert len(spending_preview) == 1
             captured["url"] = url
             captured["body"] = json
             return _FakeResp({"runner_id": "live-robinhood", "status": "started"})
@@ -187,7 +214,7 @@ class TestRunnerControlEndpoints:
         assert captured["body"]["foreground"] is False
 
     def test_connector_start_message_uses_connector_status(
-        self, capsys: pytest.CaptureFixture[str]
+        self, capsys: pytest.CaptureFixture[str], spending_preview: list[str]
     ) -> None:
         from cli._legacy import EXIT_SUCCESS, cmd_connector_start
 
@@ -197,6 +224,7 @@ class TestRunnerControlEndpoints:
             headers: Dict[str, str],
             timeout: float,
         ) -> _FakeResp:
+            assert len(spending_preview) == 1
             return _FakeResp({"runner_id": "live-robinhood", "status": "started"})
 
         with patch("httpx.post", _post):
@@ -236,7 +264,7 @@ class TestRunnerControlEndpoints:
         assert captured["url"].endswith("/live/runner/stop")
         assert captured["body"]["broker"] == "robinhood"
 
-    def test_start_server_unreachable_is_run_failed(self) -> None:
+    def test_start_server_unreachable_is_run_failed(self, spending_preview: list[str]) -> None:
         from cli._legacy import EXIT_RUN_FAILED, cmd_live_start
 
         def _boom(
@@ -245,12 +273,16 @@ class TestRunnerControlEndpoints:
             headers: Dict[str, str],
             timeout: float,
         ) -> _FakeResp:
+            assert len(spending_preview) == 1
             raise OSError("connection refused")
 
-        with patch("httpx.post", _boom):
+        with patch("httpx.post", side_effect=_boom) as post:
             assert cmd_live_start("robinhood") == EXIT_RUN_FAILED
+        post.assert_called_once()
 
-    def test_run_foreground_starts_then_stops(self, fake_liveness: Dict[str, Any]) -> None:
+    def test_run_foreground_starts_then_stops(
+        self, fake_liveness: Dict[str, Any], spending_preview: list[str]
+    ) -> None:
         """`live run` relays a foreground start, tails liveness, then stops."""
         from cli._legacy import EXIT_SUCCESS, cmd_live_run
 
@@ -262,6 +294,7 @@ class TestRunnerControlEndpoints:
             headers: Dict[str, str],
             timeout: float,
         ) -> _FakeResp:
+            assert len(spending_preview) == 1
             calls.append(url)
             if url.endswith("/live/runner/start"):
                 assert json["foreground"] is True
