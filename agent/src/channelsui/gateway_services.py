@@ -255,9 +255,7 @@ class GatewayServices:
     """Service bundle required by :class:`src.channels.websocket.WebSocketChannel`."""
 
     session_manager: Any = None
-    cron_service: Any = None
     runtime_model_name: Any = None
-    cron_pending_job_ids: Any = None
     static_dist_path: Any = None
     workspace_path: Path | None = None
     default_restrict_to_workspace: bool = True
