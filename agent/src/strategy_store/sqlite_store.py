@@ -650,17 +650,33 @@ class SqliteStrategyStore:
     @_synchronized
     def record_bench(self, result: BenchResult) -> int:
         """Record a bench result.  Returns the result ID."""
+        with self._write_transaction():
+            return self._insert_bench(result)
+
+    def _insert_bench(self, result: BenchResult) -> int:
+        """Insert within the caller's transaction."""
         values = self._bench_values(result)
         values["created_at"] = result.created_at or _now_iso()
         columns = ", ".join(values)
         placeholders = ", ".join("?" for _ in values)
 
+        cursor = self._conn.execute(
+            f"INSERT INTO bench_history ({columns}) VALUES ({placeholders})",
+            list(values.values()),
+        )
+        return cursor.lastrowid  # type: ignore[return-value]
+
+    @_synchronized
+    def record_bench_once(self, result: BenchResult) -> int | None:
+        """Atomically record a measurement, returning None for a duplicate.
+
+        BEGIN IMMEDIATE serializes this check and insert across connections.
+        Directory, timestamp, bench label and grading do not change evidence.
+        """
         with self._write_transaction():
-            cursor = self._conn.execute(
-                f"INSERT INTO bench_history ({columns}) VALUES ({placeholders})",
-                list(values.values()),
-            )
-            return cursor.lastrowid  # type: ignore[return-value]
+            if self.has_bench_result(result):
+                return None
+            return self._insert_bench(result)
 
     @_synchronized
     def get_bench_history(
@@ -709,13 +725,15 @@ class SqliteStrategyStore:
         metric absent from both rows still counts as a match.
 
         Args:
-            result: Candidate bench result; ``id`` and ``created_at`` are
-                ignored.
+            result: Candidate measurement; location, time and grading metadata
+                are ignored.
 
         Returns:
-            ``True`` when a stored row matches ``result`` on every other field.
+            ``True`` when a stored measurement has the same artifact, windows and metrics.
         """
         values = self._bench_values(result)
+        for metadata in ("run_dir", "bench_type", "category"):
+            values.pop(metadata)
         where = " AND ".join(f"{column} IS ?" for column in values)
         row = self._conn.execute(
             f"SELECT 1 FROM bench_history WHERE {where} LIMIT 1",

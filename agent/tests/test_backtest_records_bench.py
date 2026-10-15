@@ -12,6 +12,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -231,6 +232,24 @@ def test_identical_rerun_is_not_recorded_twice(
     assert len(store.get_bench_history(artifact_id)) == 1
 
 
+def test_copied_runs_cannot_meet_the_decay_floor(run_root, store, artifact_id):
+    for index in range(3):
+        copied = _make_run_dir(run_root, f"copy-{index}")
+        _write_config(copied, artifact_id=artifact_id, bench_type="periodic")
+        result = _run(copied)
+        assert result["bench_record"]["status"] == ("recorded" if index == 0 else "skipped")
+    assert len(store.get_bench_history(artifact_id)) == 1
+    assert _decay_check(artifact_id)["signal"] == "insufficient_data"
+
+
+def test_same_metrics_on_a_new_window_are_new_evidence(run_root, store, artifact_id):
+    for index in range(2):
+        run = _make_run_dir(run_root, f"window-{index}")
+        _write_config(run, artifact_id=artifact_id, bench_type="periodic", end_date=f"2026-09-{25 + index}")
+        assert _run(run)["bench_record"]["status"] == "recorded"
+    assert len(store.get_bench_history(artifact_id)) == 2
+
+
 def test_rerun_with_changed_metrics_is_recorded(
     run_dir: Path, store: Any, artifact_id: str
 ) -> None:
@@ -327,7 +346,7 @@ def test_store_failure_is_reported_without_failing_the_backtest(
     _write_config(run_dir, artifact_id=artifact_id)
 
     with patch(
-        "src.strategy_store.sqlite_store.SqliteStrategyStore.record_bench",
+        "src.strategy_store.sqlite_store.SqliteStrategyStore.record_bench_once",
         side_effect=RuntimeError("disk full"),
     ):
         envelope = _run(run_dir)
@@ -378,8 +397,8 @@ def test_has_bench_result_matches_only_identical_rows(backend: Any) -> None:
     assert backend.has_bench_result(stored)
     assert backend.has_bench_result(replace(stored, created_at="2020-01-01"))
     assert not backend.has_bench_result(replace(stored, sharpe=0.6))
-    assert not backend.has_bench_result(replace(stored, run_dir="/runs/b"))
-    assert not backend.has_bench_result(replace(stored, bench_type="periodic"))
+    assert backend.has_bench_result(replace(stored, run_dir="/runs/b"))
+    assert backend.has_bench_result(replace(stored, bench_type="periodic"))
 
 
 def test_bench_history_filters_by_type_before_limit(backend: Any) -> None:
@@ -397,3 +416,63 @@ def test_bench_history_filters_by_type_before_limit(backend: Any) -> None:
 
     assert [row.sharpe for row in rows] == [1.0]
     assert len(backend.get_bench_history(artifact_id)) == 2
+
+
+def test_concurrent_copies_are_reserved_once(backend):
+    artifact_id = _register(backend)
+    stores = ([SqliteStrategyStore(backend.db_path) for _ in range(8)]
+              if isinstance(backend, SqliteStrategyStore) else [backend] * 8)
+    def write(index):
+        return stores[index].record_bench_once(BenchResult(
+            artifact_id=artifact_id, bench_type="periodic", sharpe=0.5,
+            test_start="2026-01-01", test_end="2026-09-30", run_dir=f"/runs/{index}",
+        ))
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            ids = list(pool.map(write, range(8)))
+        assert sum(value is not None for value in ids) == 1
+        assert len(backend.get_bench_history(artifact_id)) == 1
+    finally:
+        if isinstance(backend, SqliteStrategyStore):
+            for store in stores:
+                store._conn.close()
+
+
+def test_real_local_perpetual_backtest_records_one_measurement(run_root, store, artifact_id, monkeypatch, tmp_path):
+    """Exercise real tool -> subprocess -> crypto engine -> bench persistence."""
+    import pandas as pd
+    import shutil
+    from src.core import runner as core_runner
+
+    fixture_home = tmp_path / "data-home"
+    bridge = fixture_home / ".vibe-trading" / "data-bridge"
+    bridge.mkdir(parents=True)
+    prices = bridge / "prices.csv"
+    dates = pd.date_range("2026-01-01", periods=40)
+    pd.DataFrame({"date": dates, "open": [100 + i for i in range(40)],
+                  "high": [102 + i for i in range(40)], "low": [99 + i for i in range(40)],
+                  "close": [101 + i for i in range(40)], "volume": 100000}).to_csv(prices, index=False)
+    (bridge / "config.yaml").write_text(json.dumps({"sources": [
+        {"symbol": "1000PEPE-USDT-PERP", "type": "csv", "path": str(prices)},
+    ]}))
+    prepare = core_runner._prepare_sandbox_home
+    monkeypatch.setattr(core_runner, "_prepare_sandbox_home", lambda _home: prepare(fixture_home))
+    run = _make_run_dir(run_root, "real-engine")
+    _write_config(run, artifact_id=artifact_id, bench_type="periodic", source="local",
+                  codes=["1000PEPE-USDT-PERP"], start_date="2026-01-01", end_date="2026-02-09", initial_cash=10000)
+    (run / "code" / "signal_engine.py").write_text(
+        'import pandas as pd\nclass SignalEngine:\n'
+        '    def __init__(self, **kwargs): pass\n'
+        '    def generate(self, data_map):\n'
+        '        return {k: pd.Series([1 if i % 10 < 5 else -1 for i in range(len(v))], index=v.index) for k,v in data_map.items()}\n'
+    )
+    outcome = json.loads(run_backtest(str(run)))
+    assert outcome["status"] == "ok", outcome
+    assert outcome["bench_record"]["status"] == "recorded", outcome
+    assert pd.read_csv(run / "artifacts" / "metrics.csv").iloc[0]["trade_count"] > 0
+    copied = run_root / "real-copy"
+    shutil.copytree(run, copied)
+    repeated = json.loads(run_backtest(str(copied)))
+    assert repeated["status"] == "ok", repeated
+    assert repeated["bench_record"]["status"] == "skipped", repeated
+    assert len(store.get_bench_history(artifact_id)) == 1

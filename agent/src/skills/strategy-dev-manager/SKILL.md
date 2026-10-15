@@ -90,7 +90,7 @@ Build the SignalEngine, run the backtest, and link results.
    - Factor artifacts → `templates/factor_signal_engine.py`
    - Strategy artifacts → `templates/strategy_signal_engine.py`
 5. Validate syntax: `bash("python -c \"import ast; ast.parse(open('code/signal_engine.py').read()); print('OK')\"")`
-6. Call `backtest(run_dir)` to execute the backtest. When `config.json` declares an `artifact_id`, the result carries a `bench_record` that reports whether the run was `recorded`, `skipped` (failed run, no trades, missing metrics, or an identical row already stored) or `failed` (for example an unregistered `artifact_id`), with a `reason`.
+6. Call `backtest(run_dir)` to execute the backtest. When `config.json` declares an `artifact_id`, the result carries a `bench_record` that reports whether the run was `recorded`, `skipped` (failed run, no trades, missing metrics, or the same measurement already stored (even in another directory)) or `failed` (for example an unregistered `artifact_id`), with a `reason`.
 7. Call `link_autopilot_backtest(hypothesis_id, run_dir)` to link the run results back to the hypothesis.
 8. Call `sdm_status(action="detail", artifact_id=...)` and update the artifact status to "benching".
 

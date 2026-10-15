@@ -17,6 +17,8 @@ from typing import Any
 
 import pandas as pd
 
+from src.market_data import FIAT_CODES as _FIAT_CODES
+
 # Broker CSV/Excel cells often include ISO codes or currency glyphs around the
 # number (Schwab/IBKR "$1,234.56", JP/CN "¥1000"). Commas are already stripped;
 # without stripping these tokens float() fails and we silently store 0.0.
@@ -24,9 +26,6 @@ _CURRENCY_TOKEN_RE = re.compile(
     r"(?i)(?<![A-Za-z])(?:USDT|USDC|USD|EUR|GBP|JPY|CNY|HKD)(?![A-Za-z])|[$€£¥￥]"
 )
 
-# ISO codes of the fiat currencies a broker export can quote as a pair
-# (EUR/USD); a pair with two fiat legs is forex, never crypto.
-from src.market_data import FIAT_CODES as _FIAT_CODES
 
 FormatName = str  # "tonghuashun" | "eastmoney" | "futu" | "generic" | "unknown"
 

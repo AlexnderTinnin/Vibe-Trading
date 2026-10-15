@@ -116,8 +116,8 @@ def _record_bench_if_declared(
     numbers.
 
     One row is kept per distinct measurement. A rerun that reproduces a stored
-    row exactly is skipped, so repeating a run cannot count as an independent
-    confirmation; a rerun of the same directory whose metrics or window
+    measurement is skipped atomically, even from another directory or
+    concurrent process, so copying a run cannot count as independent evidence; a rerun of the same directory whose metrics or window
     changed is a new measurement and is recorded.
 
     Args:
@@ -183,9 +183,8 @@ def _record_bench_if_declared(
             run_dir=str(run_path),
             **metrics,
         )
-        if store.has_bench_result(result):
+        if store.record_bench_once(result) is None:
             return _outcome("skipped", reason="identical bench already recorded")
-        store.record_bench(result)
         return _outcome("recorded", bench_type=bench_type)
     except Exception as exc:  # noqa: BLE001
         return _outcome("failed", reason=f"{type(exc).__name__}: {exc}")
