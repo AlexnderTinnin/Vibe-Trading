@@ -28,6 +28,12 @@ class TestConcurrentToolCallPairing:
     it actually belongs to.
     """
 
+    def test_missing_call_does_not_complete_another_active_call(self, dashboard):
+        dashboard.handle_event("tool_call", {"tool": "backtest", "call_id": "active"})
+        dashboard.handle_event("tool_result", {"tool": "backtest", "call_id": "evicted", "status": "error"})
+        assert next(step for step in dashboard.steps if step.call_id == "active").status == "active"
+        assert next(step for step in dashboard.steps if step.call_id == "evicted").status == "error"
+
     def test_results_pair_with_their_own_call_via_call_id(self, dashboard: RailRunDashboard) -> None:
         dashboard.handle_event(
             "tool_call", {"tool": "get_market_data", "arguments": {"symbol": "AAPL"}, "call_id": "call-1"}

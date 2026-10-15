@@ -19,6 +19,17 @@ def test_only_the_header_line_is_redacted() -> None:
     assert out == "HTTP/1.1 200 OK\nSet-Cookie: [redacted]\nContent-Type: text/html"
 
 
+@pytest.mark.parametrize("text", [
+    'Cookie: sid="secret"; csrf=another',
+    'Set-Cookie: sid="secret"; Path=/',
+    '''curl -H 'Cookie: sid="secret"; csrf=another' https://example.com''',
+])
+def test_quoted_cookie_value_never_leaks(text):
+    out = redact_text(text)
+    assert "secret" not in out and "another" not in out
+    assert redact_text(out) == out
+
+
 @pytest.mark.parametrize("quote", ['"', "'"])
 def test_quoted_curl_header_keeps_the_rest_of_the_command(quote: str) -> None:
     cmd = f"curl -H {quote}Cookie: sid=abc123; csrf=xyz{quote} https://example.com/api"

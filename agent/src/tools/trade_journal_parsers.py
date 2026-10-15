@@ -26,11 +26,7 @@ _CURRENCY_TOKEN_RE = re.compile(
 
 # ISO codes of the fiat currencies a broker export can quote as a pair
 # (EUR/USD); a pair with two fiat legs is forex, never crypto.
-_FIAT_CODES = frozenset({
-    "USD", "EUR", "GBP", "JPY", "CHF", "AUD", "CAD", "NZD", "CNY", "CNH", "HKD",
-    "SGD", "SEK", "NOK", "DKK", "MXN", "ZAR", "INR", "KRW", "TRY", "PLN", "CZK",
-    "HUF", "ILS", "THB",
-})
+from src.market_data import FIAT_CODES as _FIAT_CODES
 
 FormatName = str  # "tonghuashun" | "eastmoney" | "futu" | "generic" | "unknown"
 

@@ -473,9 +473,10 @@ class RailRunDashboard:
             for step in self.steps:
                 if step.call_id == raw_call_id:
                     return step
-        for step in reversed(self.steps):
-            if step.status == "active" and (not raw_tool or step.tool == raw_tool):
-                return step
+        else:
+            for step in reversed(self.steps):
+                if step.status == "active" and (not raw_tool or step.tool == raw_tool):
+                    return step
         step = RailStep(title=_tool_title(raw_tool or "tool", None), tool=raw_tool, call_id=raw_call_id)
         self.steps.append(step)
         self.steps = self.steps[-10:]

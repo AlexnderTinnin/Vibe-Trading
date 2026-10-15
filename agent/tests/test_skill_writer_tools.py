@@ -87,12 +87,13 @@ class TestSaveSkillTool:
         text = (user_dir / "custom" / "SKILL.md").read_text(encoding="utf-8")
         assert "description: Custom skill" in text
 
-    def test_save_forces_frontmatter_name_to_match_slug(self, tool: SaveSkillTool, user_dir: Path) -> None:
+    @pytest.mark.parametrize("field", ["name", "name "])
+    def test_save_forces_frontmatter_name_to_match_slug(self, tool: SaveSkillTool, user_dir: Path, field: str) -> None:
         """A frontmatter name that disagrees with the slug this tool advertises
         would make the skill unreachable under load_skill(slug) and cause
         duplicate entries on every lookup; the saved name must always match.
         """
-        content = "---\nname: MySkill\ndescription: mismatched name\ncategory: user\n---\n\nBody"
+        content = f"---\n{field}: MySkill\ndescription: mismatched name\ncategory: user\n---\n\nBody"
         result = json.loads(tool.execute(name="My Skill", content=content))
         assert result["status"] == "ok"
         text = (user_dir / "my-skill" / "SKILL.md").read_text(encoding="utf-8")

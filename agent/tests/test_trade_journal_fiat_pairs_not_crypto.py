@@ -11,7 +11,7 @@ from src.tools.trade_journal_parsers import _infer_market_from_symbol, parse_gen
 
 @pytest.mark.parametrize(
     "symbol",
-    ["EUR/USD", "GBP/USD", "USD/JPY", "usd-cnh", "AUD-USD", "USD/CHF"],
+    ["EUR/USD", "GBP/USD", "USD/JPY", "usd-cnh", "AUD-USD", "USD/CHF", "USD/BRL", "USD/TWD"],
 )
 def test_fiat_cross_is_not_crypto(symbol: str) -> None:
     assert _infer_market_from_symbol(symbol) == "other"

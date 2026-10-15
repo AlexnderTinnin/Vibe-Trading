@@ -69,7 +69,7 @@ def _with_forced_frontmatter_name(content: str, slug: str) -> str:
     new_lines = []
     replaced = False
     for line in header_lines:
-        if line.strip().startswith("name:"):
+        if line.partition(":")[0].strip() == "name":
             new_lines.append(f"name: {slug}")
             replaced = True
         else:
