@@ -248,14 +248,17 @@ class DataConfig(_EnvBase):
     vibe_trading_openalex_mailto: str = Field(alias="VIBE_TRADING_OPENALEX_MAILTO", default="")
     vibe_tw_stock_db: str = Field(alias="VIBE_TW_STOCK_DB", default="")
     # Brazilian official data (B3 COTAHIST, CVM, BCB, Tesouro Direto), synced
-    # by ``vibe-trading br-data sync`` into one SQLite file. Empty = default
+    # by the one-off CLI ``python -m src.br_data sync`` or by the daily
+    # ``system:br-data-sync`` job (gated by ``vibe_br_sync_enabled`` below)
+    # into one SQLite file. Empty = default
     # ``~/.vibe-trading/br-data/br_data.db``.
     vibe_br_data_db: str = Field(alias="VIBE_BR_DATA_DB", default="")
     # First COTAHIST year a sync downloads (B3 publishes from 1986).
     vibe_br_cotahist_start_year: int = Field(alias="VIBE_BR_COTAHIST_START_YEAR", default=2015)
     # First year of CVM fund daily reports / company filings a sync downloads.
     vibe_br_cvm_start_year: int = Field(alias="VIBE_BR_CVM_START_YEAR", default=2022)
-    # Local time (HH:MM, America/Sao_Paulo) of the daily sync in daemon mode.
+    # Local time (HH:MM, America/Sao_Paulo) used as the cron slot for the
+    # FIRST seed of the daily sync system job (see ``vibe_br_sync_enabled``).
     vibe_br_sync_time: str = Field(alias="VIBE_BR_SYNC_TIME", default="21:30")
     # Opt-in gate for the protected daily-sync system job
     # (``system:br-data-sync``, scheduler-unification T9), read via
