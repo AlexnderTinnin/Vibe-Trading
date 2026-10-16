@@ -224,6 +224,13 @@ class ScheduledResearchJob:
         last_verdict: The latest run's parsed verdict record, or ``None`` when
             no completed run produced one yet. Embedded with its own
             ``previous`` so the list view renders a delta in one query.
+        executor_kind: ``"prompt"`` dispatches ``prompt`` to the agent (every
+            job before scheduler unification); ``"internal"`` calls the
+            in-process callable registered under ``internal_callable``.
+        internal_callable: Registry KEY name — never an import path — used to
+            resolve the internal executor for ``executor_kind="internal"``
+            jobs. ``None`` for prompt jobs. Internal/system jobs legitimately
+            carry ``prompt=""``.
     """
 
     id: str
@@ -232,6 +239,14 @@ class ScheduledResearchJob:
     title: str = ""
     source_type: str = "prompt"
     playbook_slug: Optional[str] = None
+    # Downgrade risk (documented, fail-closed): ``_SCHEMA_VERSION`` stays 1
+    # while ``source_type="system"`` rows may exist, so code from BEFORE
+    # scheduler unification rejects such a row in ``from_dict`` and the store
+    # quarantines the whole file as ``.corrupt-<ts>`` (data preserved, not
+    # loaded). Downgrading to a version before scheduler-unification requires
+    # removing system job rows first.
+    executor_kind: str = "prompt"
+    internal_callable: Optional[str] = None
     end_at: Optional[int] = None
     next_run_at: int = field(default_factory=lambda: int(time.time() * 1000))
     status: JobStatus = JobStatus.PENDING
@@ -271,6 +286,8 @@ class ScheduledResearchJob:
             "title": self.title,
             "source_type": self.source_type,
             "playbook_slug": self.playbook_slug,
+            "executor_kind": self.executor_kind,
+            "internal_callable": self.internal_callable,
             "end_at": self.end_at,
             "next_run_at": self.next_run_at,
             "status": self.status.value,
@@ -301,10 +318,16 @@ class ScheduledResearchJob:
         Returns:
             The reconstructed ``ScheduledResearchJob``.
 
+        Dicts written before scheduler unification lack ``executor_kind`` and
+        ``internal_callable``; both default to the prompt executor, so old
+        files load unchanged.
+
         Raises:
             KeyError: If a required field is missing.
             TypeError: If a field has the wrong type.
-            ValueError: If ``status`` is not a recognized ``JobStatus`` value.
+            ValueError: If ``status`` is not a recognized ``JobStatus`` value,
+                or ``source_type`` / ``executor_kind`` is outside its domain,
+                or an ``internal`` job names no ``internal_callable``.
         """
         job_id = data["id"]
         prompt = data["prompt"]
@@ -352,8 +375,23 @@ class ScheduledResearchJob:
         end_at = data.get("end_at")
         if not isinstance(title, str):
             raise TypeError("'title' must be a string")
-        if source_type not in {"prompt", "playbook"}:
-            raise ValueError("'source_type' must be 'prompt' or 'playbook'")
+        if source_type not in {"prompt", "playbook", "system"}:
+            raise ValueError("'source_type' must be 'prompt', 'playbook', or 'system'")
+        # Pre-unification dicts carry neither key; both default to the prompt
+        # executor. Unknown or contradictory values are REJECTED rather than
+        # degraded: a misspelled executor must not silently fall back to
+        # dispatching the (possibly empty) prompt.
+        executor_kind = data.get("executor_kind", "prompt")
+        internal_callable = data.get("internal_callable")
+        if executor_kind not in {"prompt", "internal"}:
+            raise ValueError("'executor_kind' must be 'prompt' or 'internal'")
+        if internal_callable is not None and not isinstance(internal_callable, str):
+            raise TypeError("'internal_callable' must be a string or null")
+        if executor_kind == "internal" and not internal_callable:
+            raise ValueError(
+                "'executor_kind' 'internal' requires 'internal_callable' "
+                "(a registry key name, not an import path)"
+            )
         if playbook_slug is not None and not isinstance(playbook_slug, str):
             raise TypeError("'playbook_slug' must be a string or null")
         if end_at is not None and (isinstance(end_at, bool) or not isinstance(end_at, int)):
@@ -389,6 +427,8 @@ class ScheduledResearchJob:
             title=title,
             source_type=source_type,
             playbook_slug=playbook_slug,
+            executor_kind=executor_kind,
+            internal_callable=internal_callable,
             end_at=end_at,
             next_run_at=next_run_at,
             status=status,

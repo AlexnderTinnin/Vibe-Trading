@@ -24,6 +24,13 @@ from src.scheduled_research.models import ScheduledResearchJob, validate_schedul
 logger = logging.getLogger(__name__)
 
 _STORE_FILENAME = "scheduled_research_jobs.json"
+# Stays 1 across scheduler unification: the new job fields (``executor_kind``,
+# ``internal_callable``) and ``source_type="system"`` are additive and this
+# version's reader defaults them for old files. The documented flip side is
+# fail-closed: pre-unification code rejects a ``source_type="system"`` row in
+# ``from_dict`` and quarantines the WHOLE file as ``.corrupt-<ts>`` — so
+# downgrading to a version before scheduler-unification requires removing
+# system job rows first.
 _SCHEMA_VERSION = 1
 
 
