@@ -8,7 +8,7 @@ A missing store file is the only clean empty result. A file that exists but
 fails to parse is quarantined and ``load`` raises ``CorruptStoreError`` instead
 of silently returning an empty list.
 
-Single-writer invariant (scheduler-unification T12): the sole owner of the
+Single-writer invariant (scheduler unification): the sole owner of the
 store is the FastAPI lifespan in ``agent/api_server.py``, which starts exactly
 one executor per process (``src/api/scheduled_routes.py``'s singleton). The
 atomic replace below protects readers against torn files, but there is NO

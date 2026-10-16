@@ -61,9 +61,9 @@ def run_sync(only: Iterable[str] | None = None, *, cotahist_from: int | None = N
 def _next_run(hhmm: str) -> tuple[int, int]:
     """Parse a wall-clock "HH:MM" into cron ``(minute, hour)`` fields.
 
-    Repurposed from the retired daemon's next-slot math (scheduler-unification
-    T9): the cross-day arithmetic now belongs to the scheduling kernel
-    (``next_due``), and this helper is the "HH:MM"→cron-field parser consumed
+    Repurposed from the retired daemon's next-slot math (scheduler
+    unification): the cross-day arithmetic now belongs to the scheduling
+    kernel (``next_due``), and this helper is the "HH:MM"→cron-field parser consumed
     by :func:`src.br_data.scheduling.daily_cron_from_env`, which owns the
     invalid-value fallback policy.
 
@@ -78,13 +78,14 @@ def _next_run(hhmm: str) -> tuple[int, int]:
 
 
 def run_daemon(only: Iterable[str] | None = None) -> int:
-    """Retired standalone daemon (scheduler-unification T9): notice + ``0``.
+    """Retired standalone daemon (scheduler unification): notice + ``0``.
 
     The daily sync now runs as the protected system job
     ``system:br-data-sync`` inside the main service's scheduler. Prints the
     migration notice and returns ``0`` in bounded time — exit code 0 is
     deliberate and test-pinned: under compose ``restart: unless-stopped`` a
-    non-zero exit would crash-loop the legacy sidecar until T10 removes it.
+    non-zero exit would crash-loop any deployment still invoking this
+    command until its compose template drops the sidecar.
 
     Args:
         only: Accepted for CLI compatibility and ignored (the system job

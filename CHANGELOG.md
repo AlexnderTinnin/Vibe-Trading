@@ -31,7 +31,13 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   (`VT_MEMORY_CONSOLIDATION`, `VIBE_BR_SYNC_ENABLED`) — and both default off
   outside the shipped ZimaOS template, which hardcodes the scheduler and the
   daily Brazil sync on. Cancelling a system job by hand-editing the store
-  file is undone at the next startup; turning its flag off halts the row.
+  file is undone at the next startup; turning its flag off halts the row. A
+  system job that exhausted its retry budget (terminal `failed` after
+  consecutive dispatch failures) is reset to `pending` with its failure
+  counters cleared at the next startup while its flag is on — no API surface
+  can resurrect a protected row, so the startup reset is its only recovery
+  path; the `scheduled_research` agent tool's draft schema now also rejects
+  unknown keys (`additionalProperties: false`).
 - Removed the vestigial `cron_service` residue from the channel stack
   (manager.py constructor parameter, gateway_services.py dataclass fields,
   channels_config_routes.py docstring), and corrected stale `env_schema.py`

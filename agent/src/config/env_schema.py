@@ -261,7 +261,7 @@ class DataConfig(_EnvBase):
     # FIRST seed of the daily sync system job (see ``vibe_br_sync_enabled``).
     vibe_br_sync_time: str = Field(alias="VIBE_BR_SYNC_TIME", default="21:30")
     # Opt-in gate for the protected daily-sync system job
-    # (``system:br-data-sync``, scheduler-unification T9), read via
+    # (``system:br-data-sync``), read via
     # src/br_data/scheduling.py. Deliberately not part of any preset, so
     # enabling the scheduler never silently seeds a daily network sync;
     # VIBE_BR_SYNC_TIME above drives the first seed's cron slot.
@@ -677,7 +677,7 @@ class MemoryConfig(_EnvBase):
         description="Enable SQLite FTS5 search index",
     )
 
-    # Scheduled consolidation system job (scheduler-unification T8).
+    # Scheduled consolidation system job (scheduler unification).
     # Deliberately NOT listed in the preset flag map or the memory flag alias
     # map above: the preset machinery only touches fields in the alias map, so
     # VT_MEMORY=on/full can never silently enable a background timer. This

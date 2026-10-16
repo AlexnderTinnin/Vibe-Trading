@@ -1,4 +1,4 @@
-"""Scheduled memory consolidation (scheduler-unification T8).
+"""Scheduled memory consolidation (scheduler unification).
 
 Thin orchestration surface consumed by the scheduler; it adds NO semantics of
 its own — every behavior lives in the existing memory modules and this module
@@ -16,7 +16,7 @@ only decides *whether* and *how* to call them:
   ``asyncio.to_thread``, so the blocking GC/compression pass never runs on the
   event loop.
 
-Honest no-op contract (plan T8 ②b(ii)): archive GC is gated by
+Honest no-op contract: archive GC is gated by
 ``VT_MEMORY_GC`` and compression is only ever invoked through GC's
 archive→compress handoff (``lifecycle.run_gc`` is the sole production caller
 of ``CompressionPipeline``), so with GC off there is nothing this job can
@@ -25,7 +25,7 @@ rather than faking work. ``VT_MEMORY_DECAY`` off degrades importance to raw
 quality scores (existing ``compute_importance`` behavior); that is noted in
 the log but still a real consolidation pass.
 
-Concurrency contract (plan T8 ②b(iii)): writes are serialized by the memory
+Concurrency contract: writes are serialized by the memory
 layer's own ``memory_lock`` (``fcntl.flock`` on ``<memory_dir>/.lock``) taken
 PER ACTION inside ``lifecycle`` — this module must NOT hold that lock around
 ``run_gc`` because the inner per-action acquisitions would then conflict with
@@ -83,8 +83,8 @@ def consolidate(memory_dir: Optional[Path] = None) -> None:
         logger.info("memory consolidation skipped: VT_MEMORY_CONSOLIDATION is off")
         return
     if not cfg.gc_enabled:
-        # Plan ②b(ii): GC gates BOTH the archive pass and the archive→compress
-        # handoff, so without it there is nothing to truthfully consolidate.
+        # GC gates BOTH the archive pass and the archive→compress handoff, so
+        # without it there is nothing to truthfully consolidate.
         logger.info(
             "memory consolidation no-op: VT_MEMORY_GC is off — archive GC and the "
             "archive→compress handoff are both gated by it; no files were touched"
@@ -104,8 +104,8 @@ def consolidate(memory_dir: Optional[Path] = None) -> None:
 
     memory = PersistentMemory(memory_dir=memory_dir)
     lifecycle = MemoryLifecycle(memory)
-    # Plan ②b(i): run_gc's default is dry_run=True (audit-only). The scheduled
-    # pass MUST archive for real, so dry_run=False is passed explicitly.
+    # run_gc's default is dry_run=True (audit-only). The scheduled pass MUST
+    # archive for real, so dry_run=False is passed explicitly.
     actions = lifecycle.run_gc(dry_run=False)
     archived = sum(1 for a in actions if a.get("action") == "archive")
     logger.info(

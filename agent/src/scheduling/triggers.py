@@ -1,6 +1,6 @@
 """Trigger grammar and next-run math for the shared scheduling kernel.
 
-Extracted verbatim (scheduler-unification T1) from two prior owners so every
+Extracted verbatim (scheduler unification) from two prior owners so every
 scheduler in the repo can share one trigger vocabulary:
 
 * the schedule grammar — interval-ms strings and simplified 5-field cron with

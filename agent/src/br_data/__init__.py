@@ -10,8 +10,11 @@ Sources (all public, no key):
 * Banco Central (SGS) — Selic, CDI, IPCA, IGP-M, PTAX and any other series.
 * Tesouro Transparente — Tesouro Direto bond prices and yields.
 
-``python -m src.br_data sync`` downloads/refreshes everything;
-``python -m src.br_data daemon`` repeats it once a day. Readers
+``python -m src.br_data sync`` downloads/refreshes everything; the daily
+cadence runs as the protected system job ``system:br-data-sync`` inside the
+main service's scheduler (opt-in via ``VIBE_BR_SYNC_ENABLED`` — see
+:mod:`src.br_data.scheduling`). ``python -m src.br_data daemon`` is retired:
+it prints a migration notice and exits 0. Readers
 (:mod:`backtest.loaders.b3_cotahist_loader`, ``get_br_market_data``) only
 read the SQLite file.
 """
