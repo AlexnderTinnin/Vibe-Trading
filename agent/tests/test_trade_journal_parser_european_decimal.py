@@ -28,3 +28,22 @@ def test_comma_decimal_with_dot_grouping(raw: str, expected: float) -> None:
 )
 def test_us_formats_are_unchanged(raw: str, expected: float) -> None:
     assert _to_float(raw) == pytest.approx(expected)
+
+
+def test_european_amounts_reach_fifo_analysis(tmp_path, monkeypatch) -> None:
+    import csv
+    import json
+
+    from src.tools.trade_journal_tool import analyze_trade_journal
+
+    monkeypatch.setenv("VIBE_TRADING_ALLOWED_FILE_ROOTS", str(tmp_path))
+    path = tmp_path / "european-journal.csv"
+    with path.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(["datetime", "symbol", "side", "quantity", "price", "fee"])
+        writer.writerow(["2026-01-02", "AAPL", "buy", "1.000,00", "1.234,50", "1.000,25"])
+        writer.writerow(["2026-01-05", "AAPL", "sell", "1.000,00", "1.235,50", "1.000,75"])
+    result = json.loads(analyze_trade_journal(str(path), "full"))
+    assert result["status"] == "ok"
+    # 1,000 shares * 1.00 price gain - 1,000.25 entry fee - 1,000.75 exit fee.
+    assert result["profile"]["total_pnl"] == -1001.0

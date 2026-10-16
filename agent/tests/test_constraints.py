@@ -72,6 +72,13 @@ class TestMinWeight:
         w = MinWeight(0.2).apply(np.array([0.9, 0.1, 0.0]), ["A", "B", "C"])
         assert w[2] == pytest.approx(0.0)
 
+    def test_infeasible_floor_preserves_signed_active_book(self) -> None:
+        source = pd.DataFrame([[0.02, -0.02, 0.06, 0.0]], columns=["A", "B", "C", "D"])
+        constraints = load_constraints({"constraints": [{"type": "min_weight", "floor": 0.05}]})
+        result = apply_constraints_frame(source, constraints)
+        np.testing.assert_allclose(result.iloc[0], [0.1 / 3, -0.1 / 3, 0.1 / 3, 0])
+        assert result.abs().sum(axis=1).iloc[0] == pytest.approx(0.1)
+
 
 class TestGroupExposure:
     def test_violating_group_scaled_pro_rata(self) -> None:
