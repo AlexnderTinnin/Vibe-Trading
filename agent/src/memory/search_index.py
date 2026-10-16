@@ -18,9 +18,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 
+from src.config.paths import get_runtime_root
+
 logger = logging.getLogger(__name__)
 
-_DEFAULT_DB_PATH = Path.home() / ".vibe-trading" / "memory_index.db"
+_DEFAULT_DB_PATH = get_runtime_root() / "memory_index.db"
 
 # Body text truncation limit (chars)
 _MAX_BODY_LEN = 50_000
