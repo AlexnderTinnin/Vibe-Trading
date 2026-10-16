@@ -584,6 +584,7 @@ def loader_cache_get(
     start_date: str,
     end_date: str,
     fields: list[str] | tuple[str, ...] | None = None,
+    source_revision: str | None = None,
 ) -> pd.DataFrame | None:
     """Return a cached DataFrame for one payload, or ``None`` on any miss.
 
@@ -601,7 +602,7 @@ def loader_cache_get(
         end_date=end_date,
         fields=fields,
     )
-    return _read_loader_cache_frame(cache_path)
+    return _read_loader_cache_frame(cache_path, source_revision)
 
 
 def loader_cache_put(
@@ -613,6 +614,7 @@ def loader_cache_put(
     end_date: str,
     fields: list[str] | tuple[str, ...] | None,
     frame: pd.DataFrame | None,
+    source_revision: str | None = None,
 ) -> None:
     """Write one non-empty DataFrame to the cache; a no-op when not cacheable.
 
@@ -631,7 +633,7 @@ def loader_cache_put(
         end_date=end_date,
         fields=fields,
     )
-    _write_loader_cache_frame(cache_path, frame)
+    _write_loader_cache_frame(cache_path, frame, source_revision)
 
 
 def cached_loader_fetch(
@@ -643,6 +645,7 @@ def cached_loader_fetch(
     end_date: str,
     fields: list[str] | tuple[str, ...] | None,
     fetch: Callable[[], pd.DataFrame | None],
+    source_revision: str | None = None,
 ) -> pd.DataFrame | None:
     """Fetch one DataFrame through the opt-in local cache.
 
@@ -658,6 +661,7 @@ def cached_loader_fetch(
         start_date=start_date,
         end_date=end_date,
         fields=fields,
+        source_revision=source_revision,
     )
     if cached is not None:
         return cached
@@ -670,6 +674,7 @@ def cached_loader_fetch(
         start_date=start_date,
         end_date=end_date,
         fields=fields,
+        source_revision=source_revision,
         frame=frame,
     )
     return frame
@@ -710,7 +715,14 @@ def _loader_cache_metadata_path(cache_path: Path) -> Path:
     return cache_path.with_suffix(cache_path.suffix + ".json")
 
 
-def _read_loader_cache_frame(cache_path: Path) -> pd.DataFrame | None:
+def _cache_file_identity(path: Path) -> list[int]:
+    stat = path.stat()
+    return [stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns]
+
+
+def _read_loader_cache_frame(
+    cache_path: Path, source_revision: str | None = None
+) -> pd.DataFrame | None:
     if not cache_path.is_file():
         return None
 
@@ -722,6 +734,10 @@ def _read_loader_cache_frame(cache_path: Path) -> pd.DataFrame | None:
         # dated series into row numbers and drops its adjustment/currency.
         if not isinstance(metadata, dict) or metadata.get("version") != _LOADER_CACHE_VERSION:
             raise ValueError("missing or incompatible cache metadata version")
+        if source_revision is not None and metadata.get("source_revision") != source_revision:
+            return None
+        if source_revision is not None and metadata.get("cache_file_identity") != _cache_file_identity(cache_path):
+            return None
         index_columns = metadata.get("index_columns")
         index_names = metadata.get("index_names")
         frame_attrs = metadata.get("frame_attrs")
@@ -759,6 +775,8 @@ def _read_loader_cache_frame(cache_path: Path) -> pd.DataFrame | None:
             con.close()
 
     try:
+        if source_revision is not None and metadata.get("cache_file_identity") != _cache_file_identity(cache_path):
+            return None
         index_columns = metadata.get("index_columns") or []
         if index_columns:
             missing = [
@@ -814,7 +832,9 @@ def _restore_cache_index_dtypes(
     return frame
 
 
-def _write_loader_cache_frame(cache_path: Path, frame: pd.DataFrame) -> None:
+def _write_loader_cache_frame(
+    cache_path: Path, frame: pd.DataFrame, source_revision: str | None = None
+) -> None:
     metadata_path = _loader_cache_metadata_path(cache_path)
     # pid + uuid so two concurrent writers of the same key never share a tmp
     # path; os.replace then swaps each file in atomically.
@@ -825,6 +845,8 @@ def _write_loader_cache_frame(cache_path: Path, frame: pd.DataFrame) -> None:
     try:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         cache_frame, metadata = _frame_for_loader_cache(frame)
+        if source_revision is not None:
+            metadata["source_revision"] = source_revision
 
         import duckdb
 
@@ -837,6 +859,8 @@ def _write_loader_cache_frame(cache_path: Path, frame: pd.DataFrame) -> None:
         finally:
             con.close()
 
+        if source_revision is not None:
+            metadata["cache_file_identity"] = _cache_file_identity(tmp_path)
         tmp_metadata_path.write_text(
             json.dumps(metadata, sort_keys=True, separators=(",", ":")),
             encoding="utf-8",

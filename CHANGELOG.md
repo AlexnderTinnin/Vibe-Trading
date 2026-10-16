@@ -24,6 +24,27 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   tokens so the live card matches the run total.
 - This batch is token-count visibility only: it ships no currency cost or
   cross-run aggregation.
+- Redact bare Groq/NVIDIA keys, Telegram bot tokens and Slack/Discord webhook
+  secrets from tool results and diagnostics (#1880). Follow-up coverage includes
+  Telegram ids outside the original eight-to-ten-digit assumption, GovSlack and
+  case-insensitive webhook hostnames; benign lookalikes remain unchanged.
+- Refresh opt-in local CSV, Parquet and DuckDB caches when source filesystem
+  revisions change, including DuckDB WAL changes and deletions (#1879). Reuse
+  bounded cache paths and reject mismatched metadata/payload pairs. Edits that
+  preserve all observed filesystem identity fields remain outside this check.
+- Split reversal fees between closed and newly opened quantities so FIFO PnL
+  counts each recorded fee once (#1891). Parse dot-grouped, comma-decimal journal
+  amounts correctly (#1881); ambiguous comma-only thousands retain their prior
+  interpretation. Emit strict JSON with null for unbounded ratios (#1884), and
+  avoid diagnosing disposition bias from zero holding times on both sides.
+- Reject false agreement against zero market-cap references or zero/negative
+  cross-source medians (#1883). Undefined percentage deviations are null.
+- Include completed zero-bar trades in average holding periods (#1876); retain
+  the existing bar-based measure behind the `avg_holding_days` compatibility key.
+  Infeasible minimum weights fall back to equal active magnitudes while keeping
+  signs and gross exposure (#1885). Count one flat peak/trough only once (#1882).
+- Serve Shadow Account reports from the configured runtime root used by the
+  report writer, restoring report links when `VIBE_TRADING_HOME` is set (#1887).
 
 ### Maintenance — 2026-10-15
 

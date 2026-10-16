@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 from collections import defaultdict, deque
+from collections.abc import Mapping
 from typing import Any
 
 import pandas as pd
@@ -76,6 +78,9 @@ def pair_trades_fifo(
     adjust: "CaliberAdjust | None" = None,
 ) -> list[dict[str, Any]]:
     """Pair buys and sells per symbol using FIFO to compute per-roundtrip PnL.
+
+    Reversal fees are shared proportionally between the closing quantity and
+    the remaining opening quantity, so each fee is counted exactly once.
 
     Long lots and short lots are both modelled: a sell that finds no open
     long lot opens a short lot, and a buy first covers open shorts before
@@ -168,7 +173,7 @@ def pair_trades_fifo(
                     "dt": row.datetime,
                     "qty": remaining,
                     "price": row.price,
-                    "fee": row.fee,
+                    "fee": row.fee * (remaining / row.quantity),
                 })
             continue
 
@@ -220,7 +225,7 @@ def pair_trades_fifo(
                 "dt": row.datetime,
                 "qty": remaining,
                 "price": row.price,
-                "fee": row.fee,
+                "fee": row.fee * (remaining / row.quantity),
             })
     return roundtrips
 
@@ -398,8 +403,18 @@ def _disposition_effect(rts_df: pd.DataFrame) -> dict[str, Any]:
         }
     win_hold = float(wins["hold_days"].mean())
     loss_hold = float(losses["hold_days"].mean())
+    if win_hold == 0 and loss_hold == 0:
+        return {
+            "severity": "low",
+            "ratio_loss_to_win_hold": None,
+            "avg_winner_hold_days": 0.0,
+            "avg_loser_hold_days": 0.0,
+            "evidence": "Both winning and losing roundtrips have zero holding time; "
+            "the ratio is undefined and does not establish a hold-losers-longer tendency.",
+        }
     ratio = loss_hold / win_hold if win_hold > 0 else float("inf")
     severity = _severity(ratio, (1.2, 1.5))
+    ratio_text = f"ratio {ratio:.2f}" if math.isfinite(ratio) else "ratio unbounded because winner holding time is zero"
     return {
         "severity": severity,
         "ratio_loss_to_win_hold": round(ratio, 2),
@@ -407,7 +422,7 @@ def _disposition_effect(rts_df: pd.DataFrame) -> dict[str, Any]:
         "avg_loser_hold_days": round(loss_hold, 2),
         "evidence": (
             f"Losing roundtrips held {loss_hold:.1f}d vs winning "
-            f"{win_hold:.1f}d (ratio {ratio:.2f}). "
+            f"{win_hold:.1f}d ({ratio_text}). "
             + ("Classic disposition pattern." if severity == "high"
                else "Mild hold-losers-longer tendency." if severity == "medium"
                else "Hold times roughly symmetric.")
@@ -629,6 +644,22 @@ def _apply_filter(df: pd.DataFrame, expr: str) -> pd.DataFrame:
     return df
 
 
+def _json_safe(value: Any) -> Any:
+    """Recursively replace non-finite floats with ``None``.
+
+    A journal with no losing round-trip yields an infinite profit/loss ratio,
+    and ``json.dumps`` would emit the non-standard ``Infinity`` literal that
+    strict JSON parsers reject.
+    """
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, Mapping):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
+
+
 def analyze_trade_journal(file_path: str, analysis_type: str = "full", filter_expr: str = "") -> str:
     """Parse a trade journal and return a JSON analysis.
 
@@ -696,7 +727,7 @@ def analyze_trade_journal(file_path: str, analysis_type: str = "full", filter_ex
             "note": "Strategy extraction → backtest bridging lands in Phase 4c.",
         }
 
-    return json.dumps(result, ensure_ascii=False, default=str)
+    return json.dumps(_json_safe(result), ensure_ascii=False, default=str, allow_nan=False)
 
 
 def _format_range(df: pd.DataFrame) -> str:

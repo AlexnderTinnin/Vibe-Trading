@@ -157,8 +157,13 @@ def verify_market_cap(
     """
     p, s, r = _exact(price), _exact(shares), _exact(reported_cap)
     calculated = _CTX.multiply(p, s)
-    deviation = abs(float(calculated - r) / float(r)) * 100 if r != 0 else 0.0
-    if deviation > 5:
+    # A zero reported cap has no percent deviation; it can only match a zero
+    # calculated cap, so a non-zero product fails rather than reading as 0%.
+    deviation = abs(float(calculated - r) / float(r)) * 100 if r != 0 else None
+    if deviation is None:
+        verdict = "pass" if calculated == 0 else "fail"
+        deviation = 0.0 if calculated == 0 else None
+    elif deviation > 5:
         verdict = "fail"
     elif deviation > 1:
         verdict = "warn"
@@ -171,7 +176,7 @@ def verify_market_cap(
         "calculated_market_cap": float(calculated),
         "calculated_market_cap_display": _fmt(float(calculated)),
         "reported_market_cap": float(r),
-        "deviation_pct": round(deviation, 4),
+        "deviation_pct": round(deviation, 4) if deviation is not None else None,
         "verdict": verdict,
     }
 
@@ -263,13 +268,19 @@ def cross_validate(
     per_source: list[dict[str, Any]] = []
     all_consistent = True
     for src, val in values.items():
-        dev = abs(float(val) - median) / median * 100 if median != 0 else 0.0
-        consistent = dev <= tolerance_pct
+        # Against a zero reference only an exactly-zero value agrees; any
+        # other value has no finite percent deviation and is inconsistent.
+        if median != 0:
+            dev = abs(float(val) - median) / abs(median) * 100
+            consistent = dev <= tolerance_pct
+        else:
+            dev = 0.0 if float(val) == 0 else None
+            consistent = dev is not None
         all_consistent = all_consistent and consistent
         per_source.append({
             "source": src,
             "value": float(val),
-            "deviation_pct": round(dev, 4),
+            "deviation_pct": round(dev, 4) if dev is not None else None,
             "consistent": consistent,
         })
     return {
