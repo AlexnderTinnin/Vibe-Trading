@@ -1378,6 +1378,41 @@ export interface AttributionResponse {
   notes: string[];
 }
 
+/**
+ * One provider-reported LLM usage event inside `llm_usage.per_iteration`.
+ * Field names mirror the on-disk artifact written by `agent/src/agent/llm_usage.py`.
+ * The two `cache_*` keys appear only once the provider reports a cache event for
+ * that call, so they are optional — never fabricated.
+ */
+export interface LlmUsageCall {
+  iter: number;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  cache_read_tokens?: number;
+  cache_creation_tokens?: number;
+}
+
+/**
+ * Run-scoped LLM usage summary returned by `GET /runs/{id}` (`RunResponse.llm_usage`,
+ * optional on the backend and `null`/absent when the run recorded no usage events).
+ */
+export interface LlmUsage {
+  provider: string;
+  model: string;
+  totals: {
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+    calls: number;
+    /** Present only after a provider cache event, like the per-iteration keys. */
+    cache_read_tokens?: number;
+    cache_creation_tokens?: number;
+  };
+  per_iteration: LlmUsageCall[];
+  updated_at: string;
+}
+
 export interface RunData {
   status: string;
   run_id: string;
@@ -1390,6 +1425,8 @@ export interface RunData {
   metrics?: BacktestMetrics;
   artifacts?: ArtifactInfo[];
   run_card?: RunCard;
+  /** Provider-reported AgentLoop usage summary; null/absent when the run recorded no usage events. */
+  llm_usage?: LlmUsage | null;
   risk_xray?: RiskXRayPayload;
   rebalance_notes?: RebalanceNotesPayload;
   validation?: ValidationData;
