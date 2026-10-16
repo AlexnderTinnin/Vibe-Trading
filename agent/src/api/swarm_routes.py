@@ -164,6 +164,14 @@ def register_swarm_routes(
             "created_at": run.created_at,
             "completed_at": run.completed_at,
             "final_report": run.final_report,
+            # Key names mirror the MCP run payload (mcp_server._run_to_dict);
+            # values come from the reconciled run, so a never-run run reports
+            # int 0 totals and token_source None — never omitted or nulled.
+            "total_input_tokens": run.total_input_tokens,
+            "total_output_tokens": run.total_output_tokens,
+            "provider": run.provider,
+            "model": run.model,
+            "token_source": run.token_source,
         }
 
     @app.get(
