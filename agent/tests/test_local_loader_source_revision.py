@@ -33,6 +33,8 @@ def _write(path: Path, kind: str, close: int) -> None:
 
 
 def _loader(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str):
+    if kind == "parquet":
+        pytest.importorskip("pyarrow", reason="local Parquet reads require an optional pandas engine")
     path = tmp_path / ("bars." + kind)
     entry = {"symbol": "AAA.US", "type": kind}
     if kind == "duckdb":
