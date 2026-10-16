@@ -10,6 +10,12 @@ backoff — is delegated to :class:`src.scheduling.kernel.SchedulerKernel`
 (scheduler unification). This module keeps the scheduled-research domain: the
 tick composition (stale recovery, expiry, due dispatch, delivery sweep), the
 job state machine, the delivery outbox and verdict recording.
+
+``executor_kind == "internal"`` jobs are dispatched non-blockingly through
+:class:`src.scheduled_research.internal_dispatch.InternalRunSupervisor`:
+registry-resolved callables run in fire-and-forget background tasks (sync
+ones off the loop via ``asyncio.to_thread``) that own the terminal write, so
+an hours-long internal run never freezes the serialized tick.
 """
 
 from __future__ import annotations
@@ -21,6 +27,10 @@ from typing import Awaitable, Callable, Optional
 
 from src.config.accessor import get_env_config
 from src.channels.bus.events import DeliveryReceipt
+from src.scheduled_research.internal_dispatch import (
+    InternalDispatchCallback,
+    InternalRunSupervisor,
+)
 from src.scheduled_research.models import (
     DeliveryRecord,
     DeliveryStatus,
@@ -157,7 +167,7 @@ class ScheduledResearchExecutor:
         briefing_reader: "BriefingReader | None" = None,
         channel_sender: "ChannelSender | None" = None,
         delivery_lease_ms: int = DEFAULT_DELIVERY_LEASE_MS,
-        internal_dispatcher: "DispatchCallback | None" = None,
+        internal_dispatcher: "InternalDispatchCallback | None" = None,
     ) -> None:
         """Initialize the executor.
 
@@ -179,11 +189,14 @@ class ScheduledResearchExecutor:
             delivery_lease_ms: How long a claimed row stays claimed before a
                 later sweep may take it over. Too short duplicates a slow
                 send; too long strands a briefing behind a dead process.
-            internal_dispatcher: Async callable invoked for jobs whose
-                ``executor_kind`` is ``"internal"``. ``None`` (the default)
-                leaves internal jobs without a runner, so their firings take
-                the existing dispatch-failure path; the registry-backed
-                implementation is wired separately.
+            internal_dispatcher: Callable resolving one ``executor_kind ==
+                "internal"`` job to its registered zero-arg callable — in
+                production the exact-key allowlist lookup in
+                :mod:`src.scheduling.registry`. ``None`` (the default) keeps
+                internal jobs fail-closed: their firings take the existing
+                dispatch-failure path. The resolved callable never runs on
+                the tick loop; :class:`InternalRunSupervisor` owns the
+                non-blocking run and its terminal write.
 
         Raises:
             ValueError: If the retry policy is invalid.
@@ -231,6 +244,12 @@ class ScheduledResearchExecutor:
             is_due_fn=is_due,
             task_name="scheduled-research-executor",
         )
+        self._internal = InternalRunSupervisor(
+            store=store,
+            dispatcher=internal_dispatcher,
+            finish_run=self._finish_run,
+            now_fn=now_fn,
+        )
         self._recovered_stale_running = False
 
     @property
@@ -254,8 +273,17 @@ class ScheduledResearchExecutor:
         Idempotent. When disabled or not started, this is a no-op. The kernel
         sets the wakeup so a sleeping loop returns at once, and cancels the
         task as a fallback so shutdown never blocks for a full tick.
+
+        In-flight internal runs are then cancelled at the asyncio-task level,
+        never at the thread level (pinned semantics, see
+        :mod:`src.scheduled_research.internal_dispatch`): a sync callable
+        already inside ``asyncio.to_thread`` finishes harmlessly with its
+        result discarded, and its job stays RUNNING in the store for
+        ``recover_stale_running`` on the next start. ``stop()`` does not wait
+        for those threads, so it stays bounded however long a callable blocks.
         """
         await self._kernel.stop()
+        await self._internal.cancel_all()
 
     async def tick(self, now_ms: int | None = None) -> None:
         """Run one poll/dispatch pass.
@@ -375,6 +403,14 @@ class ScheduledResearchExecutor:
             self._persist_completion(job)
             return
 
+        if job.executor_kind == "internal":
+            # Non-blocking internal dispatch: resolve → RUNNING → a
+            # fire-and-forget background task owns the callable and the
+            # terminal write. Awaiting the run here would freeze the
+            # serialized tick loop for hours (see internal_dispatch.py).
+            self._internal.launch(job, now_ms)
+            return
+
         job.status = JobStatus.RUNNING
         # Lifecycle writes bypass validation: this record is already persisted,
         # and a write that cannot land would strand the job mid-flight.
@@ -382,7 +418,7 @@ class ScheduledResearchExecutor:
 
         dispatch_error: Exception | None = None
         try:
-            session_id = await self._dispatch_job(job)
+            session_id = await self._dispatch(job)
             if isinstance(session_id, str) and session_id:
                 if job.delivery_channel:
                     # Arm the outbox in the same write that records the firing.
@@ -413,6 +449,18 @@ class ScheduledResearchExecutor:
         else:
             job.consecutive_failures = 0
 
+        self._finish_run(job, dispatch_error, now_ms)
+
+    def _finish_run(
+        self, job: ScheduledResearchJob, dispatch_error: Exception | None, now_ms: int
+    ) -> None:
+        """Record one attempt's outcome and persist the terminal state.
+
+        Shared by the prompt path — *now_ms* is the firing time, dispatch
+        returns at enqueue — and the internal background path, which passes
+        the COMPLETION time so a run longer than its own schedule interval
+        advances past completion instead of re-firing immediately.
+        """
         job.last_run_at = now_ms
         try:
             scheduled_next_run = next_due(job.schedule, now_ms, job.timezone)
@@ -452,23 +500,6 @@ class ScheduledResearchExecutor:
                     job.next_run_at,
                 )
         self._persist_completion(job)
-
-    async def _dispatch_job(self, job: ScheduledResearchJob) -> Optional[str]:
-        """Route one firing to its executor kind.
-
-        ``"prompt"`` jobs (every job persisted before scheduler unification)
-        go through the injected ``dispatch`` callback exactly as before.
-        ``"internal"`` jobs go through ``internal_dispatcher``; while no
-        dispatcher is wired, raising here routes the firing into the existing
-        dispatch-failure path (``failure_kind="dispatch"``, bounded retries)
-        rather than silently skipping it.
-        """
-        if job.executor_kind == "internal":
-            dispatcher = self._internal_dispatcher
-            if dispatcher is None:
-                raise RuntimeError("internal dispatcher is not configured")
-            return await dispatcher(job)
-        return await self._dispatch(job)
 
     def _delivery_is_eligible(self, job: ScheduledResearchJob, now_ms: int) -> bool:
         """Whether this row is a sweep's to take.

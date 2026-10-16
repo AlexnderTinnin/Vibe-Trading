@@ -90,6 +90,22 @@ async def _dispatch_scheduled_research_job(job) -> Optional[str]:
     return session.session_id
 
 
+def _resolve_scheduled_internal_callable(job: "ScheduledResearchJob"):
+    """Resolve one internal job's callable through the registry allowlist.
+
+    Production ``internal_dispatcher`` for the singleton executor: a pure
+    exact-key lookup in :mod:`src.scheduling.registry` — no import paths, no
+    string parsing, no shell. Any failure (unregistered or tampered
+    ``internal_callable`` name, malformed shape) raises and routes the
+    firing into the executor's dispatch-failure path. The executor runs the
+    returned zero-arg callable off the tick loop (``asyncio.to_thread`` when
+    sync, direct await when async) in a fire-and-forget background task.
+    """
+    from src.scheduling.registry import resolve_internal
+
+    return resolve_internal(job.internal_callable)
+
+
 def _read_scheduled_briefing(session_id: str) -> Optional[tuple[str, str]]:
     """Return ``(terminal status, briefing text)`` once a run has finished.
 
@@ -170,6 +186,7 @@ def _get_scheduled_research_executor():
             enabled=_scheduled_research_scheduler_enabled(),
             briefing_reader=_read_scheduled_briefing,
             channel_sender=_send_scheduled_briefing,
+            internal_dispatcher=_resolve_scheduled_internal_callable,
         )
     return _scheduled_research_executor
 
