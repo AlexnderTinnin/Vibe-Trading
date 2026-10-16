@@ -1,5 +1,6 @@
 import {
   applySwarmEvent,
+  buildSwarmStatusFromRunDetail,
   buildSwarmStatusFromToolResultPreview,
   mergeSwarmRunUsage,
 } from "../swarmStatus";
@@ -275,5 +276,80 @@ describe("swarmStatus REST usage hydration", () => {
 
     expect(hydrated.total_input_tokens).toBe(10);
     expect(hydrated.token_source).toBe("provider");
+  });
+});
+
+describe("swarmStatus roster repair from the run detail", () => {
+  // Shape of a real 4-task run whose card rendered as a partial "2/2 agents".
+  const detail = {
+    id: "swarm-real",
+    preset_name: "global_allocation_committee",
+    status: "failed",
+    created_at: "2026-10-16T12:16:23.000Z",
+    completed_at: "2026-10-16T12:50:19.000Z",
+    total_input_tokens: 423957,
+    total_output_tokens: 52128,
+    token_source: "provider",
+    provider: "openai",
+    model: "deepseek-v4.1-flash",
+    tasks: [
+      { id: "task-allocate", agent_id: "allocator", status: "blocked", worker_iterations: 0, input_tokens: null, output_tokens: null },
+      { id: "task-ashare", agent_id: "a_share_analyst", status: "completed", worker_iterations: 9, input_tokens: null, output_tokens: null },
+      { id: "task-crypto", agent_id: "crypto_analyst", status: "completed", worker_iterations: 21, input_tokens: null, output_tokens: null },
+      { id: "task-ushk", agent_id: "us_hk_analyst", status: "failed", worker_iterations: 8, input_tokens: null, output_tokens: null },
+    ],
+  };
+
+  it("restores the agents a partial event stream dropped", () => {
+    const partial: SwarmRunStatus = {
+      ...baseStatus(),
+      agents: [
+        { agentId: "us_hk_analyst", taskId: "task-ushk", status: "failed", input_tokens: 88000, output_tokens: 8281 },
+        { agentId: "allocator", taskId: "task-allocate", status: "blocked" },
+      ],
+    };
+
+    const merged = mergeSwarmRunUsage(partial, detail);
+
+    expect(merged.agents.map((agent) => agent.agentId).sort()).toEqual([
+      "a_share_analyst",
+      "allocator",
+      "crypto_analyst",
+      "us_hk_analyst",
+    ]);
+    expect(merged.agents.find((a) => a.agentId === "crypto_analyst")?.status).toBe("done");
+    expect(merged.agents.find((a) => a.agentId === "crypto_analyst")?.iterations).toBe(21);
+    expect(merged.agents.find((a) => a.agentId === "us_hk_analyst")?.input_tokens).toBe(88000);
+    expect(merged.total_input_tokens).toBe(423957);
+    expect(merged.token_source).toBe("provider");
+  });
+
+  it("builds a complete status from the detail alone on a cold load", () => {
+    const built = buildSwarmStatusFromRunDetail(detail, "swarm-real");
+
+    expect(built?.runId).toBe("swarm-real");
+    expect(built?.preset).toBe("global_allocation_committee");
+    expect(built?.status).toBe("failed");
+    expect(built?.total_input_tokens).toBe(423957);
+    expect(built?.provider).toBe("openai");
+    expect(built?.model).toBe("deepseek-v4.1-flash");
+
+    const hydrated = built && mergeSwarmRunUsage(built, detail);
+    expect(hydrated?.agents).toHaveLength(4);
+  });
+
+  it("does not regress a terminal status to a stale pending from the detail", () => {
+    const live: SwarmRunStatus = {
+      ...baseStatus(),
+      agents: [
+        { agentId: "a_share_analyst", taskId: "task-ashare", status: "done", input_tokens: 10 },
+      ],
+    };
+    const stale = { ...detail, tasks: [{ ...detail.tasks[1], status: "pending" }] };
+
+    const merged = mergeSwarmRunUsage(live, stale);
+
+    expect(merged.agents.find((a) => a.agentId === "a_share_analyst")?.status).toBe("done");
+    expect(merged.agents.find((a) => a.agentId === "a_share_analyst")?.input_tokens).toBe(10);
   });
 });

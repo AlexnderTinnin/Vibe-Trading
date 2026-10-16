@@ -42,6 +42,7 @@ import {
 } from "@/components/chat/LiveRuntimePanel";
 import {
   applySwarmEvent,
+  buildSwarmStatusFromRunDetail,
   buildSwarmStatusFromStarted,
   buildSwarmStatusFromToolResultPreview,
   mergeSwarmRunUsage,
@@ -81,7 +82,8 @@ const act = () => useAgentStore.getState();
 
 function hydrateSwarmRunUsage(runId: string): void {
   void api.getSwarmRun(runId).then((payload) => {
-    const current = act().swarmRuns[runId];
+    const current = act().swarmRuns[runId]
+      ?? buildSwarmStatusFromRunDetail(payload, runId);
     if (!current) return;
     act().upsertSwarmStatus(mergeSwarmRunUsage(current, payload));
   }).catch(() => undefined);

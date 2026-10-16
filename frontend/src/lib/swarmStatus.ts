@@ -411,16 +411,97 @@ export function buildSwarmStatusFromToolResultPreview(preview: string): SwarmRun
   }
 }
 
+// Stops the detail payload regressing a status the stream already advanced past.
+const STATUS_RANK: Record<SwarmAgentDisplayStatus, number> = {
+  waiting: 0,
+  running: 1,
+  retry: 2,
+  done: 3,
+  failed: 3,
+  blocked: 3,
+  cancelled: 3,
+};
+
+function advancedStatus(
+  live: SwarmAgentDisplayStatus,
+  authoritative: SwarmAgentDisplayStatus,
+): SwarmAgentDisplayStatus {
+  return STATUS_RANK[authoritative] >= STATUS_RANK[live] ? authoritative : live;
+}
+
+/**
+ * Merge the server's reconciled roster from the run detail into a status built
+ * from the event stream, which loses earlier frames on reload or reconnect.
+ * Merges rather than replaces so stream-only per-task tokens survive.
+ */
+export function mergeSwarmRunRoster(
+  status: SwarmRunStatus,
+  payload: Record<string, unknown>,
+): SwarmRunStatus {
+  const tasks = Array.isArray(payload.tasks) ? payload.tasks.map(asRecord) : [];
+  if (tasks.length === 0) return status;
+
+  const live = new Map(status.agents.map((agent) => [agent.agentId, agent]));
+  const merged: SwarmAgentStatus[] = tasks
+    .filter((task) => asString(task.agent_id))
+    .map((task) => {
+      const agentId = asString(task.agent_id);
+      const existing = live.get(agentId);
+      live.delete(agentId);
+      const authoritative = mapTaskStatus(task.status);
+      return {
+        ...(existing ?? { agentId, iterations: 0 }),
+        agentId,
+        taskId: asString(task.id) || existing?.taskId,
+        status: existing ? advancedStatus(existing.status, authoritative) : authoritative,
+        iterations: existing?.iterations ?? asNumber(task.worker_iterations) ?? 0,
+        lastText: existing?.lastText ?? (asString(task.summary) || undefined),
+        error: existing?.error ?? (asString(task.error) || undefined),
+      };
+    });
+
+  // Never drop an agent the detail omits; the roster may only grow.
+  for (const leftover of live.values()) merged.push(leftover);
+
+  return { ...status, agents: merged };
+}
+
+/** Status built from the run detail alone, for a cold load with nothing in memory. */
+export function buildSwarmStatusFromRunDetail(
+  payload: Record<string, unknown>,
+  runId: string,
+): SwarmRunStatus | null {
+  const id = asString(payload.id) || runId;
+  if (!id) return null;
+  const times = serverRunTimes(payload);
+  return {
+    runId: id,
+    preset: asString(payload.preset_name) || asString(payload.preset) || "swarm",
+    status: normalizeRunStatus(payload.status),
+    currentLayer: 0,
+    totalLayers: 0,
+    startedAt: times.startedAt ?? 0,
+    completedAt: times.completedAt,
+    total_input_tokens: asNumber(payload.total_input_tokens),
+    total_output_tokens: asNumber(payload.total_output_tokens),
+    provider: asString(payload.provider) || undefined,
+    model: asString(payload.model) || undefined,
+    token_source: asTokenSource(payload.token_source),
+    agents: [],
+  };
+}
+
 export function mergeSwarmRunUsage(
   status: SwarmRunStatus,
   payload: Record<string, unknown>,
 ): SwarmRunStatus {
+  const withRoster = mergeSwarmRunRoster(status, payload);
   return {
-    ...status,
-    total_input_tokens: asNumber(payload.total_input_tokens) ?? status.total_input_tokens,
-    total_output_tokens: asNumber(payload.total_output_tokens) ?? status.total_output_tokens,
-    provider: asString(payload.provider) || status.provider,
-    model: asString(payload.model) || status.model,
-    token_source: asTokenSource(payload.token_source) ?? status.token_source,
+    ...withRoster,
+    total_input_tokens: asNumber(payload.total_input_tokens) ?? withRoster.total_input_tokens,
+    total_output_tokens: asNumber(payload.total_output_tokens) ?? withRoster.total_output_tokens,
+    provider: asString(payload.provider) || withRoster.provider,
+    model: asString(payload.model) || withRoster.model,
+    token_source: asTokenSource(payload.token_source) ?? withRoster.token_source,
   };
 }
