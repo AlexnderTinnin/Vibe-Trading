@@ -777,7 +777,7 @@ export interface ScheduledRun {
   id: string;
   prompt: string;
   title: string;
-  source_type: "prompt" | "playbook";
+  source_type: "prompt" | "playbook" | "system";
   playbook_slug: string | null;
   end_at: number | null;
   schedule: string;

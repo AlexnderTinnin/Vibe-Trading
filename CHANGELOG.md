@@ -7,6 +7,45 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Maintenance — 2026-10-16
+
+- Extracted a shared scheduling kernel under `agent/src/scheduling/`: trigger
+  grammar and next-due math are pure functions (cron evaluated on the stored
+  timezone's wall clock, interval, once), and the tick-loop kernel takes an
+  injectable clock, backoff policy and wake coalescing. The scheduled-research
+  executor is now a kernel consumer; its external REST contract, job statuses
+  and fire semantics are unchanged.
+- Folded the Brazil data daily sync into the kernel as a protected internal
+  job (`system:br-data-sync`) and retired the standalone `while True` daemon:
+  `run_daemon` now prints a migration notice and returns exit 0 in bounded
+  time, and the ZimaOS sidecar service is gone. First-sync timing changed:
+  instead of syncing at every container start, the job seeds its first run at
+  the next 21:30 America/Sao_Paulo wall-clock slot, and `VIBE_BR_SYNC_TIME`
+  only takes effect while first seeding — changing it later does not
+  reschedule the stored row.
+- Added a protected `system` job category (ids prefixed `system:`, seeded
+  idempotently at startup): rows cannot be deleted or patched through REST
+  or CLI surfaces. The first job in the category is the memory
+  lifecycle-consolidation pass. Both system jobs fire only when the double
+  gate holds — `VIBE_TRADING_ENABLE_SCHEDULER` and the job's own flag
+  (`VT_MEMORY_CONSOLIDATION`, `VIBE_BR_SYNC_ENABLED`) — and both default off
+  outside the shipped ZimaOS template, which hardcodes the scheduler and the
+  daily Brazil sync on. Cancelling a system job by hand-editing the store
+  file is undone at the next startup; turning its flag off halts the row.
+- Removed the vestigial `cron_service` residue from the channel stack
+  (manager.py constructor parameter, gateway_services.py dataclass fields,
+  channels_config_routes.py docstring), and corrected stale `env_schema.py`
+  comments that named a nonexistent `vibe-trading br-data sync` subcommand
+  instead of the real entry point `python -m src.br_data sync`.
+- Explicitly untouched by this batch: the live/runtime scheduler, channel
+  polling, and the JSON file store — no new database, no destructive
+  migration, `_SCHEMA_VERSION` stays 1 — and there is still no cross-process
+  merge of job stores across multiple instances; two executors on one store
+  remain unsupported.
+- Downgrade warning: the schema version stays 1, but older code reading a
+  store file that contains `system:` rows quarantines the whole file. Delete
+  the system job rows before rolling back.
+
 ### Maintenance — 2026-10-15
 
 - Separate live safety polling from model decisions (#1854): safety checks keep
