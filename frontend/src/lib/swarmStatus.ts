@@ -300,26 +300,42 @@ export function applySwarmEvent(current: SwarmRunStatus, rawEvent: unknown): Swa
   }
 
   if (["task_failed", "worker_failed", "worker_timeout", "worker_incomplete"].includes(type)) {
-    return updateAgent(current, { agentId, taskId }, (agent) => ({
+    const withTokens = updateAgent(current, { agentId, taskId }, (agent) => ({
       ...agent,
       status: "failed",
       elapsed_s: agent.startedAt && eventTime
         ? Math.max(0, (eventTime - agent.startedAt) / 1000)
         : agent.elapsed_s,
       error: asString(data.error) || asString(data.reason) || agent.error,
+      input_tokens: asNumber(data.input_tokens) ?? agent.input_tokens,
+      output_tokens: asNumber(data.output_tokens) ?? agent.output_tokens,
+      cache_read_tokens: asNumber(data.cache_read_tokens) ?? agent.cache_read_tokens,
+      cache_creation_tokens: asNumber(data.cache_creation_tokens) ?? agent.cache_creation_tokens,
     }));
+    return recomputeRunTokenTotals({
+      ...withTokens,
+      token_source: mergeTokenSource(current.token_source, data.token_source),
+    });
   }
 
   if (type === "task_cancelled" || type === "worker_cancelled") {
     // cancel_run() reached this worker mid-flight: a user stop, not a failure.
-    return updateAgent(current, { agentId, taskId }, (agent) => ({
+    const withTokens = updateAgent(current, { agentId, taskId }, (agent) => ({
       ...agent,
       status: "cancelled",
       elapsed_s: agent.startedAt && eventTime
         ? Math.max(0, (eventTime - agent.startedAt) / 1000)
         : agent.elapsed_s,
       iterations: asNumber(data.iterations) ?? agent.iterations,
+      input_tokens: asNumber(data.input_tokens) ?? agent.input_tokens,
+      output_tokens: asNumber(data.output_tokens) ?? agent.output_tokens,
+      cache_read_tokens: asNumber(data.cache_read_tokens) ?? agent.cache_read_tokens,
+      cache_creation_tokens: asNumber(data.cache_creation_tokens) ?? agent.cache_creation_tokens,
     }));
+    return recomputeRunTokenTotals({
+      ...withTokens,
+      token_source: mergeTokenSource(current.token_source, data.token_source),
+    });
   }
 
   if (type === "task_blocked") {
@@ -393,4 +409,18 @@ export function buildSwarmStatusFromToolResultPreview(preview: string): SwarmRun
       agents: [],
     };
   }
+}
+
+export function mergeSwarmRunUsage(
+  status: SwarmRunStatus,
+  payload: Record<string, unknown>,
+): SwarmRunStatus {
+  return {
+    ...status,
+    total_input_tokens: asNumber(payload.total_input_tokens) ?? status.total_input_tokens,
+    total_output_tokens: asNumber(payload.total_output_tokens) ?? status.total_output_tokens,
+    provider: asString(payload.provider) || status.provider,
+    model: asString(payload.model) || status.model,
+    token_source: asTokenSource(payload.token_source) ?? status.token_source,
+  };
 }

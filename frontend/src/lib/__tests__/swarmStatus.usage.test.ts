@@ -1,6 +1,7 @@
 import {
   applySwarmEvent,
   buildSwarmStatusFromToolResultPreview,
+  mergeSwarmRunUsage,
 } from "../swarmStatus";
 import type { SwarmRunStatus } from "@/types/agent";
 
@@ -189,5 +190,90 @@ describe("swarmStatus tool-result preview token_usage", () => {
     expect(status?.preset).toBe("demo_team");
     expect(status?.status).toBe("completed");
     expect(status?.total_input_tokens).toBeUndefined();
+  });
+});
+
+describe("swarmStatus failed/cancelled task token telemetry", () => {
+  it("counts tokens from a failed task so the live card matches the run total", () => {
+    const next = applySwarmEvent(baseStatus(), {
+      type: "task_failed",
+      agent_id: "analyst",
+      task_id: "t1",
+      timestamp: "2026-07-29T12:01:00.000Z",
+      data: {
+        error: "boom",
+        input_tokens: 1000,
+        output_tokens: 200,
+        cache_read_tokens: 50,
+        cache_creation_tokens: 10,
+        token_source: "estimated",
+      },
+    });
+
+    expect(next.total_input_tokens).toBe(1000);
+    expect(next.total_output_tokens).toBe(200);
+    expect(next.token_source).toBe("estimated");
+  });
+
+  it("counts tokens from a cancelled task", () => {
+    const next = applySwarmEvent(baseStatus(), {
+      type: "task_cancelled",
+      agent_id: "risk",
+      task_id: "t2",
+      timestamp: "2026-07-29T12:01:00.000Z",
+      data: { input_tokens: 300, output_tokens: 40 },
+    });
+
+    expect(next.total_input_tokens).toBe(300);
+    expect(next.total_output_tokens).toBe(40);
+  });
+
+  it("does not wipe totals when a failure event carries no token fields", () => {
+    const withTokens = applySwarmEvent(
+      baseStatus(),
+      completedEvent("analyst", "t1", { input_tokens: 500, output_tokens: 60 }),
+    );
+    const next = applySwarmEvent(withTokens, {
+      type: "worker_failed",
+      agent_id: "risk",
+      task_id: "t2",
+      timestamp: "2026-07-29T12:02:00.000Z",
+      data: { error: "network" },
+    });
+
+    expect(next.total_input_tokens).toBe(500);
+    expect(next.total_output_tokens).toBe(60);
+  });
+});
+
+describe("swarmStatus REST usage hydration", () => {
+  it("merges run-level totals and the provenance label from the detail payload", () => {
+    const hydrated = mergeSwarmRunUsage(baseStatus(), {
+      total_input_tokens: 853341,
+      total_output_tokens: 34681,
+      provider: "dashscope",
+      model: "glm-5.1",
+      token_source: "provider",
+    });
+
+    expect(hydrated.runId).toBe("run-usage");
+    expect(hydrated.total_input_tokens).toBe(853341);
+    expect(hydrated.total_output_tokens).toBe(34681);
+    expect(hydrated.provider).toBe("dashscope");
+    expect(hydrated.model).toBe("glm-5.1");
+    expect(hydrated.token_source).toBe("provider");
+  });
+
+  it("keeps existing totals and label when the payload redacts or omits them", () => {
+    const current: SwarmRunStatus = {
+      ...baseStatus(),
+      total_input_tokens: 10,
+      token_source: "provider",
+    };
+
+    const hydrated = mergeSwarmRunUsage(current, { token_source: "[redacted]" });
+
+    expect(hydrated.total_input_tokens).toBe(10);
+    expect(hydrated.token_source).toBe("provider");
   });
 });

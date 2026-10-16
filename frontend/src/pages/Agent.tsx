@@ -44,6 +44,7 @@ import {
   applySwarmEvent,
   buildSwarmStatusFromStarted,
   buildSwarmStatusFromToolResultPreview,
+  mergeSwarmRunUsage,
 } from "@/lib/swarmStatus";
 import { buildToolTimelineMessages } from "@/pages/agentToolTimeline";
 
@@ -77,6 +78,14 @@ function groupMessages(msgs: StoredAgentMessage[]): MsgGroup[] {
 }
 
 const act = () => useAgentStore.getState();
+
+function hydrateSwarmRunUsage(runId: string): void {
+  void api.getSwarmRun(runId).then((payload) => {
+    const current = act().swarmRuns[runId];
+    if (!current) return;
+    act().upsertSwarmStatus(mergeSwarmRunUsage(current, payload));
+  }).catch(() => undefined);
+}
 
 function eventCallId(data: Record<string, unknown>): string | undefined {
   return typeof data.call_id === "string" && data.call_id
@@ -846,6 +855,7 @@ export function Agent() {
           const fallback = buildSwarmStatusFromToolResultPreview(String(d.preview || ""));
           if (fallback && !act().swarmRuns[fallback.runId]) {
             act().upsertSwarmStatus(fallback);
+            hydrateSwarmRunUsage(fallback.runId);
           }
         }
       },

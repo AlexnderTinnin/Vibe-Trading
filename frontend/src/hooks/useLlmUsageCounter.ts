@@ -3,7 +3,8 @@
  *
  * The backend emits one `llm_usage` event per agent iteration carrying the
  * provider-reported usage DELTA plus `iter` and `attempt_id`
- * (agent/src/session/service.py). useSSE dedups by Last-Event-ID, but a
+ * (emitted at agent/src/agent/loop.py; `attempt_id` injected at
+ * agent/src/session/service.py). useSSE dedups by Last-Event-ID, but a
  * reconnect replay can still deliver an already-applied iteration, so
  * accumulation is keyed idempotently on `(attemptId, iter)` and a new
  * attempt_id resets the running totals to zero.

@@ -41,8 +41,9 @@ export interface SwarmRunStatus {
   startedAt: number;
   completedAt?: number;
   agents: SwarmAgentStatus[];
-  // Run-level cost telemetry from GET /swarm/runs/{id}; names mirror the backend
-  // response keys. All optional: absent on runs created before the fields existed.
+  // Run-level cost telemetry. Names mirror the GET /swarm/runs/{id} response,
+  // but the values arrive from swarm events or, on replay, are hydrated from
+  // that endpoint. All optional: absent on runs created before the fields existed.
   total_input_tokens?: number;
   total_output_tokens?: number;
   provider?: string | null;
