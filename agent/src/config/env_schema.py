@@ -257,6 +257,15 @@ class DataConfig(_EnvBase):
     vibe_br_cvm_start_year: int = Field(alias="VIBE_BR_CVM_START_YEAR", default=2022)
     # Local time (HH:MM, America/Sao_Paulo) of the daily sync in daemon mode.
     vibe_br_sync_time: str = Field(alias="VIBE_BR_SYNC_TIME", default="21:30")
+    # Opt-in gate for the protected daily-sync system job
+    # (``system:br-data-sync``, scheduler-unification T9), read via
+    # src/br_data/scheduling.py. Deliberately not part of any preset, so
+    # enabling the scheduler never silently seeds a daily network sync;
+    # VIBE_BR_SYNC_TIME above drives the first seed's cron slot.
+    vibe_br_sync_enabled: EnvBool = Field(
+        default=False, alias="VIBE_BR_SYNC_ENABLED",
+        description="Enable the daily br-data sync system job",
+    )
     vibe_trading_data_cache: EnvBool = Field(alias="VIBE_TRADING_DATA_CACHE", default=False)
     vibe_trading_data_cache_root: str = Field(alias="VIBE_TRADING_DATA_CACHE_ROOT", default="")
     aliyun_iqs_api_key: str = Field(alias="ALIYUN_IQS_API_KEY", default="")

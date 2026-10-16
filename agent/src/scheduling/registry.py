@@ -30,6 +30,7 @@ from __future__ import annotations
 import re
 from typing import Awaitable, Callable
 
+from src.br_data.sync import run_sync as _br_data_run_sync
 from src.memory.consolidation import consolidate as _memory_consolidate
 
 #: A registered internal callable: invoked with no arguments, either sync
@@ -132,13 +133,10 @@ def is_registered(name: object) -> bool:
 # ---------------------------------------------------------------------------
 # Production allowlist — the ONLY name→callable surface (module docstring).
 #
-# Scheduler-unification T8/T9 append entries HERE by module edit, e.g.:
-#
-#     from src.memory.lifecycle import consolidate as _consolidate
-#     _INTERNAL_CALLABLES["memory.consolidate"] = _consolidate
-#
-# Rules: literal keys only; values are imported callable objects, never
-# import-path strings; nothing populates this dict from runtime input.
+# Scheduler-unification T8/T9 appended the entries below by module edit; a
+# new entry is ONE top-level import of the callable object plus ONE literal
+# key here. Rules: literal keys only; values are imported callable objects,
+# never import-path strings; nothing populates this dict from runtime input.
 # An internal firing whose key is missing fail-closes into the executor's
 # dispatch-failure path (``failure_kind="dispatch"``).
 # ---------------------------------------------------------------------------
@@ -146,4 +144,8 @@ _INTERNAL_CALLABLES: dict[str, InternalRunnable] = {
     # T8: daily archive-only memory consolidation (opt-in via
     # VT_MEMORY_CONSOLIDATION; honest no-op unless VT_MEMORY_GC is on too).
     "memory.consolidate": _memory_consolidate,
+    # T9: daily Brazilian official-dataset sync (opt-in via
+    # VIBE_BR_SYNC_ENABLED; replaces the retired ``src.br_data`` daemon —
+    # per-source failures are reported in the return value, not raised).
+    "br_data.run_sync": _br_data_run_sync,
 }

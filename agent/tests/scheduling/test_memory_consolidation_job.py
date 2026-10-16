@@ -177,7 +177,9 @@ def test_default_off_seeds_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     monkeypatch.delenv("VT_MEMORY_CONSOLIDATION", raising=False)
     store = _store(tmp_path)
     report = ensure_system_jobs(store, now_fn=lambda: 1000)
-    assert report.skipped_disabled == (JOB_ID,)
+    # T9: the production tuple also holds system:br-data-sync (default-off),
+    # so membership replaces the exact tuple; "nothing written" stays strict.
+    assert JOB_ID in report.skipped_disabled
     assert report.seeded == ()
     assert store.get(JOB_ID) is None
     assert not store.path.exists()
@@ -206,7 +208,7 @@ def test_vt_memory_full_seeds_no_job(tmp_path: Path, monkeypatch: pytest.MonkeyP
     _set_env(monkeypatch, VT_MEMORY="full")
     store = _store(tmp_path)
     report = ensure_system_jobs(store, now_fn=lambda: 1000)
-    assert report.skipped_disabled == (JOB_ID,)
+    assert JOB_ID in report.skipped_disabled  # T9: br-data-sync joins the skipped set
     assert store.get(JOB_ID) is None
 
 

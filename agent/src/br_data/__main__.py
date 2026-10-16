@@ -47,8 +47,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(_status(), indent=2, ensure_ascii=False))
         return 0
     if args.command == "daemon":
-        run_daemon(args.only)
-        return 0
+        return run_daemon(args.only)
     report = run_sync(args.only, cotahist_from=args.cotahist_from, cvm_from=args.cvm_from)
     print(json.dumps(report, indent=2, ensure_ascii=False))
     return 1 if any(isinstance(v, dict) and "error" in v for v in report.values()) else 0
