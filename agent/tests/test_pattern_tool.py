@@ -50,6 +50,26 @@ def test_find_peaks_valleys_ignores_nan_center() -> None:
     assert 3 in pv["peaks"]
 
 
+def test_find_peaks_valleys_reports_a_flat_top_once() -> None:
+    pv = find_peaks_valleys(pd.Series([1, 2, 3, 3, 2, 1.0]), window=2)
+    assert pv["peaks"] == [2]
+
+
+def test_find_peaks_valleys_reports_a_flat_bottom_once() -> None:
+    pv = find_peaks_valleys(pd.Series([3, 2, 1, 1, 2, 3.0]), window=2)
+    assert pv["valleys"] == [2]
+
+
+def test_double_top_ignores_a_single_flat_top() -> None:
+    out = double_top_bottom(pd.Series([1, 2, 3, 3, 2, 1.0]), window=2)
+    assert (out == 0).all()
+
+
+def test_double_top_ignores_a_flat_series() -> None:
+    out = double_top_bottom(pd.Series([5.0] * 30), window=3)
+    assert (out == 0).all()
+
+
 # --------------------------------------------------------------------------
 # trend_line_slope
 # --------------------------------------------------------------------------
