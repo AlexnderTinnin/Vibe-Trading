@@ -182,6 +182,8 @@ def test_redact_payload_keeps_account_ref_provenance() -> None:
         "token_usage",
         "total_input_tokens",
         "total_output_tokens",
+        "cache_read_tokens",
+        "cache_creation_tokens",
         "clob_token_id",
     ],
 )
@@ -193,6 +195,38 @@ def test_is_sensitive_arg_preserves_benign_token_fields(key: str) -> None:
     value = "123456789012345678901234567890" if key == "clob_token_id" else 50000
     assert is_sensitive_arg(key, value=value) is False
     assert is_sensitive_arg(key) is True  # No value evidence means no exemption.
+
+
+@pytest.mark.parametrize("label", ["provider", "estimated", None])
+def test_is_sensitive_arg_preserves_token_source_label(label: str | None) -> None:
+    assert is_sensitive_arg("token_source", value=label) is False
+
+
+@pytest.mark.parametrize(
+    "value", ["[redacted]", "bogus", "", 50000, {"label": "provider"}]
+)
+def test_is_sensitive_arg_fails_closed_on_unexpected_token_source(value: object) -> None:
+    assert is_sensitive_arg("token_source", value=value) is True
+
+
+def test_redact_payload_keeps_token_source_label_in_every_sink() -> None:
+    payload = {
+        "token_usage": {
+            "total_input_tokens": 4200,
+            "total_output_tokens": 1300,
+            "token_source": "provider",
+        }
+    }
+    assert redact_payload(payload) == payload
+    assert redact_payload(payload, sink=RESULT_SINK) == payload
+
+
+def test_redact_payload_redacts_unknown_token_source_label() -> None:
+    out = redact_payload(
+        {"token_usage": {"total_input_tokens": 1, "token_source": "bogus"}},
+        sink=RESULT_SINK,
+    )
+    assert out["token_usage"]["token_source"] == "[redacted]"
 
 
 @pytest.mark.parametrize(

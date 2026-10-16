@@ -125,15 +125,26 @@ _RESULT_SAFE_KEYS = {"content"}
 #: Exact token-metadata names eligible for a VALUE-SHAPED exemption in every
 #: sink. A familiar name alone is never permission to release its value:
 #: counts must be nonnegative integers (or absent), usage may be a mapping of
-#: counts, and CLOB ids must have the public decimal uint256 shape. Unknown
+#: counts, ``token_source`` must be one of :data:`_TOKEN_SOURCE_LABELS` (or
+#: absent), and CLOB ids must have the public decimal uint256 shape. Unknown
 #: shapes fail closed, including unprefixed secrets no text regex can detect.
 _BENIGN_TOKEN_FIELD_KEYS = {
     "token_budget",
     "token_usage",
+    "token_source",
     "total_input_tokens",
     "total_output_tokens",
+    "cache_read_tokens",
+    "cache_creation_tokens",
     "clob_token_id",
 }
+
+#: The closed vocabulary a ``token_source`` provenance label may carry. The
+#: label is a fixed enum, not free text, so any other string fails closed
+#: rather than riding a familiar key name into a trace. ``None`` is the honest
+#: "unlabelled" value and is preserved. Adding a value here is the only way a
+#: new provenance label becomes surfaceable.
+_TOKEN_SOURCE_LABELS = frozenset({"provider", "estimated"})
 
 
 def _fold_key(name: str) -> str:
@@ -318,6 +329,11 @@ def is_sensitive_arg(
                 and len(value) <= 78
                 and int(value) < 2**256
             )
+        if folded == "tokensource":
+            return not (
+                value is None
+                or (isinstance(value, str) and value in _TOKEN_SOURCE_LABELS)
+            )
         if folded == "tokenusage" and isinstance(value, dict):
             return False
         return not (value is None or (type(value) is int and value >= 0))
@@ -391,15 +407,21 @@ def _redact_token_usage(value: Any, *, sink: str) -> Any:
         sink: Sink policy for nested sensitive keys.
 
     Returns:
-        A fresh mapping containing only counts, nulls, and redaction sentinels.
+        A fresh mapping containing only counts, nulls, validated
+        ``token_source`` labels (:data:`_TOKEN_SOURCE_LABELS`), and redaction
+        sentinels.
     """
     if isinstance(value, dict):
-        return {
-            key: _REDACTED
-            if is_sensitive_arg(str(key), sink=sink, value=item)
-            else _redact_token_usage(item, sink=sink)
-            for key, item in value.items()
-        }
+        scrubbed: dict[Any, Any] = {}
+        for key, item in value.items():
+            name = str(key)
+            if is_sensitive_arg(name, sink=sink, value=item):
+                scrubbed[key] = _REDACTED
+            elif _fold_key(name) == "tokensource":
+                scrubbed[key] = item
+            else:
+                scrubbed[key] = _redact_token_usage(item, sink=sink)
+        return scrubbed
     return value if value is None or (type(value) is int and value >= 0) else _REDACTED
 
 
