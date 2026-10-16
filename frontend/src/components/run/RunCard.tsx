@@ -56,7 +56,7 @@ export function KeyValueTable({ data, empty, monospaceValues = false }: { data: 
         <tbody>
           {entries.map(([key, value]) => (
             <tr key={key} className="border-b last:border-0 hover:bg-muted/40">
-              <td className="w-36 break-all py-2 ps-4 pr-4 align-top text-muted-foreground">{key}</td>
+              <td className="w-36 break-words py-2 ps-4 pr-4 align-top text-muted-foreground">{key}</td>
               <td className={cn("py-2 align-top", monospaceValues ? "break-all font-mono text-xs" : "break-words text-right tabular-nums")}>{formatRunCardValue(value)}</td>
             </tr>
           ))}
