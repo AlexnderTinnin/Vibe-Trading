@@ -134,3 +134,16 @@ def test_tool_returns_error_envelopes(kwargs: dict[str, object], expected: str) 
     payload = json.loads(OptionsPayoffTool().execute(**kwargs))
     assert payload["status"] == "error"
     assert expected in payload["error"]
+
+
+def test_overflowing_result_returns_error_envelope_not_exception() -> None:
+    """A finite but extreme multiplier overflows the P&L to inf; it must not raise."""
+    raw = OptionsPayoffTool().execute(
+        legs=[{"option_type": "call", "strike": 100.0, "qty": 10}],
+        entry_spot=100.0,
+        expiry_days=30,
+        multiplier=1e308,
+    )
+    payload = json.loads(raw)
+    assert payload["status"] == "error"
+    assert "non-serializable" in payload["error"]

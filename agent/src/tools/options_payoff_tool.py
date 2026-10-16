@@ -222,7 +222,12 @@ class OptionsPayoffTool(BaseTool):
                 "Scenario P&L is mark-to-market and does not deduct a hypothetical exit commission.",
             ],
         }
-        return json.dumps(payload, ensure_ascii=False, allow_nan=False)
+        try:
+            return json.dumps(payload, ensure_ascii=False, allow_nan=False)
+        except ValueError as exc:
+            # Extreme finite inputs (e.g. a ~1e308 multiplier) overflow to inf
+            # in the results; report that instead of raising out of execute().
+            return _error(f"non-serializable numeric result: {exc}")
 
 
 def _coerce_legs(raw: Any) -> list[OptionLeg]:
