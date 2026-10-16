@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 from collections import defaultdict, deque
+from collections.abc import Mapping
 from typing import Any
 
 import pandas as pd
@@ -629,6 +631,22 @@ def _apply_filter(df: pd.DataFrame, expr: str) -> pd.DataFrame:
     return df
 
 
+def _json_safe(value: Any) -> Any:
+    """Recursively replace non-finite floats with ``None``.
+
+    A journal with no losing round-trip yields an infinite profit/loss ratio,
+    and ``json.dumps`` would emit the non-standard ``Infinity`` literal that
+    strict JSON parsers reject.
+    """
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, Mapping):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
+
+
 def analyze_trade_journal(file_path: str, analysis_type: str = "full", filter_expr: str = "") -> str:
     """Parse a trade journal and return a JSON analysis.
 
@@ -696,7 +714,7 @@ def analyze_trade_journal(file_path: str, analysis_type: str = "full", filter_ex
             "note": "Strategy extraction → backtest bridging lands in Phase 4c.",
         }
 
-    return json.dumps(result, ensure_ascii=False, default=str)
+    return json.dumps(_json_safe(result), ensure_ascii=False, default=str, allow_nan=False)
 
 
 def _format_range(df: pd.DataFrame) -> str:
