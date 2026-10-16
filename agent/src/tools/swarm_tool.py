@@ -705,6 +705,7 @@ def _format_result(
         "token_usage": {
             "total_input_tokens": run.total_input_tokens,
             "total_output_tokens": run.total_output_tokens,
+            "token_source": run.token_source,
         },
     }
     return json.dumps(result, ensure_ascii=False, indent=2)

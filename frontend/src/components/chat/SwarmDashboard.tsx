@@ -8,6 +8,7 @@ import {
   ShieldAlert,
   XCircle,
 } from "lucide-react";
+import { abbreviateNum } from "@/lib/formatters";
 import {
   localizeStatus,
   type ManifestTranslation,
@@ -121,6 +122,35 @@ function agentKey(agent: SwarmAgentStatus): string {
   return agent.taskId || agent.agentId;
 }
 
+function agentTokenText(agent: SwarmAgentStatus): string | null {
+  const input = agent.input_tokens != null && agent.input_tokens > 0
+    ? abbreviateNum(agent.input_tokens)
+    : null;
+  const output = agent.output_tokens != null && agent.output_tokens > 0
+    ? abbreviateNum(agent.output_tokens)
+    : null;
+  if (!input && !output) return null;
+  return `↑${input ?? "—"} ↓${output ?? "—"}`;
+}
+
+function AgentTokens({
+  agent,
+  t,
+  className,
+}: {
+  agent: SwarmAgentStatus;
+  t: ManifestTranslation;
+  className: string;
+}) {
+  const tokens = agentTokenText(agent);
+  if (!tokens) return null;
+  return (
+    <div className={className} title={t("runDetail.llmUsage.tab")}>
+      {tokens}
+    </div>
+  );
+}
+
 function WideAgentRow({
   agent,
   isActive,
@@ -179,6 +209,11 @@ function WideAgentRow({
             {agent.iterations}
           </div>
         )}
+        <AgentTokens
+          agent={agent}
+          className="truncate text-[10px]"
+          t={t}
+        />
       </div>
       <div
         className={[
@@ -232,6 +267,11 @@ function NarrowAgentCard({
           <span className="sr-only">{t("swarmStatus.tool")}</span>
           {agent.tool ? localizeToolName(agent.tool, agent.tool) : "-"}
         </span>
+        <AgentTokens
+          agent={agent}
+          className="shrink-0"
+          t={t}
+        />
         <span className="shrink-0">
           <span className="sr-only">{t("swarmStatus.time")}</span>
           {formatElapsed(agent.elapsed_s, t)}

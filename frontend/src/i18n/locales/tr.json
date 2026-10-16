@@ -1820,7 +1820,10 @@
     "output": "Çıktı",
     "waitingForEvents": "Aracı olayları bekleniyor…",
     "teamStarting": "Ekip hazırlanıyor; ilk güncellemeler birkaç saniye içinde…",
-    "detailsUnavailable": "ayrıntılar alınamıyor"
+    "detailsUnavailable": "ayrıntılar alınamıyor",
+    "tokens": "↑{{input}} ↓{{output}} belirteç",
+    "estimated": "tahmini",
+    "tokenSourceUnlabeled": "kaynak etiketsiz"
   },
   "mandate": {
     "runtimeMandate": "Bağlantı işlem yetkisi",

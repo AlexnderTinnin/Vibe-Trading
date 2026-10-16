@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { memo } from "react";
 import { Clock, Users } from "lucide-react";
 import { SwarmDashboard } from "@/components/chat/SwarmDashboard";
+import { abbreviateNum } from "@/lib/formatters";
 import {
   localizePreset,
   localizeStatus,
@@ -106,6 +107,56 @@ function LayerStepper({
   );
 }
 
+function formatPositive(value: number | undefined): string | null {
+  return value != null && Number.isFinite(value) && value > 0
+    ? abbreviateNum(value)
+    : null;
+}
+
+/**
+ * Run-level token totals with provenance labeling: an explicit "estimated"
+ * badge for heuristic counts, an "unlabeled" badge when the source is unknown
+ * (pre-telemetry runs). Only "provider" — the exact-usage case — renders
+ * without a badge, so a partly-estimated total can never read as billed data.
+ */
+function TokenUsageLine({
+  status,
+  t,
+}: {
+  status: SwarmRunStatus;
+  t: ManifestTranslation;
+}) {
+  const input = formatPositive(status.total_input_tokens);
+  const output = formatPositive(status.total_output_tokens);
+  if (!input && !output) return null;
+
+  const label = t("swarmStatus.tokens", {
+    input: input ?? "—",
+    output: output ?? "—",
+  });
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+      <span
+        className="font-mono"
+        title={`\u2191${String(status.total_input_tokens ?? 0)} \u2193${String(status.total_output_tokens ?? 0)}`}
+      >
+        {label}
+      </span>
+      {status.token_source === "estimated" && (
+        <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+          {t("swarmStatus.estimated")}
+        </span>
+      )}
+      {status.token_source == null && (
+        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium">
+          {t("swarmStatus.tokenSourceUnlabeled")}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function runTone(status: SwarmRunStatus["status"]): string {
   switch (status) {
     case "completed":
@@ -176,6 +227,8 @@ export const SwarmStatusCard = memo(function SwarmStatusCard({ status }: Props) 
             <LayerStepper status={status} t={t} />
           </div>
         )}
+
+        <TokenUsageLine status={status} t={t} />
 
         <SwarmDashboard
           agents={status.agents}

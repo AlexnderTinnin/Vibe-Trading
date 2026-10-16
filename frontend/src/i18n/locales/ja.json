@@ -1849,7 +1849,10 @@
     "output": "出力",
     "waitingForEvents": "エージェントイベントを待機中...",
     "teamStarting": "チームを起動中です。数秒で最初の進捗が届きます…",
-    "detailsUnavailable": "詳細は利用できません"
+    "detailsUnavailable": "詳細は利用できません",
+    "tokens": "↑{{input}} ↓{{output}} トークン",
+    "estimated": "推定",
+    "tokenSourceUnlabeled": "出典未表記"
   },
   "mandate": {
     "runtimeMandate": "コネクタマンデート",

@@ -1849,7 +1849,10 @@
     "output": "المخرجات",
     "waitingForEvents": "بانتظار أحداث الوكيل...",
     "teamStarting": "الفريق قيد التشغيل — أولى التحديثات خلال ثوانٍ…",
-    "detailsUnavailable": "التفاصيل غير متاحة"
+    "detailsUnavailable": "التفاصيل غير متاحة",
+    "tokens": "↑{{input}} ↓{{output}} رموز",
+    "estimated": "تقديرية",
+    "tokenSourceUnlabeled": "مصدر غير موسوم"
   },
   "mandate": {
     "runtimeMandate": "تفويض وقت تشغيل الموصل",

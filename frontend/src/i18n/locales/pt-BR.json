@@ -1854,7 +1854,10 @@
     "output": "Saída",
     "waitingForEvents": "Aguardando eventos do agente...",
     "teamStarting": "A equipe está girando – primeiras atualizações em alguns segundos…",
-    "detailsUnavailable": "detalhes indisponíveis"
+    "detailsUnavailable": "detalhes indisponíveis",
+    "tokens": "↑{{input}} ↓{{output}} tokens",
+    "estimated": "estimados",
+    "tokenSourceUnlabeled": "fonte sem rótulo"
   },
   "mandate": {
     "runtimeMandate": "Mandato de runtime do conector",

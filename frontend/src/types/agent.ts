@@ -24,6 +24,12 @@ export interface SwarmAgentStatus {
   lastText?: string;
   error?: string;
   layer?: number;
+  // Per-task cost telemetry from the swarm.event task_completed payload.
+  // Names mirror the backend event keys; absent when the worker never reported.
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_tokens?: number;
+  cache_creation_tokens?: number;
 }
 
 export interface SwarmRunStatus {

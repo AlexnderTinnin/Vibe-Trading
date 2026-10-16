@@ -1849,7 +1849,10 @@
     "output": "输出",
     "waitingForEvents": "等待智能体事件...",
     "teamStarting": "智能体团队正在启动，稍等几秒就有第一批进展…",
-    "detailsUnavailable": "暂无详细信息"
+    "detailsUnavailable": "暂无详细信息",
+    "tokens": "↑{{input}} ↓{{output}} Token",
+    "estimated": "估算",
+    "tokenSourceUnlabeled": "来源未标注"
   },
   "mandate": {
     "runtimeMandate": "连接器交易授权（mandate）",

@@ -1854,7 +1854,10 @@
     "output": "Output",
     "waitingForEvents": "Menunggu event dari Agent...",
     "teamStarting": "Tim sedang dimulai — update pertama akan muncul dalam beberapa detik…",
-    "detailsUnavailable": "detail tidak tersedia"
+    "detailsUnavailable": "detail tidak tersedia",
+    "tokens": "↑{{input}} ↓{{output}} token",
+    "estimated": "estimasi",
+    "tokenSourceUnlabeled": "sumber tanpa label"
   },
   "mandate": {
     "runtimeMandate": "Mandat runtime connector",

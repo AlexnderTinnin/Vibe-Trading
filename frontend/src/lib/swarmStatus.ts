@@ -18,6 +18,43 @@ function asNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+function asTokenSource(value: unknown): SwarmRunStatus["token_source"] {
+  return value === "provider" || value === "estimated" ? value : undefined;
+}
+
+/**
+ * Conservative provenance merge — mirrors the backend runtime's
+ * `_merge_token_source`: a missing/unknown incoming label never overwrites a
+ * real one, and one "estimated" contribution contaminates the cumulative total.
+ */
+function mergeTokenSource(
+  current: SwarmRunStatus["token_source"],
+  incoming: unknown,
+): SwarmRunStatus["token_source"] {
+  const label = asTokenSource(incoming);
+  if (label === undefined) return current;
+  if (current == null || label === "estimated") return label;
+  return current;
+}
+
+/**
+ * Recompute run totals as the sum over agents. Idempotent under replayed
+ * events because each task_completed re-sets (not accumulates) its agent's
+ * own values. Returns undefined — never a fabricated 0 — when no agent
+ * reported a given direction.
+ */
+function recomputeRunTokenTotals(status: SwarmRunStatus): SwarmRunStatus {
+  const sum = (pick: (agent: SwarmAgentStatus) => number | undefined) => {
+    const values = status.agents.map(pick).filter((v): v is number => v != null);
+    return values.length > 0 ? values.reduce((acc, v) => acc + v, 0) : undefined;
+  };
+  return {
+    ...status,
+    total_input_tokens: sum((agent) => agent.input_tokens),
+    total_output_tokens: sum((agent) => agent.output_tokens),
+  };
+}
+
 function timestampMs(value: unknown): number | undefined {
   if (typeof value !== "string") return undefined;
   const parsed = new Date(value).getTime();
@@ -243,7 +280,7 @@ export function applySwarmEvent(current: SwarmRunStatus, rawEvent: unknown): Swa
   }
 
   if (type === "task_completed" || type === "worker_completed") {
-    return updateAgent(current, { agentId, taskId }, (agent) => ({
+    const withTaskTokens = updateAgent(current, { agentId, taskId }, (agent) => ({
       ...agent,
       status: "done",
       elapsed_s: agent.startedAt && eventTime
@@ -251,7 +288,15 @@ export function applySwarmEvent(current: SwarmRunStatus, rawEvent: unknown): Swa
         : agent.elapsed_s,
       iterations: asNumber(data.iterations) ?? agent.iterations,
       lastText: asString(data.summary) || agent.lastText,
+      input_tokens: asNumber(data.input_tokens) ?? agent.input_tokens,
+      output_tokens: asNumber(data.output_tokens) ?? agent.output_tokens,
+      cache_read_tokens: asNumber(data.cache_read_tokens) ?? agent.cache_read_tokens,
+      cache_creation_tokens: asNumber(data.cache_creation_tokens) ?? agent.cache_creation_tokens,
     }));
+    return recomputeRunTokenTotals({
+      ...withTaskTokens,
+      token_source: mergeTokenSource(current.token_source, data.token_source),
+    });
   }
 
   if (["task_failed", "worker_failed", "worker_timeout", "worker_incomplete"].includes(type)) {
@@ -307,6 +352,7 @@ export function buildSwarmStatusFromToolResultPreview(preview: string): SwarmRun
     if (!runId) return null;
     const times = serverRunTimes(parsed);
     const status = normalizeRunStatus(parsed.status);
+    const usage = asRecord(parsed.token_usage);
     return {
       runId,
       preset: asString(parsed.preset) || "swarm",
@@ -317,6 +363,9 @@ export function buildSwarmStatusFromToolResultPreview(preview: string): SwarmRun
       completedAt: ["completed", "failed", "cancelled"].includes(status)
         ? times.completedAt
         : undefined,
+      total_input_tokens: asNumber(usage.total_input_tokens),
+      total_output_tokens: asNumber(usage.total_output_tokens),
+      token_source: asTokenSource(usage.token_source),
       agents: [],
     };
   } catch {

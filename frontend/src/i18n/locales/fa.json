@@ -1854,7 +1854,10 @@
     "output": "خروجی",
     "waitingForEvents": "در انتظار رویدادهای ایجنت…",
     "teamStarting": "تیم در حال آماده‌سازی است — اولین به‌روزرسانی‌ها در چند ثانیه…",
-    "detailsUnavailable": "جزئیات در دسترس نیست"
+    "detailsUnavailable": "جزئیات در دسترس نیست",
+    "tokens": "↑{{input}} ↓{{output}} توکن",
+    "estimated": "تخمینی",
+    "tokenSourceUnlabeled": "منبع بدون برچسب"
   },
   "mandate": {
     "runtimeMandate": "ماندیت ران‌تایم کانکتور",

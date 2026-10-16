@@ -1854,7 +1854,10 @@
     "output": "Output",
     "waitingForEvents": "Waiting for agent events...",
     "teamStarting": "The team is spinning up — first updates in a few seconds…",
-    "detailsUnavailable": "details unavailable"
+    "detailsUnavailable": "details unavailable",
+    "tokens": "↑{{input}} ↓{{output}} tokens",
+    "estimated": "estimated",
+    "tokenSourceUnlabeled": "source unlabeled"
   },
   "mandate": {
     "runtimeMandate": "Connector runtime mandate",
