@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import sys
 import time
 import uuid
@@ -21,13 +20,7 @@ from src.scheduled_research.models import (
 )
 from src.scheduled_research.playbooks import get_playbook
 from src.scheduled_research.store import ScheduledResearchJobStore
-from src.scheduling.system_jobs import is_system_job_id
-
-# Mirrors ``_SAFE_JOB_ID_RE`` in src/api/scheduled_routes.py (and the
-# ``_SAFE_PATH_PARAM_RE`` the DELETE/PATCH routes enforce on the job id).
-# A draft id outside this rule — including every ``system:``-prefixed id —
-# could be persisted but never addressed, deleted or edited through the API.
-_SAFE_JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+from src.scheduling.system_jobs import JOB_ID_RULE_MESSAGE, is_safe_job_id, is_system_job_id
 
 
 def public_job(job: ScheduledResearchJob) -> dict[str, Any]:
@@ -155,10 +148,8 @@ def build_job_from_draft(
                 f"job id {draft_id!r} is reserved for protected system jobs; "
                 "the 'system:' prefix cannot be authored"
             )
-        if not _SAFE_JOB_ID_RE.fullmatch(draft_id):
-            raise ValueError(
-                "job id must be 1-128 characters of letters, digits, '_' or '-'"
-            )
+        if not is_safe_job_id(draft_id):
+            raise ValueError(JOB_ID_RULE_MESSAGE)
     title = str(draft.get("title") or "").strip()
     if not title:
         raise ValueError("title is required")

@@ -162,9 +162,18 @@ def test_production_spec_shape() -> None:
     assert spec.enabled_predicate is consolidation_enabled
 
 
-def test_registry_production_entry_resolves_to_consolidate() -> None:
+def test_registry_production_entry_delegates_to_consolidate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     assert is_registered("memory.consolidate") is True
-    assert resolve_internal("memory.consolidate") is consolidate
+    # The registered entry is a literal wrapper with a deferred domain import:
+    # calling it must delegate to the real consolidation entry point.
+    calls = []
+    monkeypatch.setattr(
+        "src.memory.consolidation.consolidate", lambda *a, **k: calls.append("fired")
+    )
+    resolve_internal("memory.consolidate")()
+    assert calls == ["fired"]
 
 
 # ---------------------------------------------------------------------------

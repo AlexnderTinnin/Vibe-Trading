@@ -1,7 +1,7 @@
-"""Scheduled Brazilian dataset sync (scheduler-unification T9).
+"""Scheduled Brazilian dataset sync (scheduler unification).
 
 Thin domain surface consumed by the scheduler, mirroring
-:mod:`src.memory.consolidation` (T8): it adds NO sync semantics of its own —
+:mod:`src.memory.consolidation`: it adds NO sync semantics of its own —
 every behavior lives in :mod:`src.br_data.sync` and this module only decides
 *whether* and *when* the protected system job runs:
 
@@ -11,21 +11,25 @@ every behavior lives in :mod:`src.br_data.sync` and this module only decides
   :func:`src.config.accessor.get_env_config` — the sanctioned config path.
   The flag defaults to ``False`` and belongs to no preset, so turning the
   scheduler on never silently seeds a daily network-sync job.
-* :func:`daily_cron_from_env` derives the spec's 5-field cron schedule from
-  the pre-existing ``VIBE_BR_SYNC_TIME`` (``DataConfig.vibe_br_sync_time``,
-  "HH:MM" on the ``sync.TZ`` São Paulo wall clock; default "21:30" →
-  ``"30 21 * * *"``), parsed by ``sync._next_run`` — the "HH:MM"→cron-field
-  parser repurposed from the retired daemon. It NEVER raises: an invalid
+* :func:`daily_cron_from_env` is the spec's ``schedule_fn``: it derives the
+  5-field cron schedule from the pre-existing ``VIBE_BR_SYNC_TIME``
+  (``DataConfig.vibe_br_sync_time``, "HH:MM" on the ``sync.TZ`` São Paulo
+  wall clock; default "21:30" → ``"30 21 * * *"``), parsed by
+  ``sync._next_run`` — the "HH:MM"→cron-field parser repurposed from the
+  retired daemon. It is evaluated lazily inside ``ensure_system_jobs`` (at
+  lifespan startup, after dotenv load) — never at import time, which would
+  freeze the value before ``.env`` is read. It NEVER raises: an invalid
   value ("25:99" / "" / "abc") falls back to :data:`DEFAULT_DAILY_CRON` with
-  a warning (plan T9, pinned choice), because it is evaluated at
-  ``system_jobs`` module-build time and an import-time crash would take the
-  whole API server down over one typo'd env var.
+  a warning, so one typo'd env var can never take the API server down.
 
 Seed-time-only contract: ``ensure_system_jobs`` seeds a row once and a VALID
 edited schedule/timezone on that row is trusted afterwards (the system_jobs
-(β) boundary), so ``VIBE_BR_SYNC_TIME`` drives the FIRST seed only — later
-changes need a PATCH of the stored row (or deleting it and restarting), not
-just an env edit.
+local-trust boundary), so ``VIBE_BR_SYNC_TIME`` drives the FIRST seed only.
+The row is a protected system job — REST/CLI PATCH and DELETE refuse it — so
+retiming an existing seed means editing the ``schedule`` field of the stored
+row in the store JSON file (a valid edited schedule is trusted at the next
+startup), or deleting the row from that file and restarting to re-seed from
+the env value.
 
 The runnable itself is ``sync.run_sync``, registered under the literal key
 ``"br_data.run_sync"`` in :mod:`src.scheduling.registry`. It is SYNC by
@@ -64,10 +68,10 @@ def sync_job_enabled() -> bool:
 def daily_cron_from_env() -> str:
     """Derive the daily cron (``"M H * * *"``) from ``VIBE_BR_SYNC_TIME``.
 
-    Evaluated at ``system_jobs`` module-build time, so it must NEVER raise:
-    any value ``sync._next_run`` cannot parse as an in-range "HH:MM" falls
-    back to :data:`DEFAULT_DAILY_CRON` with a warning (plan T9 pinned
-    choice).
+    Evaluated lazily at ``ensure_system_jobs`` time (the spec's
+    ``schedule_fn``), so it must NEVER raise: any value ``sync._next_run``
+    cannot parse as an in-range "HH:MM" falls back to
+    :data:`DEFAULT_DAILY_CRON` with a warning.
 
     Returns:
         A 5-field cron string, e.g. ``"30 21 * * *"`` for the default

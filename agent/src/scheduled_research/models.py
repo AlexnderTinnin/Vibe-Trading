@@ -27,6 +27,7 @@ from src.scheduling.triggers import (
     validate_timezone as validate_timezone,
     validate_timezone_shape as validate_timezone_shape,
 )
+from src.scheduling.types import ExecutorKind, is_executor_kind
 
 logger = logging.getLogger(__name__)
 
@@ -245,7 +246,7 @@ class ScheduledResearchJob:
     # quarantines the whole file as ``.corrupt-<ts>`` (data preserved, not
     # loaded). Downgrading to a version before scheduler-unification requires
     # removing system job rows first.
-    executor_kind: str = "prompt"
+    executor_kind: ExecutorKind = "prompt"
     internal_callable: Optional[str] = None
     end_at: Optional[int] = None
     next_run_at: int = field(default_factory=lambda: int(time.time() * 1000))
@@ -383,7 +384,7 @@ class ScheduledResearchJob:
         # dispatching the (possibly empty) prompt.
         executor_kind = data.get("executor_kind", "prompt")
         internal_callable = data.get("internal_callable")
-        if executor_kind not in {"prompt", "internal"}:
+        if not is_executor_kind(executor_kind):
             raise ValueError("'executor_kind' must be 'prompt' or 'internal'")
         if internal_callable is not None and not isinstance(internal_callable, str):
             raise TypeError("'internal_callable' must be a string or null")

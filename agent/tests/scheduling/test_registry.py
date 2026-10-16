@@ -213,6 +213,28 @@ def test_registry_source_has_no_dynamic_resolution_tokens() -> None:
         assert token not in source, f"registry.py must never contain {token!r}"
 
 
+def test_registry_has_no_top_level_domain_imports() -> None:
+    """The generic scheduling package must not eagerly pull in domain stacks.
+
+    Mechanical pin of the deferred-import contract: every top-level import in
+    registry.py is stdlib/typing — the ``src.br_data`` / ``src.memory``
+    imports live INSIDE the literal wrapper bodies and run at first firing,
+    not at kernel-package import.
+    """
+    import ast
+
+    tree = ast.parse(Path(registry.__file__).read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                assert not alias.name.startswith("src."), f"top-level import {alias.name!r}"
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert module.startswith("src.scheduling") or not module.startswith("src."), (
+                f"top-level domain import {module!r}"
+            )
+
+
 def test_registry_source_has_no_shell_tokens() -> None:
     source = Path(registry.__file__).read_text(encoding="utf-8")
     for token in ("subprocess", "os.system", "shell=True"):
@@ -224,4 +246,4 @@ def test_register_internal_is_documented_module_and_test_only() -> None:
     # surface — production entries are explicit dict edits at module bottom.
     assert register_internal.__doc__ is not None
     assert "MODULE/TEST-ONLY" in register_internal.__doc__
-    assert "T8/T9" in register_internal.__doc__
+    assert "module edit" in register_internal.__doc__

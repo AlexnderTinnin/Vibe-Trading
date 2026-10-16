@@ -478,14 +478,14 @@ def test_stop_is_bounded_and_leaves_inflight_job_running(tmp_path: Path, clean_r
 
 
 def test_production_resolver_resolves_registered_and_rejects_tampered(clean_registry) -> None:
-    from src.api.scheduled_routes import _resolve_scheduled_internal_callable
+    from src.scheduled_research.internal_dispatch import resolve_scheduled_internal_callable
 
     register_internal("test.prod", lambda: None)
     job = _internal_job("j", callable_name="test.prod")
-    assert resolve_internal("test.prod") is _resolve_scheduled_internal_callable(job)
+    assert resolve_internal("test.prod") is resolve_scheduled_internal_callable(job)
     tampered = _internal_job("j", callable_name="os.system")
     with pytest.raises(InternalCallableError):
-        _resolve_scheduled_internal_callable(tampered)
+        resolve_scheduled_internal_callable(tampered)
 
 
 def test_production_singleton_routes_internal_jobs_through_registry(

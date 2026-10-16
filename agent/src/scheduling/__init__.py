@@ -7,23 +7,21 @@ in the repo can adopt:
   (interval-ms + 5-field cron + IANA timezones with the DST gap-skip /
   fold=0 policy) and next-run math, plus the ``once`` trigger kind absorbed
   from the live runtime scheduler (provided for future adoption; not wired).
-* :mod:`src.scheduling.types` — the shared vocabulary: ``ExecutorKind``,
-  the minimal ``JobLike`` protocol, ``TriggerSpec`` and the kernel callback
-  type aliases.
+* :mod:`src.scheduling.types` — the shared vocabulary: ``ExecutorKind`` with
+  its closed runtime domain, and the kernel callback type aliases.
 * :mod:`src.scheduling.kernel` — ``SchedulerKernel``: the generic tick loop
   with ``asyncio.Event`` wakeup, bounded exponential backoff, an injectable
-  clock and callback seams for domain logic (consumed by the scheduled
-  research executor since T4).
+  clock and the ``on_tick`` seam for domain logic (consumed by the scheduled
+  research executor).
 * :mod:`src.scheduling.registry` — the internal-callable allowlist: an
   explicit module-level dict mapping literal registry keys to zero-arg
   sync/async callables, with exact-key resolution only (no dynamic import,
-  no string parsing, no shell).
-
+  no string parsing, no shell) and deferred domain imports.
 * :mod:`src.scheduling.system_jobs` — protected system jobs: the
   ``SystemJobSpec`` surface (``system:`` id prefix, ``source_type="system"``,
   ``executor_kind="internal"``, registry-key callable, per-spec enablement
   predicate) and ``ensure_system_jobs`` — the idempotent startup
-  seed/repair pass (tamper correction, (α) status reset, (β) schedule-trust
+  seed/repair pass (tamper correction, status reset, schedule-trust
   boundary, repair-replay, flag-off halt) called from the lifespan before
   the executor starts.
 """
@@ -63,21 +61,14 @@ from src.scheduling.triggers import (
 )
 from src.scheduling.types import (
     EXECUTOR_KINDS,
-    AdvanceFn,
     ExecutorKind,
-    IsDueFn,
-    JobErrorFn,
-    JobLike,
     NowFn,
     OnTickFn,
-    TriggerSpec,
     is_executor_kind,
 )
 
 __all__ = [
     "CRON_BOUNDS",
-    "EnabledPredicate",
-    "EnsureSystemJobsReport",
     "CRON_SEARCH_LIMIT_DAYS",
     "DEFAULT_MAX_CONSECUTIVE_FAILURES",
     "DEFAULT_RETRY_BASE_DELAY_MS",
@@ -87,24 +78,14 @@ __all__ = [
     "DEFAULT_TRIGGER_INTERVAL_MS",
     "EXECUTOR_KINDS",
     "ONCE_SPEC",
-    "AdvanceFn",
     "ExecutorKind",
     "InternalCallableError",
     "InternalRunnable",
-    "IsDueFn",
-    "JobErrorFn",
-    "JobLike",
     "NowFn",
     "OnTickFn",
-    "SYSTEM_JOB_ID_PREFIX",
     "SchedulerKernel",
-    "SpecGate",
-    "SystemJobSpec",
-    "TriggerSpec",
     "day_matches",
-    "ensure_system_jobs",
     "is_executor_kind",
-    "is_system_job_id",
     "is_interval_schedule",
     "is_registered",
     "list_internal",
@@ -115,11 +96,22 @@ __all__ = [
     "parse_cron_field",
     "register_internal",
     "resolve_internal",
-    "system_job_specs",
     "trigger_interval_ms",
     "validate_schedule",
     "validate_timezone",
     "validate_timezone_shape",
+    # Lazily resolved (PEP 562) — see the comment below.
+    "EnabledPredicate",
+    "EnsureSystemJobsReport",
+    "JOB_ID_RULE_MESSAGE",
+    "SAFE_JOB_ID_RE",
+    "SYSTEM_JOB_ID_PREFIX",
+    "SpecGate",
+    "SystemJobSpec",
+    "ensure_system_jobs",
+    "is_safe_job_id",
+    "is_system_job_id",
+    "system_job_specs",
 ]
 
 # --- lazy re-export: src.scheduling.system_jobs (PEP 562) -------------------
@@ -132,12 +124,15 @@ __all__ = [
 # while breaking the import-time cycle in every import order.
 _SYSTEM_JOBS_EXPORTS = frozenset(
     {
+        "JOB_ID_RULE_MESSAGE",
+        "SAFE_JOB_ID_RE",
         "SYSTEM_JOB_ID_PREFIX",
         "EnabledPredicate",
         "EnsureSystemJobsReport",
         "SpecGate",
         "SystemJobSpec",
         "ensure_system_jobs",
+        "is_safe_job_id",
         "is_system_job_id",
         "system_job_specs",
     }
@@ -151,4 +146,3 @@ def __getattr__(name: str):
 
         return getattr(system_jobs, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-

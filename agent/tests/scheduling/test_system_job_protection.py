@@ -11,7 +11,7 @@ modify, create or replace one. The six entries audited here:
    defense in depth for non-REST callers.
 2. ``PATCH /scheduled-runs/{job_id}`` — same 400-before-handler reality.
 3. ``propose_create`` / ``build_job_from_draft`` — a draft id that is
-   ``system:``-prefixed or outside ``_SAFE_JOB_ID_RE`` is refused at propose.
+   ``system:``-prefixed or outside ``SAFE_JOB_ID_RE`` is refused at propose.
 4. ``commit_proposal`` — the AUTHORITATIVE guard: proposal files live under
    ``<runtime root>/scheduled_research/proposals/`` and can be hand-written
    or edited between propose and commit, so commit re-reads the store and
@@ -168,11 +168,22 @@ def _run_cli(argv: List[str]) -> int:
 
 def test_safe_job_id_regex_rejects_system_ids() -> None:
     from src.api.helpers import _SAFE_PATH_PARAM_RE
+    from src.scheduling.system_jobs import SAFE_JOB_ID_RE, is_safe_job_id
 
-    assert scheduled_routes._SAFE_JOB_ID_RE.match(SYSTEM_ID) is None
-    assert scheduled_routes._SAFE_JOB_ID_RE.fullmatch(SYSTEM_ID) is None
+    assert SAFE_JOB_ID_RE.match(SYSTEM_ID) is None
+    assert SAFE_JOB_ID_RE.fullmatch(SYSTEM_ID) is None
+    assert is_safe_job_id(SYSTEM_ID) is False
     assert _SAFE_PATH_PARAM_RE.match(SYSTEM_ID) is None
     assert is_system_job_id(SYSTEM_ID) is True
+
+
+def test_shared_job_id_rule_cannot_drift_from_host_path_param_rule() -> None:
+    # The structural anti-forgery guarantee holds only while BOTH grammars
+    # reject ':' — pin them to the same pattern so a one-sided edit fails.
+    from src.api.helpers import _SAFE_PATH_PARAM_RE
+    from src.scheduling.system_jobs import SAFE_JOB_ID_RE
+
+    assert SAFE_JOB_ID_RE.pattern == _SAFE_PATH_PARAM_RE.pattern
 
 
 def test_route_registration_order_keeps_static_paths_before_job_id() -> None:

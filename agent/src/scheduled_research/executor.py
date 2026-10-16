@@ -241,7 +241,6 @@ class ScheduledResearchExecutor:
             retry_base_delay_ms=self._retry_base_delay_ms,
             retry_max_delay_ms=self._retry_max_delay_ms,
             on_tick=self._on_kernel_tick,
-            is_due_fn=is_due,
             task_name="scheduled-research-executor",
         )
         self._internal = InternalRunSupervisor(

@@ -1,7 +1,7 @@
 """Fire-and-forget supervision for registry-backed internal jobs.
 
-Extracted beside the scheduled-research executor (scheduler unification T5)
-so ``executor.py`` stays under its 800-line cap; the semantics ARE the
+Extracted beside the scheduled-research executor (scheduler unification) so
+``executor.py`` stays under its 800-line cap; the semantics ARE the
 executor's internal-dispatch contract:
 
 * Resolve synchronously through the injected dispatcher — in production an
@@ -29,6 +29,15 @@ executor's internal-dispatch contract:
   ``recover_stale_running`` resets it to PENDING for a fresh firing.
   Internal callables must therefore be safe to re-run. ``stop()`` never
   waits for those threads, so it stays bounded.
+* HONEST process-exit caveat: ``asyncio.to_thread`` runs on the loop's
+  default ``ThreadPoolExecutor``, whose non-daemon worker threads are joined
+  during interpreter finalization. A sync internal run still in flight (an
+  hours-long ``br_data`` sync, say) can therefore stall graceful process
+  exit past ``stop()`` until the orchestrator's kill timeout (compose's
+  ``stop_grace_period``) escalates to SIGKILL. That is safe by the contract
+  above — the job stays RUNNING for stale-recovery, store writes are atomic
+  (tmp + ``os.replace``) and the sync's SQLite writes are crash-safe — but
+  "bounded stop" covers ``stop()`` itself, not interpreter finalization.
 """
 
 from __future__ import annotations
@@ -49,6 +58,23 @@ FinishRunFn = Callable[[ScheduledResearchJob, Optional[Exception], int], None]
 #: Resolves one internal job to its registered callable; raises on any
 #: unregistered/tampered name (allowlist lookup, never string parsing).
 InternalDispatchCallback = Callable[[ScheduledResearchJob], InternalRunnable]
+
+
+def resolve_scheduled_internal_callable(job: ScheduledResearchJob) -> InternalRunnable:
+    """Resolve one internal job's callable through the registry allowlist.
+
+    Production ``internal_dispatcher`` for the singleton executor (wired in
+    ``src/api/scheduled_routes.py``): a pure exact-key lookup in
+    :mod:`src.scheduling.registry` — no import paths, no string parsing, no
+    shell. Any failure (unregistered or tampered ``internal_callable`` name,
+    malformed shape) raises and routes the firing into the executor's
+    dispatch-failure path. The supervisor runs the returned zero-arg callable
+    off the tick loop (``asyncio.to_thread`` when sync, direct await when
+    async) in a fire-and-forget background task.
+    """
+    from src.scheduling.registry import resolve_internal
+
+    return resolve_internal(job.internal_callable)
 
 
 class InternalRunSupervisor:

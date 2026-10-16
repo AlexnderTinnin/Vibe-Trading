@@ -1,8 +1,8 @@
 """Allowlist registry for internal scheduled callables (scheduler unification).
 
 The ONLY name→callable mapping available to ``executor_kind == "internal"``
-jobs. Security contract (plan D4, user-confirmed — this is the safety
-bedrock, "no arbitrary shell, no dynamic import"):
+jobs. Security contract — this is the safety bedrock, "no arbitrary shell,
+no dynamic import":
 
 * Keys are literal strings registered in THIS module. The production surface
   is the explicit ``_INTERNAL_CALLABLES`` dict at the bottom, populated by
@@ -23,15 +23,21 @@ bedrock, "no arbitrary shell, no dynamic import"):
   :mod:`src.scheduled_research.internal_dispatch`): sync callables are
   offloaded through ``asyncio.to_thread``, async callables are awaited
   directly, always in a background task — never on the serialized tick loop.
+* Domain imports are DEFERRED: each production entry is a literal zero-arg
+  wrapper whose body imports the domain callable at first firing. This
+  module is imported by the generic :mod:`src.scheduling` package (and,
+  through it, by ``scheduled_research.models``), so a top-level domain
+  import here would drag the whole ``br_data``/``memory`` stack into every
+  process that merely touches the scheduling vocabulary — and invert the
+  dependency direction of the generic kernel. The wrappers keep the dict
+  literal-keyed and exact-match-only; the deferred import is a fixed module
+  statement inside a function body, never a name-driven resolution.
 """
 
 from __future__ import annotations
 
 import re
 from typing import Awaitable, Callable
-
-from src.br_data.sync import run_sync as _br_data_run_sync
-from src.memory.consolidation import consolidate as _memory_consolidate
 
 #: A registered internal callable: invoked with no arguments, either sync
 #: (return value discarded) or async. ``...`` tolerates defaulted/optional
@@ -59,7 +65,7 @@ class InternalCallableError(KeyError):
 
 def _check_name(name: object) -> str:
     """Return *name* if it has the dotted-identifier shape, else reject it."""
-    if not isinstance(name, str) or not _VALID_NAME_RE.match(name):
+    if not isinstance(name, str) or not _VALID_NAME_RE.fullmatch(name):
         raise InternalCallableError(
             f"internal callable name {name!r} is rejected: only dotted identifiers "
             "(letters, digits, '_', single '.' separators) are allowed"
@@ -71,9 +77,9 @@ def register_internal(name: str, fn: InternalRunnable, *, replace: bool = False)
     """Register *fn* under the literal key *name*.
 
     MODULE/TEST-ONLY: the production surface is the explicit dict entries at
-    the bottom of this module, added by module edit (scheduler-unification
-    T8/T9). No runtime input may reach this function — the invariant is
-    documented here and guarded by ``test_registry.py``.
+    the bottom of this module, added by module edit. No runtime input may
+    reach this function — the invariant is documented here and guarded by
+    ``test_registry.py``.
 
     Args:
         name: Literal registry key (dotted-identifier shape).
@@ -127,25 +133,52 @@ def list_internal() -> tuple[str, ...]:
 
 def is_registered(name: object) -> bool:
     """Whether *name* is a well-formed AND registered key. Never raises."""
-    return isinstance(name, str) and bool(_VALID_NAME_RE.match(name)) and name in _INTERNAL_CALLABLES
+    return isinstance(name, str) and bool(_VALID_NAME_RE.fullmatch(name)) and name in _INTERNAL_CALLABLES
+
+
+# ---------------------------------------------------------------------------
+# Production entries — literal zero-arg wrappers with a deferred domain
+# import inside the function body (module docstring, "Domain imports are
+# DEFERRED"). The wrapper is the registered callable object; the import it
+# performs is a fixed statement, never derived from the registry key.
+# ---------------------------------------------------------------------------
+
+
+def _memory_consolidate() -> None:
+    """Run one scheduled memory-consolidation pass (deferred domain import).
+
+    Backs the ``memory.consolidate`` key: daily archive-only consolidation,
+    opt-in via ``VT_MEMORY_CONSOLIDATION`` and an honest no-op unless
+    ``VT_MEMORY_GC`` is on too (see :mod:`src.memory.consolidation`).
+    """
+    from src.memory.consolidation import consolidate
+
+    consolidate()
+
+
+def _br_data_run_sync() -> None:
+    """Run one Brazilian official-dataset sync (deferred domain import).
+
+    Backs the ``br_data.run_sync`` key: daily sync, opt-in via
+    ``VIBE_BR_SYNC_ENABLED``; replaces the retired ``src.br_data`` daemon —
+    per-source failures are reported in ``run_sync``'s return value, not
+    raised (see :mod:`src.br_data.scheduling`).
+    """
+    from src.br_data.sync import run_sync
+
+    run_sync()
 
 
 # ---------------------------------------------------------------------------
 # Production allowlist — the ONLY name→callable surface (module docstring).
 #
-# Scheduler-unification T8/T9 appended the entries below by module edit; a
-# new entry is ONE top-level import of the callable object plus ONE literal
-# key here. Rules: literal keys only; values are imported callable objects,
+# A new entry is ONE literal wrapper function above plus ONE literal key
+# here. Rules: literal keys only; values are the wrapper callable objects,
 # never import-path strings; nothing populates this dict from runtime input.
 # An internal firing whose key is missing fail-closes into the executor's
 # dispatch-failure path (``failure_kind="dispatch"``).
 # ---------------------------------------------------------------------------
 _INTERNAL_CALLABLES: dict[str, InternalRunnable] = {
-    # T8: daily archive-only memory consolidation (opt-in via
-    # VT_MEMORY_CONSOLIDATION; honest no-op unless VT_MEMORY_GC is on too).
     "memory.consolidate": _memory_consolidate,
-    # T9: daily Brazilian official-dataset sync (opt-in via
-    # VIBE_BR_SYNC_ENABLED; replaces the retired ``src.br_data`` daemon —
-    # per-source failures are reported in the return value, not raised).
     "br_data.run_sync": _br_data_run_sync,
 }

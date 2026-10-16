@@ -6,7 +6,6 @@ Mounted by ``agent/api_server.py`` via ``register_scheduled_routes(app, ...)``.
 from __future__ import annotations
 
 import logging
-import re
 import sys as _sys
 import time
 import uuid
@@ -31,11 +30,6 @@ logger = logging.getLogger(__name__)
 
 _SCHEDULED_RESEARCH_SCHEDULER_ENV = "VIBE_TRADING_ENABLE_SCHEDULER"
 _SCHEDULED_RESEARCH_TRUE_VALUES = {"1", "true", "yes", "on"}
-
-# Mirrors ``_SAFE_PATH_PARAM_RE`` in src/api/helpers.py, which the delete route
-# enforces on the job id. Kept in sync so a job can never be created under an
-# id the delete route refuses.
-_SAFE_JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
 
 # ---------------------------------------------------------------------------
@@ -88,22 +82,6 @@ async def _dispatch_scheduled_research_job(job) -> Optional[str]:
     )
     await svc.send_message(session.session_id, job.prompt)
     return session.session_id
-
-
-def _resolve_scheduled_internal_callable(job: "ScheduledResearchJob"):
-    """Resolve one internal job's callable through the registry allowlist.
-
-    Production ``internal_dispatcher`` for the singleton executor: a pure
-    exact-key lookup in :mod:`src.scheduling.registry` — no import paths, no
-    string parsing, no shell. Any failure (unregistered or tampered
-    ``internal_callable`` name, malformed shape) raises and routes the
-    firing into the executor's dispatch-failure path. The executor runs the
-    returned zero-arg callable off the tick loop (``asyncio.to_thread`` when
-    sync, direct await when async) in a fire-and-forget background task.
-    """
-    from src.scheduling.registry import resolve_internal
-
-    return resolve_internal(job.internal_callable)
 
 
 def _read_scheduled_briefing(session_id: str) -> Optional[tuple[str, str]]:
@@ -179,6 +157,7 @@ def _get_scheduled_research_executor():
     global _scheduled_research_executor
     if _scheduled_research_executor is None:
         from src.scheduled_research.executor import ScheduledResearchExecutor
+        from src.scheduled_research.internal_dispatch import resolve_scheduled_internal_callable
 
         _scheduled_research_executor = ScheduledResearchExecutor(
             _get_scheduled_research_store(),
@@ -186,7 +165,7 @@ def _get_scheduled_research_executor():
             enabled=_scheduled_research_scheduler_enabled(),
             briefing_reader=_read_scheduled_briefing,
             channel_sender=_send_scheduled_briefing,
-            internal_dispatcher=_resolve_scheduled_internal_callable,
+            internal_dispatcher=resolve_scheduled_internal_callable,
         )
     return _scheduled_research_executor
 
@@ -194,20 +173,10 @@ def _get_scheduled_research_executor():
 def _start_scheduled_research_executor() -> None:
     """Start scheduled research execution when explicitly enabled.
 
-    Single-writer invariant (scheduler-unification T12): the FastAPI lifespan
-    (``api_server._run_startup_preflight``) is the SOLE owner of this call —
-    the executor's kernel task is started exactly once per process, and the
-    store behind it has exactly one writer. Multi-process concurrent writes
-    are not supported (see the ``src/scheduled_research/store.py`` module
-    docstring); a duplicate ``start()`` in the same process is a no-op.
-
-    Startup order fulfills the system-job timing contract (i)
-    (:mod:`src.scheduling.system_jobs`): ``ensure_system_jobs`` reconciles
-    every enabled protected system job into the store BEFORE ``start()``
-    creates the kernel task, so the first tick can never observe a store
-    missing its system rows. When the master flag is off this early-returns
-    before any write: CRUD keeps working, nothing executes, and no system
-    row is seeded or store file created.
+    Single-writer invariant: the FastAPI lifespan is the SOLE owner of this
+    call (``src/scheduled_research/store.py``); a duplicate ``start()`` is a
+    no-op. ``ensure_system_jobs`` runs BEFORE ``start()`` (timing contract in
+    :mod:`src.scheduling.system_jobs`); master flag off early-returns.
     """
     if not _scheduled_research_scheduler_enabled():
         return
@@ -516,6 +485,8 @@ def register_scheduled_routes(
 
         The job is persisted immediately. No execution is triggered.
         """
+        from src.api.scheduled_guards import ensure_authorable_job_id
+        from src.scheduled_research.executor import next_due
         from src.scheduled_research.models import (
             JobStatus,
             ScheduledResearchJob,
@@ -525,19 +496,7 @@ def register_scheduled_routes(
             validate_timezone_shape,
         )
 
-        from src.scheduled_research.executor import next_due
-
-        # A job whose id the delete route rejects can never be cancelled
-        # through the API, so the id is held to that same rule at creation
-        # rather than at first attempted delete.
-        if request.id is not None and not _SAFE_JOB_ID_RE.fullmatch(request.id):
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "job id must be 1-128 characters of letters, digits, "
-                    "'_' or '-'"
-                ),
-            )
+        ensure_authorable_job_id(request.id)
         if contains_pdf_password(request.config):
             raise HTTPException(status_code=422, detail="config must not include pdf_password")
 
@@ -692,6 +651,7 @@ def register_scheduled_routes(
         request: UpdateScheduledRunRequest,
     ) -> ScheduledRunResponse:
         """Update future configuration without deleting the job or its history."""
+        from src.api.scheduled_guards import guard_system_job_mutation
         from src.scheduled_research.executor import next_due
         from src.scheduled_research.models import (
             DeliveryRecord,
@@ -703,8 +663,6 @@ def register_scheduled_routes(
             validate_timezone_shape,
         )
 
-        from src.scheduling.system_jobs import is_system_job_id
-
         _host_validate_path_param(job_id, "job_id")
         store = _get_scheduled_research_store()
         job = store.get(job_id)
@@ -712,15 +670,7 @@ def register_scheduled_routes(
             raise HTTPException(
                 status_code=404, detail=f"scheduled run {job_id} not found"
             )
-        # Defense in depth for non-REST callers (CLI, internal services,
-        # future entry points). UNREACHABLE via REST: every system job id
-        # carries ':' (SYSTEM_JOB_ID_PREFIX), which _validate_path_param
-        # above rejects with a 400 before the store is even read — the
-        # REST-visible behavior for a system job is that 400, not this 403.
-        if is_system_job_id(job.id) or job.source_type == "system":
-            raise HTTPException(
-                status_code=403, detail="system jobs cannot be modified"
-            )
+        guard_system_job_mutation(job.id, job.source_type)
         if job.status == JobStatus.RUNNING or job.delivery.status == DeliveryStatus.SENDING:
             raise HTTPException(
                 status_code=409,
@@ -893,18 +843,10 @@ def register_scheduled_routes(
     )
     async def delete_scheduled_run(job_id: str) -> Response:
         """Cancel (delete) a scheduled research job by id."""
-        from src.scheduling.system_jobs import is_system_job_id
+        from src.api.scheduled_guards import guard_system_job_deletion
 
         _host_validate_path_param(job_id, "job_id")
-        # Defense in depth for non-REST callers (CLI, internal services,
-        # future entry points). UNREACHABLE via REST: every system job id
-        # carries ':' (SYSTEM_JOB_ID_PREFIX), which _validate_path_param
-        # above rejects with a 400 before this guard runs — the REST-visible
-        # behavior for a system job is that path-parameter 400, not this 403.
-        if is_system_job_id(job_id):
-            raise HTTPException(
-                status_code=403, detail="system jobs cannot be deleted"
-            )
+        guard_system_job_deletion(job_id)
         removed = _get_scheduled_research_store().delete(job_id)
         if not removed:
             raise HTTPException(

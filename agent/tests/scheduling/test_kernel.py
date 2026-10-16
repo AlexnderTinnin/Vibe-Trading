@@ -14,8 +14,6 @@ import asyncio
 import itertools
 import threading
 import time
-from dataclasses import dataclass
-from datetime import datetime, timezone
 
 import pytest
 
@@ -26,8 +24,6 @@ from src.scheduling.kernel import (
 )
 from src.scheduling.types import (
     EXECUTOR_KINDS,
-    JobLike,
-    TriggerSpec,
     is_executor_kind,
 )
 
@@ -363,20 +359,11 @@ def test_ctor_rejects_invalid_retry_policy() -> None:
         SchedulerKernel(retry_base_delay_ms=1000, retry_max_delay_ms=999)
 
 
-# ---- callback seams and policy surface ------------------------------------------
+# ---- callback seam and policy surface -------------------------------------------
 
 
-def test_callback_seams_and_knobs_are_exposed_read_only() -> None:
+def test_callback_and_knobs_are_exposed_read_only() -> None:
     async def on_tick(now_ms: int) -> None:
-        return None
-
-    def is_due(job, now_ms: int) -> bool:
-        return True
-
-    def advance(job, from_ms: int) -> int | None:
-        return None
-
-    def on_err(job, now_ms: int, exc: Exception) -> None:
         return None
 
     kernel = SchedulerKernel(
@@ -386,16 +373,10 @@ def test_callback_seams_and_knobs_are_exposed_read_only() -> None:
         retry_base_delay_ms=10,
         retry_max_delay_ms=20,
         on_tick=on_tick,
-        is_due_fn=is_due,
-        advance_fn=advance,
-        on_job_error=on_err,
         task_name="k",
     )
 
     assert kernel.on_tick is on_tick
-    assert kernel.is_due_fn is is_due
-    assert kernel.advance_fn is advance
-    assert kernel.on_job_error is on_err
     assert kernel.tick_interval_ms == 1234
     assert kernel.max_consecutive_failures == 5
     assert (kernel.retry_base_delay_ms, kernel.retry_max_delay_ms) == (10, 20)
@@ -405,7 +386,15 @@ def test_callback_seams_and_knobs_are_exposed_read_only() -> None:
         kernel.tick_interval_ms = 1  # read-only property
 
 
-# ---- types: ExecutorKind / JobLike / TriggerSpec --------------------------------
+def test_kernel_rejects_the_removed_speculative_seams() -> None:
+    # The kernel's only callback is on_tick; due-ness/advance/error seams were
+    # dead storage and are gone — a caller passing them must fail loudly.
+    for removed_kwarg in ("is_due_fn", "advance_fn", "on_job_error"):
+        with pytest.raises(TypeError):
+            SchedulerKernel(**{removed_kwarg: lambda *a, **k: None})  # type: ignore[arg-type]
+
+
+# ---- types: ExecutorKind ----------------------------------------------------------
 
 
 def test_executor_kind_domain_is_closed() -> None:
@@ -415,51 +404,3 @@ def test_executor_kind_domain_is_closed() -> None:
     assert not is_executor_kind("shell")
     assert not is_executor_kind(None)
     assert not is_executor_kind("")
-
-
-def test_joblike_matches_structurally_and_rejects_partial_jobs() -> None:
-    @dataclass
-    class DummyJob:
-        id: str
-        next_run_at: int
-        status: str
-        schedule: str
-        timezone: str | None
-        consecutive_failures: int
-
-    assert isinstance(DummyJob("j1", 1000, "pending", "5000", None, 0), JobLike)
-
-    class Partial:
-        id = "x"
-        next_run_at = 0
-
-    assert not isinstance(Partial(), JobLike)
-
-
-def test_trigger_spec_once_has_no_next_run() -> None:
-    spec = TriggerSpec("once")
-    assert spec.is_once
-    spec.validate()  # the once kind is always accepted
-    assert spec.next_due_after(5000) is None
-    assert TriggerSpec(" ONCE ").is_once  # compared stripped + case-insensitively
-
-
-def test_trigger_spec_interval_and_cron_next_due() -> None:
-    assert TriggerSpec("5000").next_due_after(1000) == 6000
-
-    spec = TriggerSpec("0 4 * * *", "UTC")
-    spec.validate()
-    after = 1_760_000_000_000  # 2025-10-09T08:53:20Z
-    nxt = spec.next_due_after(after)
-    assert nxt is not None and nxt > after
-    fired = datetime.fromtimestamp(nxt / 1000, tz=timezone.utc)
-    assert (fired.hour, fired.minute) == (4, 0)
-
-
-def test_trigger_spec_validate_rejects_bad_grammar_and_timezone() -> None:
-    with pytest.raises(ValueError):
-        TriggerSpec("bogus").validate()
-    with pytest.raises(ValueError):
-        TriggerSpec("0 4 * * *", "Mars/Olympus_Mons").validate()
-    # Construction itself stays tolerant; only validate() rejects.
-    TriggerSpec("bogus")

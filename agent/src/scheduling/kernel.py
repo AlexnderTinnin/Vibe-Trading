@@ -1,12 +1,11 @@
 """Generic scheduler kernel: tick loop, wakeup, backoff, injectable clock.
 
-Extracted (scheduler-unification T2) from the loop machinery of
-``src/scheduled_research/executor.py`` so every scheduler in the repo can
-share one tick/wakeup/backoff implementation. The kernel is strictly
-generic: it knows nothing about delivery outboxes, verdicts, briefings or
-playbooks — domain logic attaches through the constructor's callback seams
-(``on_tick`` / ``is_due_fn`` / ``advance_fn`` / ``on_job_error``) and stays
-in the consumer's module.
+Extracted from the loop machinery of ``src/scheduled_research/executor.py``
+(scheduler unification) so every scheduler in the repo can share one
+tick/wakeup/backoff implementation. The kernel is strictly generic: it knows
+nothing about delivery outboxes, verdicts, briefings or playbooks — domain
+logic attaches through the constructor's ``on_tick`` callback and stays in
+the consumer's module.
 
 Responsibilities (the complete list):
 
@@ -40,13 +39,7 @@ import logging
 import time
 from typing import Optional
 
-from src.scheduling.types import (
-    AdvanceFn,
-    IsDueFn,
-    JobErrorFn,
-    NowFn,
-    OnTickFn,
-)
+from src.scheduling.types import NowFn, OnTickFn
 
 logger = logging.getLogger(__name__)
 
@@ -78,12 +71,9 @@ class SchedulerKernel:
     propagates so :meth:`stop` stays bounded), then sleeps
     ``tick_interval_ms`` unless a :meth:`request_wake` shortens the sleep.
 
-    ``is_due_fn`` / ``advance_fn`` / ``on_job_error`` are stored injection
-    seams, exposed as read-only properties: the kernel never interprets them
-    itself, but carrying the full callback set on one instance lets a
-    consumer compose its ``on_tick`` chain (due-job pass, per-job isolation,
-    error recording) against a single wiring point without reaching into
-    kernel internals.
+    Due-ness, next-run advancement and per-job error recording are the
+    consumer's own ``on_tick`` composition — the kernel stores the retry
+    policy and exposes it read-only, but never interprets jobs itself.
     """
 
     def __init__(
@@ -96,9 +86,6 @@ class SchedulerKernel:
         retry_base_delay_ms: int = DEFAULT_RETRY_BASE_DELAY_MS,
         retry_max_delay_ms: int = DEFAULT_RETRY_MAX_DELAY_MS,
         on_tick: Optional[OnTickFn] = None,
-        is_due_fn: Optional[IsDueFn] = None,
-        advance_fn: Optional[AdvanceFn] = None,
-        on_job_error: Optional[JobErrorFn] = None,
         task_name: str = DEFAULT_TASK_NAME,
     ) -> None:
         """Initialize the kernel.
@@ -113,9 +100,6 @@ class SchedulerKernel:
             retry_base_delay_ms: Base delay for exponential retry backoff.
             retry_max_delay_ms: Upper bound for exponential retry backoff.
             on_tick: Async callable invoked once per tick with ``now_ms``.
-            is_due_fn: ``(job, now_ms) -> bool`` due-ness predicate seam.
-            advance_fn: ``(job, from_ms) -> next_run_at | None`` seam.
-            on_job_error: ``(job, now_ms, exc)`` per-job failure hook seam.
             task_name: Name of the background ``asyncio`` task.
 
         Raises:
@@ -134,9 +118,6 @@ class SchedulerKernel:
         self._retry_base_delay_ms = retry_base_delay_ms
         self._retry_max_delay_ms = retry_max_delay_ms
         self._on_tick = on_tick
-        self._is_due_fn = is_due_fn
-        self._advance_fn = advance_fn
-        self._on_job_error = on_job_error
         self._task_name = task_name
         self._loop: asyncio.AbstractEventLoop | None = None
         self._task: asyncio.Task | None = None
@@ -179,21 +160,6 @@ class SchedulerKernel:
     def on_tick(self) -> Optional[OnTickFn]:
         """Return the injected per-tick callback (the only one the loop calls)."""
         return self._on_tick
-
-    @property
-    def is_due_fn(self) -> Optional[IsDueFn]:
-        """Return the injected due-ness predicate seam."""
-        return self._is_due_fn
-
-    @property
-    def advance_fn(self) -> Optional[AdvanceFn]:
-        """Return the injected next-run advancement seam."""
-        return self._advance_fn
-
-    @property
-    def on_job_error(self) -> Optional[JobErrorFn]:
-        """Return the injected per-job error hook seam."""
-        return self._on_job_error
 
     # -- lifecycle ------------------------------------------------------------
 

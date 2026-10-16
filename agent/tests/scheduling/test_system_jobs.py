@@ -114,7 +114,7 @@ def test_is_system_job_id_false_for_everything_else(job_id: object) -> None:
 
 
 def test_prefix_constant_contains_colon_for_safe_id_re_interplay() -> None:
-    """T7 ②b: the prefix MUST contain ':' so _SAFE_JOB_ID_RE (^[A-Za-z0-9_-]{1,128}$)
+    """the prefix MUST contain ':' so SAFE_JOB_ID_RE (^[A-Za-z0-9_-]{1,128}$)
     rejects every system id at POST/path-param level — structural anti-forgery."""
     assert SYSTEM_JOB_ID_PREFIX == "system:"
     assert ":" in SYSTEM_JOB_ID_PREFIX
@@ -445,6 +445,41 @@ def test_disabled_flag_leaves_terminal_rows_untouched(tmp_path: Path) -> None:
     report = ensure_system_jobs(store, specs=[spec], enabled_predicate=lambda _s: False)
     assert report.halted == (spec.id,)
     assert store.path.read_bytes() == before  # FAILED is already never-due
+
+
+def test_enabled_spec_resets_failed_row_and_clears_retry_budget(tmp_path: Path) -> None:
+    """Retry-budget reset: FAILED is reachable at runtime through the
+    executor's own retry exhaustion, and no API surface may resurrect a
+    system row — the startup reset is the only recovery path, so a transient
+    multi-day outage cannot permanently brick a product-owned job."""
+    store = _store(tmp_path)
+    spec = _spec()
+    ensure_system_jobs(store, specs=[spec], now_fn=lambda: 1000)
+    _mutate_row(
+        store,
+        spec.id,
+        status=JobStatus.FAILED,
+        consecutive_failures=3,
+        last_error="boom",
+        failure_kind="dispatch",
+        end_at=12345,
+    )
+
+    report = ensure_system_jobs(store, specs=[spec], now_fn=lambda: 2000)
+    assert report.repaired == (spec.id,)
+    job = store.get(spec.id)
+    assert job.status == JobStatus.PENDING
+    assert job.end_at is None
+    assert job.consecutive_failures == 0
+    assert job.last_error is None
+    assert job.failure_kind is None
+    assert job.next_run_at == 1000  # other runtime fields still untouched
+
+    # Idempotent: the conformant PENDING row is not rewritten on a second pass.
+    before = store.path.read_bytes()
+    report2 = ensure_system_jobs(store, specs=[spec], now_fn=lambda: 3000)
+    assert report2.unchanged == (spec.id,)
+    assert store.path.read_bytes() == before
 
 
 def test_disabled_flag_still_corrects_tampered_fields(tmp_path: Path) -> None:

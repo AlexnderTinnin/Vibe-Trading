@@ -431,7 +431,6 @@ def test_sync_flag_defaults_false_and_gates_seeding(monkeypatch, tmp_path):
 
 def test_flag_on_seeds_br_sync_row_with_spec_fields(monkeypatch, tmp_path):
     from src.br_data.scheduling import sync_job_enabled
-    from src.br_data.sync import run_sync
     from src.scheduled_research.models import JobStatus
     from src.scheduling.registry import is_registered, resolve_internal
     from src.scheduling.system_jobs import ensure_system_jobs
@@ -449,7 +448,14 @@ def test_flag_on_seeds_br_sync_row_with_spec_fields(monkeypatch, tmp_path):
     assert spec.prompt == ""
     assert spec.enabled_predicate is sync_job_enabled
     assert is_registered("br_data.run_sync") is True
-    assert resolve_internal("br_data.run_sync") is run_sync
+    # The registered entry is a literal wrapper with a deferred domain import:
+    # calling it must delegate to the real sync entry point.
+    calls = []
+    monkeypatch.setattr(
+        "src.br_data.sync.run_sync", lambda *a, **k: calls.append("fired") or {}
+    )
+    resolve_internal("br_data.run_sync")()
+    assert calls == ["fired"]
 
     store = _br_store(tmp_path)
     report = ensure_system_jobs(store, now_fn=lambda: 1000)
@@ -459,11 +465,11 @@ def test_flag_on_seeds_br_sync_row_with_spec_fields(monkeypatch, tmp_path):
     assert job.source_type == "system"
     assert job.executor_kind == "internal"
     assert job.internal_callable == "br_data.run_sync"
-    assert job.schedule == spec.schedule
+    assert job.schedule == spec.resolved_schedule()
     assert job.timezone == "America/Sao_Paulo"
     assert job.status == JobStatus.PENDING
     # cron + tz seeds the NEXT São Paulo slot, not "now"
-    assert job.next_run_at == next_due(spec.schedule, 1000, spec.timezone)
+    assert job.next_run_at == next_due(spec.resolved_schedule(), 1000, spec.timezone)
     assert job.next_run_at > 1000
 
 
@@ -529,7 +535,7 @@ def test_due_internal_job_calls_run_sync_exactly_once(tmp_path, monkeypatch):
     assert saved.failure_kind is None
     assert saved.last_run_at == 1500  # completion time (internal path)
     spec = _production_br_spec()
-    assert saved.next_run_at == next_due(spec.schedule, 1500, spec.timezone)
+    assert saved.next_run_at == next_due(spec.resolved_schedule(), 1500, spec.timezone)
 
 
 def test_run_sync_exception_lands_in_dispatch_failure_path(tmp_path, monkeypatch):
