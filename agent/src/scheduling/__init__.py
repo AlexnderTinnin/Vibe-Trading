@@ -19,8 +19,13 @@ in the repo can adopt:
   sync/async callables, with exact-key resolution only (no dynamic import,
   no string parsing, no shell).
 
-Later todos of the scheduler-unification plan add ``system_jobs.py``
-(protected system jobs) beside these modules.
+* :mod:`src.scheduling.system_jobs` — protected system jobs: the
+  ``SystemJobSpec`` surface (``system:`` id prefix, ``source_type="system"``,
+  ``executor_kind="internal"``, registry-key callable, per-spec enablement
+  predicate) and ``ensure_system_jobs`` — the idempotent startup
+  seed/repair pass (tamper correction, (α) status reset, (β) schedule-trust
+  boundary, repair-replay, flag-off halt) called from the lifespan before
+  the executor starts.
 """
 
 from src.scheduling.kernel import (
@@ -71,6 +76,8 @@ from src.scheduling.types import (
 
 __all__ = [
     "CRON_BOUNDS",
+    "EnabledPredicate",
+    "EnsureSystemJobsReport",
     "CRON_SEARCH_LIMIT_DAYS",
     "DEFAULT_MAX_CONSECUTIVE_FAILURES",
     "DEFAULT_RETRY_BASE_DELAY_MS",
@@ -89,10 +96,15 @@ __all__ = [
     "JobLike",
     "NowFn",
     "OnTickFn",
+    "SYSTEM_JOB_ID_PREFIX",
     "SchedulerKernel",
+    "SpecGate",
+    "SystemJobSpec",
     "TriggerSpec",
     "day_matches",
+    "ensure_system_jobs",
     "is_executor_kind",
+    "is_system_job_id",
     "is_interval_schedule",
     "is_registered",
     "list_internal",
@@ -103,8 +115,40 @@ __all__ = [
     "parse_cron_field",
     "register_internal",
     "resolve_internal",
+    "system_job_specs",
     "trigger_interval_ms",
     "validate_schedule",
     "validate_timezone",
     "validate_timezone_shape",
 ]
+
+# --- lazy re-export: src.scheduling.system_jobs (PEP 562) -------------------
+# system_jobs imports src.scheduled_research.models/store, and models itself
+# imports src.scheduling.triggers — an eager import here would make that
+# re-enter this partially initialized __init__ (circular ImportError) whenever
+# src.scheduled_research is imported before src.scheduling. Deferring the
+# import to first attribute access keeps the export surface identical
+# (``from src.scheduling import ensure_system_jobs`` and friends all work)
+# while breaking the import-time cycle in every import order.
+_SYSTEM_JOBS_EXPORTS = frozenset(
+    {
+        "SYSTEM_JOB_ID_PREFIX",
+        "EnabledPredicate",
+        "EnsureSystemJobsReport",
+        "SpecGate",
+        "SystemJobSpec",
+        "ensure_system_jobs",
+        "is_system_job_id",
+        "system_job_specs",
+    }
+)
+
+
+def __getattr__(name: str):
+    """Lazily resolve the system-jobs exports (see the comment above)."""
+    if name in _SYSTEM_JOBS_EXPORTS:
+        from src.scheduling import system_jobs
+
+        return getattr(system_jobs, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
