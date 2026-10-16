@@ -1228,7 +1228,10 @@
     "resumeConnector": "恢复连接器",
     "resumeConnectorTitle": "清除熔断开关并恢复连接器活动",
     "connectorResumed": "连接器已恢复",
-    "failedToResumeConnector": "恢复连接器失败。"
+    "failedToResumeConnector": "恢复连接器失败。",
+    "tokenUsage": {
+      "live": "Token"
+    }
   },
   "runDetail": {
     "title": "运行详情",

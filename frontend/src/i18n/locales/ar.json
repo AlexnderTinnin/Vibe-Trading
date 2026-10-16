@@ -1228,7 +1228,10 @@
     "resumeConnector": "استئناف الموصل",
     "resumeConnectorTitle": "مسح مفتاح الإيقاف واستئناف نشاط الموصل",
     "connectorResumed": "تم استئناف الموصل",
-    "failedToResumeConnector": "فشل استئناف الموصل."
+    "failedToResumeConnector": "فشل استئناف الموصل.",
+    "tokenUsage": {
+      "live": "رموز"
+    }
   },
   "runDetail": {
     "title": "تفاصيل التشغيل",

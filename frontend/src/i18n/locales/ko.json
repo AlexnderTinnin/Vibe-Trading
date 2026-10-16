@@ -1228,7 +1228,10 @@
     "resumeConnector": "커넥터 재개",
     "resumeConnectorTitle": "킬 스위치를 해제하고 커넥터 활동을 재개",
     "connectorResumed": "커넥터가 재개되었습니다",
-    "failedToResumeConnector": "커넥터 재개에 실패했습니다."
+    "failedToResumeConnector": "커넥터 재개에 실패했습니다.",
+    "tokenUsage": {
+      "live": "토큰"
+    }
   },
   "runDetail": {
     "title": "실행 상세",

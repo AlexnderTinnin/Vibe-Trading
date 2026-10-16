@@ -1199,7 +1199,10 @@
     "resumeConnectorTitle": "Acil durdurmayı kaldır ve bağlantı faaliyetlerini yeniden etkinleştir",
     "connectorResumed": "Bağlantı yeniden etkinleştirildi",
     "failedToResumeConnector": "Bağlantı yeniden etkinleştirilemedi.",
-    "messageTooLong": "Mesaj, ekler ve ekip talimatlarıyla birlikte {{limit}} karakteri aşıyor. Göndermeden önce kısaltın."
+    "messageTooLong": "Mesaj, ekler ve ekip talimatlarıyla birlikte {{limit}} karakteri aşıyor. Göndermeden önce kısaltın.",
+    "tokenUsage": {
+      "live": "belirteç"
+    }
   },
   "runDetail": {
     "title": "Çalışma ayrıntıları",

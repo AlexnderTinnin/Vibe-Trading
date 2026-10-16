@@ -1228,7 +1228,10 @@
     "resumeConnector": "コネクタを再開",
     "resumeConnectorTitle": "キルスイッチを解除してコネクタ活動を再開",
     "connectorResumed": "コネクタを再開しました",
-    "failedToResumeConnector": "コネクタの再開に失敗しました。"
+    "failedToResumeConnector": "コネクタの再開に失敗しました。",
+    "tokenUsage": {
+      "live": "トークン"
+    }
   },
   "runDetail": {
     "title": "実行詳細",

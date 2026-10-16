@@ -10,6 +10,7 @@ import {
   type StoredAgentMessage,
 } from "@/stores/agent";
 import { useSSE } from "@/hooks/useSSE";
+import { useLlmUsageCounter } from "@/hooks/useLlmUsageCounter";
 import { ApiError, AUTH_REQUIRED_MESSAGE, api, isAuthRequiredError, type GoalSnapshot, type MandateProposal, type MandateCommitted, type ScheduledResearchProposal, type LiveAction, type LiveHalted, type LLMSettings, type RunPreview } from "@/lib/api";
 import {
   extractUploadedAttachments,
@@ -24,6 +25,7 @@ import { ModelRuntimeBar } from "@/components/chat/ModelRuntimeBar";
 import { ThinkingTimeline } from "@/components/chat/ThinkingTimeline";
 import { ConversationTimeline } from "@/components/chat/ConversationTimeline";
 import { ActivityLine } from "@/components/chat/ActivityLine";
+import { LlmUsageCounter } from "@/components/chat/LlmUsageCounter";
 import { MandateProposalCard } from "@/components/chat/MandateProposalCard";
 import { ScheduledResearchProposalCard } from "@/components/chat/ScheduledResearchProposalCard";
 import { SwarmStatusCard } from "@/components/chat/SwarmStatusCard";
@@ -272,6 +274,14 @@ export function Agent() {
   const previousStatusRef = useRef(status);
 
   const { connect, disconnect, onStatusChange } = useSSE();
+
+  /* Live token totals for the in-flight attempt, fed by `llm_usage` events. */
+  const {
+    input: usageInput,
+    output: usageOutput,
+    record: recordLlmUsage,
+    reset: resetLlmUsage,
+  } = useLlmUsageCounter();
 
   const urlSessionId = searchParams.get("session");
   const visibleRuntimeIdentity = runtimeIdentity.sessionId === urlSessionId
@@ -753,6 +763,11 @@ export function Agent() {
         touch();
         replayAttemptSeenRef.current = true;
         identifyActivity(d, "thinking");
+      },
+      llm_usage: (d) => {
+        touch();
+        replayAttemptSeenRef.current = true;
+        recordLlmUsage(String(d.attempt_id || ""), Number(d.iter || 0), d);
       },
 
       reasoning_delta: (d) => {
@@ -1264,6 +1279,7 @@ export function Agent() {
     loadGoalSnapshot,
     markBackgroundCompletion,
     queueStreamUpdate,
+    recordLlmUsage,
     scrollToBottom,
   ]);
 
@@ -1331,6 +1347,12 @@ export function Agent() {
       reset();
     }
   }, [urlSessionId, doDisconnect, loadSessionMessages, setupSSE, scheduleHistoryScroll]);
+
+  /* The live token counter belongs to one session; zero it on a real switch,
+     not on callback-identity churn of the rehydration effect above. */
+  useEffect(() => {
+    resetLlmUsage();
+  }, [sessionId, resetLlmUsage]);
 
   useEffect(() => {
     if (!sessionId) {
@@ -1901,6 +1923,7 @@ export function Agent() {
               <AgentAvatar />
               <div className="flex-1 min-w-0 space-y-2">
                 {activity && <ActivityLine activity={activity} reasoningTail={reasoningTail} />}
+                <LlmUsageCounter input={usageInput} output={usageOutput} />
                 {groundingRound !== null && (
                   <p
                     role="status"

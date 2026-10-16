@@ -1233,7 +1233,10 @@
     "resumeConnector": "Lanjutkan connector",
     "resumeConnectorTitle": "Nonaktifkan penghentian darurat dan aktifkan kembali aktivitas connector",
     "connectorResumed": "Connector dilanjutkan",
-    "failedToResumeConnector": "Gagal melanjutkan connector."
+    "failedToResumeConnector": "Gagal melanjutkan connector.",
+    "tokenUsage": {
+      "live": "token"
+    }
   },
   "runDetail": {
     "title": "Detail Run",

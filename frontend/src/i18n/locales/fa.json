@@ -1233,7 +1233,10 @@
     "resumeConnector": "ازسرگیری کانکتور",
     "resumeConnectorTitle": "کلید قطع را پاک کنید و فعالیت کانکتور را دوباره فعال کنید",
     "connectorResumed": "کانکتور ازسرگیری شد",
-    "failedToResumeConnector": "ازسرگیری کانکتور ناموفق بود."
+    "failedToResumeConnector": "ازسرگیری کانکتور ناموفق بود.",
+    "tokenUsage": {
+      "live": "توکن"
+    }
   },
   "runDetail": {
     "title": "جزئیات اجرا",
