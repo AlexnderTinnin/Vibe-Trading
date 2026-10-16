@@ -4,6 +4,12 @@ The executor polls :class:`ScheduledResearchJobStore`, dispatches due jobs via
 an injected async callable, and persists lifecycle/next-run updates after each
 attempt. Schedule math is intentionally pure and clock-injected so tests can
 exercise it without sleeping or reading wall-clock time.
+
+Loop machinery — the tick loop, wakeup event, start/stop lifecycle and retry
+backoff — is delegated to :class:`src.scheduling.kernel.SchedulerKernel`
+(scheduler unification). This module keeps the scheduled-research domain: the
+tick composition (stale recovery, expiry, due dispatch, delivery sweep), the
+job state machine, the delivery outbox and verdict recording.
 """
 
 from __future__ import annotations
@@ -28,6 +34,7 @@ from src.scheduled_research.verdict import (
     outcome_of,
     parse_verdict_section,
 )
+from src.scheduling.kernel import SchedulerKernel
 
 from dataclasses import replace as _dc_replace
 from src.tools.redaction import redact_internal_paths, redact_text
@@ -126,7 +133,15 @@ def _persisted_error(exc: Exception) -> str:
 
 
 class ScheduledResearchExecutor:
-    """Background poller that dispatches due scheduled research jobs."""
+    """Background poller that dispatches due scheduled research jobs.
+
+    The tick loop, wakeup, start/stop lifecycle and retry backoff live in a
+    :class:`~src.scheduling.kernel.SchedulerKernel` instance; this class
+    supplies the kernel's ``on_tick`` composition (stale recovery → expiry →
+    due-job dispatch with per-job isolation → delivery sweep) and owns every
+    scheduled-research semantic (job state machine, delivery outbox, verdict
+    recording).
+    """
 
     def __init__(
         self,
@@ -142,6 +157,7 @@ class ScheduledResearchExecutor:
         briefing_reader: "BriefingReader | None" = None,
         channel_sender: "ChannelSender | None" = None,
         delivery_lease_ms: int = DEFAULT_DELIVERY_LEASE_MS,
+        internal_dispatcher: "DispatchCallback | None" = None,
     ) -> None:
         """Initialize the executor.
 
@@ -163,6 +179,11 @@ class ScheduledResearchExecutor:
             delivery_lease_ms: How long a claimed row stays claimed before a
                 later sweep may take it over. Too short duplicates a slow
                 send; too long strands a briefing behind a dead process.
+            internal_dispatcher: Async callable invoked for jobs whose
+                ``executor_kind`` is ``"internal"``. ``None`` (the default)
+                leaves internal jobs without a runner, so their firings take
+                the existing dispatch-failure path; the registry-backed
+                implementation is wired separately.
 
         Raises:
             ValueError: If the retry policy is invalid.
@@ -172,12 +193,12 @@ class ScheduledResearchExecutor:
             tuning = get_env_config().agent_tuning
         self._store = store
         self._dispatch = dispatch
+        self._internal_dispatcher = internal_dispatcher
         self._briefing_reader = briefing_reader
         self._channel_sender = channel_sender
         self._delivery_lease_ms = delivery_lease_ms
         self._loop: asyncio.AbstractEventLoop | None = None
         self._sweep_task: asyncio.Task | None = None
-        self._tick_interval_ms = tick_interval_ms
         self._now_fn = now_fn
         self._enabled = enabled
         self._max_consecutive_failures = (
@@ -195,21 +216,27 @@ class ScheduledResearchExecutor:
             if retry_max_delay_ms is not None
             else tuning.vibe_trading_scheduler_retry_max_delay_ms
         )
-        if self._max_consecutive_failures < 1:
-            raise ValueError("max_consecutive_failures must be at least 1")
-        if self._retry_base_delay_ms < 0:
-            raise ValueError("retry_base_delay_ms must be non-negative")
-        if self._retry_max_delay_ms < self._retry_base_delay_ms:
-            raise ValueError("retry_max_delay_ms must be at least retry_base_delay_ms")
-        self._task: asyncio.Task | None = None
-        self._wakeup: asyncio.Event | None = None
-        self._stopping = False
+        # The kernel validates the resolved retry policy; its ValueError
+        # messages are byte-identical to the ones this constructor raised
+        # before the loop machinery moved there. The kernel never reads the
+        # environment — the resolved plain numbers above are the only source.
+        self._kernel = SchedulerKernel(
+            tick_interval_ms=tick_interval_ms,
+            now_fn=now_fn,
+            enabled=enabled,
+            max_consecutive_failures=self._max_consecutive_failures,
+            retry_base_delay_ms=self._retry_base_delay_ms,
+            retry_max_delay_ms=self._retry_max_delay_ms,
+            on_tick=self._on_kernel_tick,
+            is_due_fn=is_due,
+            task_name="scheduled-research-executor",
+        )
         self._recovered_stale_running = False
 
     @property
     def is_running(self) -> bool:
         """Return whether the background loop task is active."""
-        return self._task is not None and not self._task.done()
+        return self._kernel.is_running
 
     def start(self) -> None:
         """Start the background loop.
@@ -218,34 +245,17 @@ class ScheduledResearchExecutor:
         """
         if not self._enabled or self.is_running:
             return
-        self._stopping = False
         self.recover_stale_running()
-        self._wakeup = asyncio.Event()
-        loop = asyncio.get_running_loop()
-        self._task = loop.create_task(self._run(), name="scheduled-research-executor")
+        self._kernel.start()
 
     async def stop(self) -> None:
         """Stop the background loop and wait for it to finish.
 
-        Idempotent. When disabled or not started, this is a no-op.
+        Idempotent. When disabled or not started, this is a no-op. The kernel
+        sets the wakeup so a sleeping loop returns at once, and cancels the
+        task as a fallback so shutdown never blocks for a full tick.
         """
-        if not self._enabled:
-            return
-        task = self._task
-        if task is None:
-            return
-        self._stopping = True
-        if self._wakeup is not None:
-            self._wakeup.set()
-        # The set() above wakes a sleeping loop in the common case. Cancel as a
-        # fallback so shutdown never blocks for a full tick if the wakeup raced
-        # the loop's sleep, then await the task to let it unwind cleanly.
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-        self._task = None
+        await self._kernel.stop()
 
     async def tick(self, now_ms: int | None = None) -> None:
         """Run one poll/dispatch pass.
@@ -320,37 +330,24 @@ class ScheduledResearchExecutor:
         self._recovered_stale_running = True
         return recovered
 
-    async def _run(self) -> None:
+    async def _on_kernel_tick(self, now_ms: int) -> None:
+        """Run one executor tick as the kernel's ``on_tick`` callback.
+
+        Exceptions are isolated here (rather than left to the kernel's generic
+        handler) so the log message stays the executor's own; a failing tick
+        never kills the loop and ``asyncio.CancelledError`` propagates so
+        :meth:`stop` stays bounded.
+        """
         # Captured here rather than at construction: the executor is built
         # before the server's loop exists, and request_sweep needs a loop that
         # is actually running to schedule onto.
         self._loop = asyncio.get_running_loop()
-        while not self._stopping:
-            try:
-                await self.tick(self._now_fn())
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                logger.error("scheduled research executor tick failed", exc_info=True)
-            if self._stopping:
-                break
-            await self._sleep_or_wake(self._tick_interval_ms)
-
-    async def _sleep_or_wake(self, sleep_ms: int) -> None:
-        wakeup = self._wakeup
-        if wakeup is None:
-            await asyncio.sleep(sleep_ms / 1000.0)
-            return
-        # Re-check after re-entering: if stop() flipped _stopping and set the
-        # event between the loop's check and here, return at once rather than
-        # clearing the wakeup and blocking for a full tick on shutdown.
-        if self._stopping:
-            return
-        wakeup.clear()
         try:
-            await asyncio.wait_for(wakeup.wait(), timeout=sleep_ms / 1000.0)
-        except asyncio.TimeoutError:
-            pass
+            await self.tick(now_ms)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.error("scheduled research executor tick failed", exc_info=True)
 
     async def _run_job(self, job: ScheduledResearchJob, now_ms: int) -> None:
         # The tick snapshot may be stale by the time we reach this job (an
@@ -385,7 +382,7 @@ class ScheduledResearchExecutor:
 
         dispatch_error: Exception | None = None
         try:
-            session_id = await self._dispatch(job)
+            session_id = await self._dispatch_job(job)
             if isinstance(session_id, str) and session_id:
                 if job.delivery_channel:
                     # Arm the outbox in the same write that records the firing.
@@ -456,6 +453,23 @@ class ScheduledResearchExecutor:
                 )
         self._persist_completion(job)
 
+    async def _dispatch_job(self, job: ScheduledResearchJob) -> Optional[str]:
+        """Route one firing to its executor kind.
+
+        ``"prompt"`` jobs (every job persisted before scheduler unification)
+        go through the injected ``dispatch`` callback exactly as before.
+        ``"internal"`` jobs go through ``internal_dispatcher``; while no
+        dispatcher is wired, raising here routes the firing into the existing
+        dispatch-failure path (``failure_kind="dispatch"``, bounded retries)
+        rather than silently skipping it.
+        """
+        if job.executor_kind == "internal":
+            dispatcher = self._internal_dispatcher
+            if dispatcher is None:
+                raise RuntimeError("internal dispatcher is not configured")
+            return await dispatcher(job)
+        return await self._dispatch(job)
+
     def _delivery_is_eligible(self, job: ScheduledResearchJob, now_ms: int) -> bool:
         """Whether this row is a sweep's to take.
 
@@ -488,8 +502,11 @@ class ScheduledResearchExecutor:
         flight covers anything that arrived while it was running, and the claim
         makes an overlap harmless in any case. Without a running loop this is a
         no-op — the periodic tick is what makes delivery correct, and this only
-        makes it prompt.
+        makes it prompt. The kernel wake shortens the loop's current sleep so
+        the next full tick (which ends in a sweep) follows promptly too; it
+        coalesces and is a no-op without a running kernel loop.
         """
+        self._kernel.request_wake()
         loop = self._loop
         if loop is None or not loop.is_running():
             return
@@ -710,11 +727,7 @@ class ScheduledResearchExecutor:
 
     def _retry_delay_ms(self, consecutive_failures: int) -> int:
         """Return bounded exponential backoff for a dispatch failure count."""
-        exponent = max(0, consecutive_failures - 1)
-        if self._retry_base_delay_ms == 0:
-            return 0
-        delay = self._retry_base_delay_ms * (2 ** min(exponent, 62))
-        return min(delay, self._retry_max_delay_ms)
+        return self._kernel.retry_delay_ms(consecutive_failures)
 
     @staticmethod
     def _same_record(current: ScheduledResearchJob, job: ScheduledResearchJob) -> bool:
