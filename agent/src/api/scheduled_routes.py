@@ -192,9 +192,28 @@ def _get_scheduled_research_executor():
 
 
 def _start_scheduled_research_executor() -> None:
-    """Start scheduled research execution when explicitly enabled."""
+    """Start scheduled research execution when explicitly enabled.
+
+    Single-writer invariant (scheduler-unification T12): the FastAPI lifespan
+    (``api_server._run_startup_preflight``) is the SOLE owner of this call —
+    the executor's kernel task is started exactly once per process, and the
+    store behind it has exactly one writer. Multi-process concurrent writes
+    are not supported (see the ``src/scheduled_research/store.py`` module
+    docstring); a duplicate ``start()`` in the same process is a no-op.
+
+    Startup order fulfills the system-job timing contract (i)
+    (:mod:`src.scheduling.system_jobs`): ``ensure_system_jobs`` reconciles
+    every enabled protected system job into the store BEFORE ``start()``
+    creates the kernel task, so the first tick can never observe a store
+    missing its system rows. When the master flag is off this early-returns
+    before any write: CRUD keeps working, nothing executes, and no system
+    row is seeded or store file created.
+    """
     if not _scheduled_research_scheduler_enabled():
         return
+    from src.scheduling.system_jobs import ensure_system_jobs
+
+    ensure_system_jobs(_get_scheduled_research_store())
     _get_scheduled_research_executor().start()
 
 
