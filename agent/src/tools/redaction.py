@@ -571,18 +571,18 @@ _TEXT_TOKEN_PATTERN = re.compile(
 
 #: Channel credentials that embed the secret in a URL path or a bare token, so
 #: neither the key-based nor the issuer-prefix patterns see them. The Telegram
-#: bot token (``<8-10 digit id>:<35 chars>``) appears in the request URL
+#: bot token (``<numeric id>:<35 chars>``) appears in the request URL
 #: ``https://api.telegram.org/bot<token>/sendMessage``, which HTTP client error
 #: messages echo verbatim; Slack and Discord incoming-webhook URLs are bearer
 #: credentials whose last path segment is the secret. The Telegram body is a
 #: fixed-length class and the webhook secrets are bounded runs, so matching
 #: stays linear.
 _TEXT_TELEGRAM_BOT_TOKEN_PATTERN = re.compile(
-    r"(?<![A-Za-z0-9_-])(?:bot)?\d{8,10}:[A-Za-z0-9_-]{35}(?![A-Za-z0-9_-])"
+    r"(?<![A-Za-z0-9_-])(?:bot)?\d+:[A-Za-z0-9_-]{35}(?![A-Za-z0-9_-])"
 )
 _TEXT_WEBHOOK_URL_PATTERN = re.compile(
-    r"(?P<head>https://hooks\.slack\.com/(?:services|triggers)/[A-Za-z0-9]+/[A-Za-z0-9]+/"
-    r"|https://(?:[a-z]+\.)?discord(?:app)?\.com/api/(?:v\d+/)?webhooks/\d+/)"
+    r"(?P<head>(?i:https://hooks\.slack(?:-gov)?\.com)/(?:services|triggers)/[A-Za-z0-9]+/[A-Za-z0-9]+/"
+    r"|(?i:https://(?:[a-z]+\.)?discord(?:app)?\.com)/api/(?:v\d+/)?webhooks/\d+/)"
     r"[A-Za-z0-9_-]{20,}"
 )
 
