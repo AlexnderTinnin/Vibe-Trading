@@ -1361,6 +1361,19 @@
     "ddNotRecovered": "미회복",
     "ddDays": "{{count}}일",
     "dashboard": "리서치 대시보드",
+    "llmUsage": {
+      "tab": "토큰 사용량",
+      "provider": "제공자",
+      "model": "모델",
+      "inputTokens": "입력 토큰",
+      "outputTokens": "출력 토큰",
+      "totalTokens": "총 토큰",
+      "calls": "호출 횟수",
+      "cacheRead": "캐시 읽기 토큰",
+      "cacheCreation": "캐시 생성 토큰",
+      "perIteration": "반복별 명세",
+      "iteration": "반복"
+    },
     "positions": {
       "tab": "포지션",
       "weightDistribution": "비중 분포",

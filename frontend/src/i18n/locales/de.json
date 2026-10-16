@@ -1366,6 +1366,19 @@
     "ddNotRecovered": "Nicht erholt",
     "ddDays": "{{count}} T",
     "dashboard": "Research-Dashboard",
+    "llmUsage": {
+      "tab": "Token-Nutzung",
+      "provider": "Anbieter",
+      "model": "Modell",
+      "inputTokens": "Eingabe-Tokens",
+      "outputTokens": "Ausgabe-Tokens",
+      "totalTokens": "Tokens gesamt",
+      "calls": "Aufrufe",
+      "cacheRead": "Cache-Lese-Tokens",
+      "cacheCreation": "Tokens für Cache-Erstellung",
+      "perIteration": "Detail nach Iteration",
+      "iteration": "Iteration"
+    },
     "positions": {
       "tab": "Positionen",
       "weightDistribution": "Gewichtsverteilung",

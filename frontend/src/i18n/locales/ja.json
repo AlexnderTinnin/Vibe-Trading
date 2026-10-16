@@ -1361,6 +1361,19 @@
     "ddNotRecovered": "未回復",
     "ddDays": "{{count}}日",
     "dashboard": "リサーチダッシュボード",
+    "llmUsage": {
+      "tab": "トークン使用量",
+      "provider": "プロバイダー",
+      "model": "モデル",
+      "inputTokens": "入力トークン",
+      "outputTokens": "出力トークン",
+      "totalTokens": "合計トークン",
+      "calls": "呼び出し回数",
+      "cacheRead": "キャッシュ読み込みトークン",
+      "cacheCreation": "キャッシュ作成トークン",
+      "perIteration": "イテレーション別明細",
+      "iteration": "イテレーション"
+    },
     "positions": {
       "tab": "ポジション",
       "weightDistribution": "ウェイト分布",

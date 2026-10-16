@@ -1366,6 +1366,19 @@
     "ddNotRecovered": "بازیابی نشده",
     "ddDays": "{{count}} روز",
     "dashboard": "داشبورد پژوهش",
+    "llmUsage": {
+      "tab": "مصرف توکن",
+      "provider": "ارائه‌دهنده",
+      "model": "مدل",
+      "inputTokens": "توکن‌های ورودی",
+      "outputTokens": "توکن‌های خروجی",
+      "totalTokens": "مجموع توکن‌ها",
+      "calls": "تعداد فراخوانی‌ها",
+      "cacheRead": "توکن‌های خواندن کش",
+      "cacheCreation": "توکن‌های ایجاد کش",
+      "perIteration": "جزئیات هر تکرار",
+      "iteration": "تکرار"
+    },
     "positions": {
       "tab": "موقعیت‌ها",
       "weightDistribution": "توزیع وزن",

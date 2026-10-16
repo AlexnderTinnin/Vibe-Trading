@@ -1305,6 +1305,19 @@
     "ddNotRecovered": "Toparlanmadı",
     "ddDays": "{{count}} gün",
     "dashboard": "Araştırma paneli",
+    "llmUsage": {
+      "tab": "Token kullanımı",
+      "provider": "Sağlayıcı",
+      "model": "Model",
+      "inputTokens": "Girdi belirteçleri",
+      "outputTokens": "Çıktı belirteçleri",
+      "totalTokens": "Toplam belirteç",
+      "calls": "Çağrı sayısı",
+      "cacheRead": "Önbellek okuma belirteçleri",
+      "cacheCreation": "Önbellek oluşturma belirteçleri",
+      "perIteration": "Yineleme ayrıntıları",
+      "iteration": "Yineleme"
+    },
     "positions": {
       "tab": "Pozisyonlar",
       "weightDistribution": "Ağırlık dağılımı",

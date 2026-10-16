@@ -1366,6 +1366,19 @@
     "ddNotRecovered": "Belum pulih",
     "ddDays": "{{count}} hari",
     "dashboard": "Dashboard Riset",
+    "llmUsage": {
+      "tab": "Pemakaian token",
+      "provider": "Penyedia",
+      "model": "Model",
+      "inputTokens": "Token input",
+      "outputTokens": "Token output",
+      "totalTokens": "Total token",
+      "calls": "Jumlah panggilan",
+      "cacheRead": "Token baca cache",
+      "cacheCreation": "Token pembuatan cache",
+      "perIteration": "Rincian per iterasi",
+      "iteration": "Iterasi"
+    },
     "positions": {
       "tab": "Posisi",
       "weightDistribution": "Distribusi bobot",

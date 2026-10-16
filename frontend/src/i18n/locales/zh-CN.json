@@ -1361,6 +1361,19 @@
     "ddNotRecovered": "未恢复",
     "ddDays": "{{count}} 天",
     "dashboard": "研究仪表盘",
+    "llmUsage": {
+      "tab": "Token 用量",
+      "provider": "服务商",
+      "model": "模型",
+      "inputTokens": "输入 Token",
+      "outputTokens": "输出 Token",
+      "totalTokens": "总 Token",
+      "calls": "调用次数",
+      "cacheRead": "缓存读取 Token",
+      "cacheCreation": "缓存写入 Token",
+      "perIteration": "按迭代明细",
+      "iteration": "迭代"
+    },
     "positions": {
       "tab": "持仓",
       "weightDistribution": "权重分布",

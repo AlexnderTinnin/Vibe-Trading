@@ -1366,6 +1366,19 @@
     "ddNotRecovered": "No recuperado",
     "ddDays": "{{count}} d",
     "dashboard": "Panel de investigación",
+    "llmUsage": {
+      "tab": "Uso de tokens",
+      "provider": "Proveedor",
+      "model": "Modelo",
+      "inputTokens": "Tokens de entrada",
+      "outputTokens": "Tokens de salida",
+      "totalTokens": "Tokens totales",
+      "calls": "Llamadas",
+      "cacheRead": "Tokens de lectura de caché",
+      "cacheCreation": "Tokens de creación de caché",
+      "perIteration": "Detalle por iteración",
+      "iteration": "Iteración"
+    },
     "positions": {
       "tab": "Posiciones",
       "weightDistribution": "Distribución de pesos",

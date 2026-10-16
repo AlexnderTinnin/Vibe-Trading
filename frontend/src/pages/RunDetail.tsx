@@ -13,6 +13,7 @@ import {
   CalendarRange,
   CheckCircle2,
   Code2,
+  Coins,
   Copy,
   Database,
   Download,
@@ -52,14 +53,15 @@ import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { getStrategyReportIdentity, StrategyResearchDashboard } from "@/components/charts/StrategyResearchDashboard";
 import { FactorResearchPanel } from "@/components/charts/FactorResearchPanel";
 import { AttributionTab } from "@/components/charts/AttributionTab";
+import { LlmUsagePanel } from "@/components/run/LlmUsagePanel";
 import { PositionsTab } from "@/components/run/PositionsTab";
-import { RunCardPanel, RunCardStat, formatRunCardValue } from "@/components/run/RunCard";
+import { KeyValueTable, RunCardPanel, RunCardStat, formatRunCardValue } from "@/components/run/RunCard";
 import { isDateColumn } from "@/lib/positions";
 import { runTrades } from "@/lib/runReports";
 
 const rehypePlugins = [rehypeHighlight];
 
-type Tab = "dashboard" | "chart" | "tearsheet" | "trades" | "positions" | "attribution" | "runCard" | "code" | "validation" | "studio" | "factor";
+type Tab = "dashboard" | "chart" | "tearsheet" | "trades" | "positions" | "attribution" | "runCard" | "llmUsage" | "code" | "validation" | "studio" | "factor";
 type ChartPayload = Pick<RunData, "price_series" | "indicator_series" | "trade_markers">;
 type ChartCache = Record<string, ChartPayload>;
 type ChartLoadProgress = { done: number; total: number };
@@ -153,6 +155,7 @@ export function RunDetail() {
   const hasPositions = !!run?.artifacts_positions_csv?.some(
     (row) => Object.keys(row).some((key) => !isDateColumn(key)),
   );
+  const hasLlmUsage = !!run?.llm_usage?.totals;
   const TABS: { id: Tab; label: string; icon: typeof BarChart3; hidden?: boolean }[] = [
     { id: "dashboard", label: i18n.t("runDetail.dashboard"), icon: LayoutDashboard },
     { id: "chart", label: i18n.t("runDetail.chart"), icon: BarChart3 },
@@ -164,6 +167,7 @@ export function RunDetail() {
     { id: "studio", label: i18n.t("runDetail.studio"), icon: Gauge, hidden: !hasStudio },
     { id: "validation", label: i18n.t("runDetail.validation"), icon: ShieldCheck, hidden: !hasValidation },
     { id: "runCard", label: i18n.t("runDetail.runCard"), icon: FileCheck2, hidden: !hasRunCard },
+    { id: "llmUsage", label: i18n.t("runDetail.llmUsage.tab"), icon: Coins, hidden: !hasLlmUsage },
     { id: "code", label: i18n.t("runDetail.code"), icon: Code2 },
   ];
 
@@ -462,6 +466,7 @@ export function RunDetail() {
             <StudioTab xray={run.risk_xray} notes={run.rebalance_notes} />
           )}
           {tab === "runCard" && run.run_card && <RunCardTab card={run.run_card} />}
+          {tab === "llmUsage" && run.llm_usage && <LlmUsagePanel usage={run.llm_usage} />}
           {tab === "code" && <CodeTab code={code} />}
         </ErrorBoundary>
       </div>
@@ -796,27 +801,6 @@ function FactorTab({ runId }: { runId: string }) {
   return (
     <div className="p-4">
       <FactorResearchPanel report={data} />
-    </div>
-  );
-}
-
-function KeyValueTable({ data, empty, monospaceValues = false }: { data: Record<string, unknown>; empty: string; monospaceValues?: boolean }) {
-  const entries = Object.entries(data).filter(([, value]) => value !== undefined && value !== null && value !== "");
-  if (entries.length === 0) {
-    return <p className="text-sm text-muted-foreground">{empty}</p>;
-  }
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full table-fixed text-sm">
-        <tbody>
-          {entries.map(([key, value]) => (
-            <tr key={key} className="border-b last:border-0 hover:bg-muted/40">
-              <td className="w-36 break-all py-2 ps-4 pr-4 align-top text-muted-foreground">{key}</td>
-              <td className={cn("py-2 align-top", monospaceValues ? "break-all font-mono text-xs" : "break-words text-right tabular-nums")}>{formatRunCardValue(value)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }
