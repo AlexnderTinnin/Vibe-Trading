@@ -17,6 +17,11 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 - Swarm run detail and the dashboard expose token totals and label each
   figure as provider-reported or `len//4`-estimated; the swarm worker now
   captures prompt-cache tokens through backward-compatible `run.json` fields.
+- The swarm provenance label survives the shared tool-result redaction choke
+  point (a `token_source` was previously scrubbed to `[redacted]`); the swarm
+  detail response gates `provider`/`model` through the same public-metadata
+  filter the MCP payload applies; and failed or cancelled tasks report their
+  tokens so the live card matches the run total.
 - This batch is token-count visibility only: it ships no currency cost or
   cross-run aggregation.
 

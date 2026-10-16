@@ -2,9 +2,12 @@
 
 The detail response must surface the run's stored usage — totals, provider,
 model and the ``token_source`` provenance label — with the same key names the
-MCP run payload uses. A run that never executed must report literal int ``0``
-totals (not ``null``, not a missing key) so a cost UI can never mistake an
-unmeasured run for a missing field.
+MCP run payload uses. ``provider``/``model`` additionally pass through the same
+public-metadata gate MCP applies on read, so a run.json written before that
+gate existed cannot leak an endpoint- or credential-shaped string to a browser
+client. A run that never executed must report literal int ``0`` totals (not
+``null``, not a missing key) so a cost UI can never mistake an unmeasured run
+for a missing field.
 
 The swarm runtime singleton is monkeypatched to a ``SimpleNamespace`` holding a
 real ``SwarmStore`` rooted at ``tmp_path``, so every response is read back from
@@ -57,7 +60,8 @@ def test_detail_returns_stored_token_totals_and_provider_model(
     swarm_store: SwarmStore,
 ) -> None:
     """Given a persisted run with measured usage, When GET detail, Then the
-    response carries the exact stored values under the MCP-parity keys."""
+    response carries the stored values under the MCP-parity keys (an allowlisted
+    provider/model survives the public-metadata gate unchanged)."""
     _seed_run(
         swarm_store,
         "run-usage",
@@ -130,3 +134,21 @@ def test_detail_reflects_updated_stored_run_not_stale_snapshot(
     assert payload["provider"] == "anthropic"
     assert payload["model"] == "claude-sonnet-5"
     assert payload["token_source"] == "estimated"
+
+
+def test_detail_gates_non_public_provider_and_endpoint_shaped_model(
+    swarm_store: SwarmStore,
+) -> None:
+    """Given a stored run whose provider/model predate the write-time public
+    gate, When GET detail, Then both are redacted rather than leaked raw."""
+    _seed_run(
+        swarm_store,
+        "run-unsanitized",
+        provider="internal-proxy",
+        model="http://10.0.0.5:8080/v1",
+    )
+
+    payload = _client().get("/swarm/runs/run-unsanitized").json()
+
+    assert payload["provider"] == "[redacted]"
+    assert payload["model"] == "[redacted]"

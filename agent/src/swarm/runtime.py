@@ -603,6 +603,9 @@ class SwarmRuntime:
                                     "iterations": result.iterations,
                                     "input_tokens": result.input_tokens,
                                     "output_tokens": result.output_tokens,
+                                    "cache_read_tokens": result.cache_read_tokens,
+                                    "cache_creation_tokens": result.cache_creation_tokens,
+                                    "token_source": result.token_source,
                                 },
                             ),
                         )
@@ -625,6 +628,9 @@ class SwarmRuntime:
                                     "error": redact_internal_paths(result.error),
                                     "input_tokens": result.input_tokens,
                                     "output_tokens": result.output_tokens,
+                                    "cache_read_tokens": result.cache_read_tokens,
+                                    "cache_creation_tokens": result.cache_creation_tokens,
+                                    "token_source": result.token_source,
                                 },
                             ),
                         )
