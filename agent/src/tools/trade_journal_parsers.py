@@ -318,7 +318,14 @@ def _to_float(val: Any, default: float = 0.0) -> float:
         return default
     try:
         s = str(val).strip().replace("\u2212", "-")
-        s = _CURRENCY_TOKEN_RE.sub("", s).replace(",", "").strip()
+        s = _CURRENCY_TOKEN_RE.sub("", s)
+        if "," in s and "." in s and s.rfind(",") > s.rfind("."):
+            # "1.234,56": the rightmost separator is the decimal one, so dots
+            # group thousands. Stripping only commas read it as 1.23456.
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            s = s.replace(",", "")
+        s = s.strip()
         if not s:
             return default
         # Accounting exports write a negative as "(1,234.50)" (optionally
