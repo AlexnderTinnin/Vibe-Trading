@@ -30,6 +30,8 @@ from __future__ import annotations
 import re
 from typing import Awaitable, Callable
 
+from src.memory.consolidation import consolidate as _memory_consolidate
+
 #: A registered internal callable: invoked with no arguments, either sync
 #: (return value discarded) or async. ``...`` tolerates defaulted/optional
 #: parameters; the run contract above is what the executor guarantees.
@@ -137,8 +139,11 @@ def is_registered(name: object) -> bool:
 #
 # Rules: literal keys only; values are imported callable objects, never
 # import-path strings; nothing populates this dict from runtime input.
-# Seeded EMPTY by T5 — until T6+ registers system jobs, every internal
-# firing fail-closes into the executor's dispatch-failure path
-# (``failure_kind="dispatch"``), which is the intended behavior.
+# An internal firing whose key is missing fail-closes into the executor's
+# dispatch-failure path (``failure_kind="dispatch"``).
 # ---------------------------------------------------------------------------
-_INTERNAL_CALLABLES: dict[str, InternalRunnable] = {}
+_INTERNAL_CALLABLES: dict[str, InternalRunnable] = {
+    # T8: daily archive-only memory consolidation (opt-in via
+    # VT_MEMORY_CONSOLIDATION; honest no-op unless VT_MEMORY_GC is on too).
+    "memory.consolidate": _memory_consolidate,
+}

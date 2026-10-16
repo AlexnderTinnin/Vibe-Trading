@@ -665,6 +665,17 @@ class MemoryConfig(_EnvBase):
         description="Enable SQLite FTS5 search index",
     )
 
+    # Scheduled consolidation system job (scheduler-unification T8).
+    # Deliberately NOT listed in the preset flag map or the memory flag alias
+    # map above: the preset machinery only touches fields in the alias map, so
+    # VT_MEMORY=on/full can never silently enable a background timer. This
+    # flag is opt-in on its own; the job it gates also no-ops honestly unless
+    # VT_MEMORY_GC is enabled (see src/memory/consolidation.py).
+    consolidation_enabled: EnvBool = Field(
+        default=False, alias="VT_MEMORY_CONSOLIDATION",
+        description="Enable the daily memory-consolidation system job",
+    )
+
     @model_validator(mode="before")
     @classmethod
     def _apply_preset(cls, data: Any) -> Any:

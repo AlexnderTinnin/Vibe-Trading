@@ -81,6 +81,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Sequence
 
+from src.memory.consolidation import consolidation_enabled as _memory_consolidation_enabled
 from src.scheduled_research.models import (
     JobStatus,
     ScheduledResearchJob,
@@ -182,23 +183,24 @@ class SystemJobSpec:
 # Production spec surface
 # ---------------------------------------------------------------------------
 
-#: The production specs. EMPTY by design in T6 — the framework ships first;
-#: T8 (memory consolidation) and T9 (br_data sync) each append ONE literal
-#: here plus ONE registry entry in ``registry.py``'s ``_INTERNAL_CALLABLES``
-#: block, e.g.:
-#:
-#:     SystemJobSpec(
-#:         id="system:memory-consolidation",
-#:         schedule="0 3 * * *",
-#:         timezone="UTC",
-#:         internal_callable="memory.consolidate",
-#:         title="Memory consolidation",
-#:         enabled_predicate=_memory_consolidation_enabled,  # reads T8's flag
-#:     ),
-#:
-#: Nothing else changes: ensure_system_jobs, the guards (T7) and the lifespan
-#: wiring (T12) all consume this tuple generically.
-_SYSTEM_JOB_SPECS: tuple[SystemJobSpec, ...] = ()
+#: The production specs. Each job is ONE literal here plus ONE registry entry
+#: in ``registry.py``'s ``_INTERNAL_CALLABLES`` block (T8 landed memory
+#: consolidation; T9 appends br_data sync the same way). Nothing else changes:
+#: ensure_system_jobs, the guards (T7) and the lifespan wiring (T12) all
+#: consume this tuple generically. The predicate lives in the memory domain
+#: (``src.memory.consolidation``) so THIS module keeps reading zero env.
+#: Cadence: daily at 04:00 UTC (plan T8 ①; a valid edited schedule/timezone
+#: on the row is trusted per (β) — e.g. an IANA key for local-wall-time runs).
+_SYSTEM_JOB_SPECS: tuple[SystemJobSpec, ...] = (
+    SystemJobSpec(
+        id="system:memory-consolidation",
+        schedule="0 4 * * *",
+        timezone="UTC",
+        internal_callable="memory.consolidate",
+        title="Memory consolidation",
+        enabled_predicate=_memory_consolidation_enabled,
+    ),
+)
 
 
 def system_job_specs() -> tuple[SystemJobSpec, ...]:
