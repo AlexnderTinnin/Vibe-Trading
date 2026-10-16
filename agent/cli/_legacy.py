@@ -5487,6 +5487,17 @@ def _dispatch_connector(args: argparse.Namespace) -> int:
 # CLI entrypoint
 # ---------------------------------------------------------------------------
 
+def _positive_int(value: str) -> int:
+    """argparse type for counts that must be at least one."""
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid int value: {value!r}") from None
+    if number < 1:
+        raise argparse.ArgumentTypeError(f"must be a positive integer, got {number}")
+    return number
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """Build the CLI parser with subcommands and compatibility flags."""
     parser = argparse.ArgumentParser(description="Vibe-Trading CLI")
@@ -5578,7 +5589,7 @@ def _build_parser() -> argparse.ArgumentParser:
     channels_pairing.add_argument("pairing_args", nargs="*", help="Pairing command arguments")
 
     list_parser = subparsers.add_parser("list", help="List runs")
-    list_parser.add_argument("--limit", dest="list_limit", type=int, default=20, help="Maximum number of runs")
+    list_parser.add_argument("--limit", dest="list_limit", type=_positive_int, default=20, help="Maximum number of runs")
 
     show_parser = subparsers.add_parser("show", help="Show run details")
     show_parser.add_argument("run_id", help="Run identifier")
@@ -5643,7 +5654,7 @@ def _build_parser() -> argparse.ArgumentParser:
     memory_search_parser = memory_subparsers.add_parser("search", help="Recall memories for a query")
     memory_search_parser.add_argument("query", help="Search text")
     memory_search_parser.add_argument(
-        "--limit", dest="memory_limit", type=int, default=5, help="Maximum matches (default: 5)"
+        "--limit", dest="memory_limit", type=_positive_int, default=5, help="Maximum matches (default: 5)"
     )
 
     memory_forget_parser = memory_subparsers.add_parser("forget", help="Remove a memory entry")
