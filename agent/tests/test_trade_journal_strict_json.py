@@ -47,3 +47,23 @@ def test_zero_day_winner_has_null_disposition_ratio(
         "2026-01-05 09:35:00,MSFT,sell,10,90\n",
     )
     assert out["behavior"]["disposition_effect"]["ratio_loss_to_win_hold"] is None
+    assert out["behavior"]["disposition_effect"]["severity"] == "high"
+    assert "inf" not in out["behavior"]["disposition_effect"]["evidence"]
+
+
+def test_zero_day_winners_and_losers_do_not_imply_disposition_bias(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    out = _analyze(
+        tmp_path,
+        monkeypatch,
+        "2026-01-02 09:35:00,AAPL,buy,10,100\n"
+        "2026-01-02 09:35:00,AAPL,sell,10,110\n"
+        "2026-01-02 09:35:00,MSFT,buy,10,100\n"
+        "2026-01-02 09:35:00,MSFT,sell,10,90\n",
+    )
+    effect = out["behavior"]["disposition_effect"]
+    assert effect["ratio_loss_to_win_hold"] is None
+    assert effect["severity"] == "low"
+    assert "undefined" in effect["evidence"]
+    assert "Classic disposition" not in effect["evidence"]
