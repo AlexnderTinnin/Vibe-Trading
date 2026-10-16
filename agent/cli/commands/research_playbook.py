@@ -49,6 +49,11 @@ _HELP_TOKENS = frozenset({"help", "-h", "--help", "?"})
 _LIST_TOKENS = frozenset({"list", "ls", "all"})
 _VAR_TOKEN_RE = re.compile(r"^([A-Za-z0-9_]+)=(.*)$")
 
+# Mirrors ``_SAFE_JOB_ID_RE`` in src/api/scheduled_routes.py, which the REST
+# playbook route enforces on a caller-supplied id. The CLI writes the store
+# directly and bypasses every route, so the same rule has to be enforced here.
+_SAFE_JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
 # Defensive ceilings. ``ResearchPlaybook.render`` already caps a single
 # substituted value at 4000 chars; these bound the *number* of tokens and the
 # raw argument string so a paste accident cannot make the CLI do silly work
@@ -191,6 +196,19 @@ def build_job_from_playbook(
         A ``(job, error)`` pair; exactly one side is populated.
     """
     from src.scheduled_research.playbooks import build_job
+
+    if job_id:
+        from src.scheduling.system_jobs import is_system_job_id
+
+        if is_system_job_id(job_id):
+            return None, (
+                f"job id {job_id!r} is reserved for protected system jobs; "
+                "the 'system:' prefix cannot be authored"
+            )
+        if not _SAFE_JOB_ID_RE.fullmatch(job_id):
+            return None, (
+                "job id must be 1-128 characters of letters, digits, '_' or '-'"
+            )
 
     kwargs: Dict[str, Any] = {
         "variables": variables or {},

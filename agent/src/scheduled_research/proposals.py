@@ -19,6 +19,7 @@ from src.scheduled_research.service import (
     public_job,
     scheduler_status,
 )
+from src.scheduling.system_jobs import is_system_job_id
 
 _ID_RE = re.compile(r"^srp_[0-9a-f]{32}$")
 _TTL_MS = 15 * 60 * 1000
@@ -85,10 +86,25 @@ def public_proposal(payload: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _ensure_not_system_job(job_id: object, source_type: object, operation: str) -> None:
+    """Refuse any proposal that would create, replace or cancel a system job.
+
+    ``system:``-prefixed ids are seeded and repaired only by
+    :func:`src.scheduling.system_jobs.ensure_system_jobs`; no user-facing
+    surface may author, replace or remove them.
+    """
+    if is_system_job_id(job_id) or source_type == "system":
+        raise ProposalError(
+            f"scheduled research job {str(job_id)!r} is a protected system job "
+            f"and cannot be {operation} by a proposal"
+        )
+
+
 def propose_create(
     draft: Mapping[str, Any], *, session_id: str | None = None
 ) -> dict[str, Any]:
     job = build_job_from_draft(draft, session_id=session_id)
+    _ensure_not_system_job(job.id, job.source_type, "created or replaced")
     now = int(time.time() * 1000)
     payload = {
         "proposal_id": f"srp_{uuid.uuid4().hex}",
@@ -108,6 +124,7 @@ def propose_cancel(job_id: str, *, session_id: str | None = None) -> dict[str, A
     job = default_store().get(job_id)
     if job is None:
         raise ProposalError(f"scheduled research job {job_id!r} was not found")
+    _ensure_not_system_job(job.id, job.source_type, "cancelled")
     now = int(time.time() * 1000)
     payload = {
         "proposal_id": f"srp_{uuid.uuid4().hex}",
@@ -174,6 +191,16 @@ def commit_proposal(proposal_id: str) -> dict[str, Any]:
             from src.scheduled_research.models import ScheduledResearchJob
 
             job = ScheduledResearchJob.from_dict(payload["internal_job"])
+            # Authoritative re-check against the live store: proposal files
+            # live under <runtime root>/scheduled_research/proposals/ and can
+            # be hand-written or edited between propose and commit, and the
+            # row on disk may have become a system job in between.
+            _ensure_not_system_job(job.id, job.source_type, "created or replaced")
+            existing = store.get(job.id)
+            if existing is not None:
+                _ensure_not_system_job(
+                    existing.id, existing.source_type, "created or replaced"
+                )
             if job.protect_pdf:
                 from src.scheduled_research.service import email_pdf_password_configured
 
@@ -182,6 +209,10 @@ def commit_proposal(proposal_id: str) -> dict[str, Any]:
             store.upsert(job)
             payload["committed_job_id"] = job.id
         elif payload["operation"] == "cancel":
+            target = store.get(payload["job_id"])
+            if target is not None:
+                _ensure_not_system_job(target.id, target.source_type, "cancelled")
+            _ensure_not_system_job(payload["job_id"], None, "cancelled")
             if not store.delete(payload["job_id"]):
                 raise ProposalError("scheduled research job no longer exists")
             payload["committed_job_id"] = payload["job_id"]

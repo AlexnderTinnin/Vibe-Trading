@@ -684,12 +684,23 @@ def register_scheduled_routes(
             validate_timezone_shape,
         )
 
+        from src.scheduling.system_jobs import is_system_job_id
+
         _host_validate_path_param(job_id, "job_id")
         store = _get_scheduled_research_store()
         job = store.get(job_id)
         if job is None:
             raise HTTPException(
                 status_code=404, detail=f"scheduled run {job_id} not found"
+            )
+        # Defense in depth for non-REST callers (CLI, internal services,
+        # future entry points). UNREACHABLE via REST: every system job id
+        # carries ':' (SYSTEM_JOB_ID_PREFIX), which _validate_path_param
+        # above rejects with a 400 before the store is even read — the
+        # REST-visible behavior for a system job is that 400, not this 403.
+        if is_system_job_id(job.id) or job.source_type == "system":
+            raise HTTPException(
+                status_code=403, detail="system jobs cannot be modified"
             )
         if job.status == JobStatus.RUNNING or job.delivery.status == DeliveryStatus.SENDING:
             raise HTTPException(
@@ -863,7 +874,18 @@ def register_scheduled_routes(
     )
     async def delete_scheduled_run(job_id: str) -> Response:
         """Cancel (delete) a scheduled research job by id."""
+        from src.scheduling.system_jobs import is_system_job_id
+
         _host_validate_path_param(job_id, "job_id")
+        # Defense in depth for non-REST callers (CLI, internal services,
+        # future entry points). UNREACHABLE via REST: every system job id
+        # carries ':' (SYSTEM_JOB_ID_PREFIX), which _validate_path_param
+        # above rejects with a 400 before this guard runs — the REST-visible
+        # behavior for a system job is that path-parameter 400, not this 403.
+        if is_system_job_id(job_id):
+            raise HTTPException(
+                status_code=403, detail="system jobs cannot be deleted"
+            )
         removed = _get_scheduled_research_store().delete(job_id)
         if not removed:
             raise HTTPException(

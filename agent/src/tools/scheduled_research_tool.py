@@ -40,6 +40,7 @@ class ScheduledResearchTool(BaseTool):
             "draft": {
                 "type": "object",
                 "description": "Create draft; required for propose_create.",
+                "additionalProperties": False,
                 "properties": {
                     "title": {"type": "string"},
                     "source": {
