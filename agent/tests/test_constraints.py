@@ -60,6 +60,13 @@ class TestMinWeight:
         w = MinWeight(0.4).apply(np.array([0.5, 0.3, 0.2]), ["A", "B", "C"])
         np.testing.assert_allclose(w, np.full(3, 1.0 / 3.0))
 
+    def test_infeasible_floor_with_thin_funders_does_not_zero_a_name(self) -> None:
+        # 3 names x 0.05 floor needs 0.15 but the book holds 0.10; the single
+        # name above the floor can only give 0.01 toward the 0.06 lift.
+        w = MinWeight(0.05).apply(np.array([0.02, 0.02, 0.06]), ["A", "B", "C"])
+        np.testing.assert_allclose(w, np.full(3, 0.10 / 3.0))
+        assert np.all(w > 0)
+
     def test_zero_stays_zero(self) -> None:
         # handled at frame level, but the constraint itself must not invent weight
         w = MinWeight(0.2).apply(np.array([0.9, 0.1, 0.0]), ["A", "B", "C"])
