@@ -1458,6 +1458,13 @@ signal = engine.compute_signal(panel)
 
 Correlation market inference recognizes explicit crypto pairs; bare equity tickers such as `ABNB` and `SOL` use the US equity data chain.
 
+### Trade journal fees
+
+Journal PnL includes recorded fees. When one fill closes a position and opens
+an opposite position, its fee is split by quantity between the two legs.
+Profile win rate and the average-win/average-loss ratio use the resulting net
+PnL of FIFO matched portions; those portions are not necessarily whole orders.
+
 ### Market Research
 
 ```bash

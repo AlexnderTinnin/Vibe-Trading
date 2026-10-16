@@ -79,6 +79,9 @@ def pair_trades_fifo(
 ) -> list[dict[str, Any]]:
     """Pair buys and sells per symbol using FIFO to compute per-roundtrip PnL.
 
+    Reversal fees are shared proportionally between the closing quantity and
+    the remaining opening quantity, so each fee is counted exactly once.
+
     Long lots and short lots are both modelled: a sell that finds no open
     long lot opens a short lot, and a buy first covers open shorts before
     queueing as a long (#16). Short PnL is (entry - cover) x qty.
@@ -170,7 +173,7 @@ def pair_trades_fifo(
                     "dt": row.datetime,
                     "qty": remaining,
                     "price": row.price,
-                    "fee": row.fee,
+                    "fee": row.fee * (remaining / row.quantity),
                 })
             continue
 
@@ -222,7 +225,7 @@ def pair_trades_fifo(
                 "dt": row.datetime,
                 "qty": remaining,
                 "price": row.price,
-                "fee": row.fee,
+                "fee": row.fee * (remaining / row.quantity),
             })
     return roundtrips
 
