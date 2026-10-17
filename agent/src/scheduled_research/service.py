@@ -20,6 +20,7 @@ from src.scheduled_research.models import (
 )
 from src.scheduled_research.playbooks import get_playbook
 from src.scheduled_research.store import ScheduledResearchJobStore
+from src.scheduling.system_jobs import JOB_ID_RULE_MESSAGE, is_safe_job_id, is_system_job_id
 
 
 def public_job(job: ScheduledResearchJob) -> dict[str, Any]:
@@ -140,6 +141,15 @@ def build_job_from_draft(
 ) -> ScheduledResearchJob:
     """Validate the public draft and build a persisted-model job."""
     now = int(time.time() * 1000) if now_ms is None else now_ms
+    draft_id = str(draft.get("id") or "") or None
+    if draft_id is not None:
+        if is_system_job_id(draft_id):
+            raise ValueError(
+                f"job id {draft_id!r} is reserved for protected system jobs; "
+                "the 'system:' prefix cannot be authored"
+            )
+        if not is_safe_job_id(draft_id):
+            raise ValueError(JOB_ID_RULE_MESSAGE)
     title = str(draft.get("title") or "").strip()
     if not title:
         raise ValueError("title is required")
@@ -218,7 +228,7 @@ def build_job_from_draft(
         raise ValueError("PDF protection requested but no PDF password is configured")
 
     return ScheduledResearchJob(
-        id=str(draft.get("id") or f"sr-{uuid.uuid4().hex[:12]}"),
+        id=draft_id or f"sr-{uuid.uuid4().hex[:12]}",
         title=title,
         prompt=prompt,
         source_type=source_type,

@@ -136,6 +136,11 @@ async def _run_startup_preflight() -> None:
     except Exception:  # pragma: no cover — best-effort
         logging.getLogger(__name__).warning("Legacy state migration failed", exc_info=True)
     run_preflight(console)
+    # Sole scheduler start point (single-writer invariant, scheduler-unification
+    # T12): this lifespan call is the only production site that starts the
+    # scheduled-research kernel, exactly once per process, and it seeds the
+    # protected system jobs into the store before the first tick can run
+    # (order + flag-off early-return documented on the callee).
     _start_scheduled_research_executor()
     from src.config.accessor import get_env_config
 

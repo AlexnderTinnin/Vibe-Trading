@@ -1,5 +1,6 @@
 # ZimaOS custom-app template. Configure required variables before importing.
-# Daily data sync and Watchtower updates are opt-in; see README.md.
+# Daily data sync runs as a system job inside the main app (see the flags in
+# that service); Watchtower updates are opt-in; see README.md.
 name: vibe-trading
 
 services:
@@ -64,6 +65,26 @@ services:
       LANGCHAIN_MODEL_NAME: "${LANGCHAIN_MODEL_NAME:-deepseek/deepseek-v3.2}"
       OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:?Set OPENROUTER_API_KEY}"
       OPENROUTER_BASE_URL: https://openrouter.ai/api/v1
+      # Daily sync of the official Brazilian datasets (B3 COTAHIST, CVM,
+      # Banco Central, Tesouro Direto) into the br-data/ volume, where the
+      # get_br_market_data tool and the B3 loader read them. The standalone
+      # sync sidecar container is gone: the sync now runs inside this
+      # service as the protected system job `system:br-data-sync`, which is
+      # seeded and fires only while BOTH flags below are set. The first sync
+      # is no longer launched at container start but at the next 21:30
+      # America/Sao_Paulo wall time; the initial download can be several GB
+      # (now sharing this service's resource budget) and later runs only
+      # fetch what changed. VIBE_BR_SYNC_TIME drives the FIRST seed only —
+      # the row is a protected system job (REST/CLI PATCH refuse it), so
+      # retiming it later means editing the stored row's `schedule` field in
+      # scheduled_research/scheduled_research_jobs.json, or deleting that row and restarting to
+      # re-seed. NOTE: VIBE_TRADING_ENABLE_SCHEDULER=1 is the master switch
+      # for ALL scheduled research — it also runs the user's own stored
+      # scheduled runs (agent runs consuming model tokens) in this service.
+      # Set either flag to "0" to keep the daily network sync off.
+      VIBE_TRADING_ENABLE_SCHEDULER: "1"
+      VIBE_BR_SYNC_ENABLED: "1"
+      VIBE_BR_SYNC_TIME: "21:30"
       # Do NOT set VIBE_TRADING_TRUST_DOCKER_LOOPBACK here: with a LAN-published
       # port it would treat LAN clients as local.
     volumes:
@@ -120,46 +141,6 @@ services:
           description:
             en_us: Brazilian official datasets (SQLite)
             pt_br: Base oficial de dados brasileiros (SQLite)
-
-  # Daily sync of the official Brazilian datasets (B3 COTAHIST, CVM funds and
-  # companies, Banco Central, Tesouro Direto) into br-data/, where the app's
-  # get_br_market_data tool and the B3 loader read them. The first run
-  # downloads several GB and can take hours; later runs only fetch what changed.
-  vibe-trading-br-data:
-    profiles: ["br-data-sync"]
-    image: ${VIBE_TRADING_IMAGE:?Set VIBE_TRADING_IMAGE to a reviewed image tag}
-    container_name: vibe-trading-br-data
-    pull_policy: always
-    restart: unless-stopped
-    depends_on:
-      vibe-trading-init:
-        condition: service_completed_successfully
-    command: ["python", "-m", "src.br_data", "daemon"]
-    environment:
-      TZ: America/Sao_Paulo
-      # First years to download (B3 publishes from 1986; each year of
-      # COTAHIST is a few hundred MB in SQLite, options included).
-      VIBE_BR_COTAHIST_START_YEAR: "2015"
-      VIBE_BR_CVM_START_YEAR: "2022"
-      # Daily run time (Sao Paulo), after B3 and CVM publish the day's files.
-      VIBE_BR_SYNC_TIME: "21:30"
-    volumes:
-      - ${VIBE_TRADING_APPDATA:-/DATA/AppData/vibe-trading}/home:/home/vibe/.vibe-trading
-      - ${VIBE_TRADING_APPDATA:-/DATA/AppData/vibe-trading}/br-data:/home/vibe/.vibe-trading/br-data
-    # The image's healthcheck probes the web server, which this service does
-    # not run.
-    healthcheck:
-      disable: true
-    cap_drop:
-      - ALL
-    security_opt:
-      - "no-new-privileges:true"
-    read_only: true
-    tmpfs:
-      - /tmp
-    mem_limit: 2g
-    labels:
-      com.centurylinklabs.watchtower.enable: "false"
 
 x-casaos:
   architectures:

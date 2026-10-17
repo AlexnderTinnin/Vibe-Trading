@@ -1,0 +1,1812 @@
+{
+  "meta": {
+    "captured_from": [
+      "src.scheduled_research.executor (next_due, _next_cron_due, _local_wall_time_to_epoch_ms, _day_matches)",
+      "src.scheduled_research.models (CRON_BOUNDS, parse_cron_field, validate_schedule, validate_timezone, validate_timezone_shape, is_interval_schedule)"
+    ],
+    "source_commit": "fb29ed13c2d62391ea9dd8b87129cc2b08fe5813",
+    "base_commit_origin_main": "29aa084fb7866087c612ddd55ef5449824374e22",
+    "captured_files_identical_to_base": true,
+    "source_tree_clean_for_captured_files": true,
+    "python": "3.12.8",
+    "note": "Captured mechanically from the PRE-MOVE implementation before any code was moved to src/scheduling/triggers.py (scheduler-unification T1). Values are raw function outputs; 'error' entries record exception type + str(exc). tz='__DEFAULT__' means next_due was called without the tz argument."
+  },
+  "vectors": [
+    {
+      "id": "next_due/interval/basic-60000",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "60000",
+        "after_ms": 5000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 65000
+      }
+    },
+    {
+      "id": "next_due/interval/basic-21600000",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "21600000",
+        "after_ms": 1000000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 22600000
+      }
+    },
+    {
+      "id": "next_due/interval/ignores-valid-tz",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "60000",
+        "after_ms": 5000,
+        "tz": "Pacific/Auckland"
+      },
+      "expect": {
+        "ok": 65000
+      }
+    },
+    {
+      "id": "next_due/interval/advances-under-unresolvable-tz",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "60000",
+        "after_ms": 5000,
+        "tz": "Not/AZone"
+      },
+      "expect": {
+        "ok": 65000
+      }
+    },
+    {
+      "id": "next_due/interval/minimal-1ms",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "1",
+        "after_ms": 0,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1
+      }
+    },
+    {
+      "id": "next_due/interval/15-digit-upper-bound-ok",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "999999999999999",
+        "after_ms": 0,
+        "tz": null
+      },
+      "expect": {
+        "ok": 999999999999999
+      }
+    },
+    {
+      "id": "next_due/interval/16-digit-rejected",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "1000000000000000",
+        "after_ms": 0,
+        "tz": null
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "interval is too large; expected at most 15 digits of milliseconds"
+      }
+    },
+    {
+      "id": "next_due/interval/zero-rejected",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0",
+        "after_ms": 0,
+        "tz": null
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "schedule must be a positive integer (ms) or a 5-field cron string; got: '0'"
+      }
+    },
+    {
+      "id": "next_due/interval/surrounding-whitespace-stripped",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": " 60000 ",
+        "after_ms": 5000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 65000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/every-6h-before-due",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 */6 * * *",
+        "after_ms": 1781935140000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1781935200000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/every-6h-strictly-after",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 */6 * * *",
+        "after_ms": 1781935200000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1781956800000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/every-15m-on-boundary",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "*/15 * * * *",
+        "after_ms": 1773489600000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1773490500000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/every-15m-mid-window",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "*/15 * * * *",
+        "after_ms": 1773490440000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1773490500000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/every-15m-hour-rollover",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "*/15 * * * *",
+        "after_ms": 1773492300000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1773493200000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/weekday-2000-same-day",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 20 * * 1-5",
+        "after_ms": 1781121540000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1781121600000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/weekday-2000-fri-to-mon",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 20 * * 1-5",
+        "after_ms": 1781294400000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1781553600000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/weekday-0830-fri-to-mon",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "30 8 * * 1-5",
+        "after_ms": 1781253000000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1781512200000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/playbook-cadence-from-jan1",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 9 15 2,5,8,11 *",
+        "after_ms": 1767225600000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1771146000000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/playbook-cadence-feb-to-may",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 9 15 2,5,8,11 *",
+        "after_ms": 1771146000000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1778835600000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/new-year-midnight",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 0 1 1 *",
+        "after_ms": 1780272000000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1798761600000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/sunday-is-zero",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 12 * * 0",
+        "after_ms": 1781049600000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1781438400000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/saturday-is-six",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 12 * * 6",
+        "after_ms": 1781049600000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1781352000000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/dow-7-rejected",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 12 * * 7",
+        "after_ms": 1781049600000,
+        "tz": null
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "cron field '7' is out of range; expected 0-6"
+      }
+    },
+    {
+      "id": "next_due/cron-utc/comma-range-mix-at-0",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "1,3-5 * * * *",
+        "after_ms": 1781049600000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1781049660000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/comma-range-mix-skips-2",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "1,3-5 * * * *",
+        "after_ms": 1781049720000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1781049780000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/reversed-range-rejected",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "5-1 * * * *",
+        "after_ms": 0,
+        "tz": null
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "cron range '5-1' is reversed; expected low-high"
+      }
+    },
+    {
+      "id": "next_due/cron-utc/feb-31-window-exhausted",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 0 31 2 *",
+        "after_ms": 1767225600000,
+        "tz": null
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "cron schedule has no matching time within search window: '0 0 31 2 *'"
+      }
+    },
+    {
+      "id": "next_due/cron-utc/feb-30-window-exhausted",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 0 30 2 *",
+        "after_ms": 1767225600000,
+        "tz": null
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "cron schedule has no matching time within search window: '0 0 30 2 *'"
+      }
+    },
+    {
+      "id": "next_due/cron-utc/apr-31-window-exhausted",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 0 31 4 *",
+        "after_ms": 1767225600000,
+        "tz": null
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "cron schedule has no matching time within search window: '0 0 31 4 *'"
+      }
+    },
+    {
+      "id": "next_due/cron-utc/feb-29-leap-day-2028",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 0 29 2 *",
+        "after_ms": 1772323200000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1835395200000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/feb-29-leap-day-2032-deep-search",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 0 29 2 *",
+        "after_ms": 1835481600000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1961625600000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/dom-dow-or-dow-wins",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 0 13 * 5",
+        "after_ms": 1781136060000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1781222400000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/dom-dow-or-dom-wins",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 0 13 * 5",
+        "after_ms": 1781222460000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1781308800000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/dom-wildcard-dow",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 0 13 * *",
+        "after_ms": 1781136060000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1781308800000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/dow-wildcard-dom",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 0 * * 5",
+        "after_ms": 1781136060000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1781222400000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/weekday-1130-fri-to-mon",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "30 11 * * 1-5",
+        "after_ms": 1785497400000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1785756600000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/sunday-noon-strictly-after",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 0 * * 0",
+        "after_ms": 1781438400000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1782000000000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/unresolvable-tz-rejected",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 12 * * *",
+        "after_ms": 0,
+        "tz": "Not/AZone"
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "timezone 'Not/AZone' is not a recognized IANA timezone key"
+      }
+    },
+    {
+      "id": "next_due/cron-utc/empty-schedule-rejected",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "",
+        "after_ms": 0,
+        "tz": null
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "schedule must be a non-empty string"
+      }
+    },
+    {
+      "id": "next_due/cron-utc/four-fields-rejected",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 12 * *",
+        "after_ms": 0,
+        "tz": null
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "schedule must be a positive integer (ms) or a 5-field cron string; got: '0 12 * *'"
+      }
+    },
+    {
+      "id": "next_due/cron-utc/minute-99-rejected",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "99 * * * *",
+        "after_ms": 0,
+        "tz": null
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "cron field '99' is out of range; expected 0-59"
+      }
+    },
+    {
+      "id": "next_due/cron-utc/step-60-rejected",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "*/60 * * * *",
+        "after_ms": 0,
+        "tz": null
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "cron field '*/60' is out of range; expected 0-59"
+      }
+    },
+    {
+      "id": "next_due/cron-utc/dow-range-6-7-rejected",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 0 * * 6-7",
+        "after_ms": 0,
+        "tz": null
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "cron field '6-7' is out of range; expected 0-6"
+      }
+    },
+    {
+      "id": "next_due/cron-utc/surrounding-whitespace",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "  0 12 * * *  ",
+        "after_ms": 1781049600000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1781092800000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/legacy-signature-parity-6h",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 */6 * * *",
+        "after_ms": 1781136060000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1781157600000
+      }
+    },
+    {
+      "id": "next_due/cron-utc/legacy-signature-parity-interval",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "60000",
+        "after_ms": 1781136060000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1781136120000
+      }
+    },
+    {
+      "id": "next_due/dst-ny/spring-gap-skipped",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "30 2 * * *",
+        "after_ms": 1772868600000,
+        "tz": "America/New_York"
+      },
+      "expect": {
+        "ok": 1773037800000
+      }
+    },
+    {
+      "id": "next_due/dst-ny/fall-fold-first-occurrence",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "30 1 * * *",
+        "after_ms": 1793424600000,
+        "tz": "America/New_York"
+      },
+      "expect": {
+        "ok": 1793511000000
+      }
+    },
+    {
+      "id": "next_due/dst-ny/fall-fold-fires-once",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "30 1 * * *",
+        "after_ms": 1793511000000,
+        "tz": "America/New_York"
+      },
+      "expect": {
+        "ok": 1793601000000
+      }
+    },
+    {
+      "id": "next_due/dst-akl/weekday-2330-across-spring",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "30 23 * * 1-5",
+        "after_ms": 1790335800000,
+        "tz": "Pacific/Auckland"
+      },
+      "expect": {
+        "ok": 1790591400000
+      }
+    },
+    {
+      "id": "next_due/dst-akl/weekday-2330-across-fall",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "30 23 * * 1-5",
+        "after_ms": 1775212200000,
+        "tz": "Pacific/Auckland"
+      },
+      "expect": {
+        "ok": 1775475000000
+      }
+    },
+    {
+      "id": "next_due/dst-akl/spring-gap-skipped",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "30 2 * * *",
+        "after_ms": 1790346600000,
+        "tz": "Pacific/Auckland"
+      },
+      "expect": {
+        "ok": 1790515800000
+      }
+    },
+    {
+      "id": "next_due/dst-akl/fall-fold-first-occurrence",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "30 2 * * *",
+        "after_ms": 1775223000000,
+        "tz": "Pacific/Auckland"
+      },
+      "expect": {
+        "ok": 1775309400000
+      }
+    },
+    {
+      "id": "next_due/dst-akl/monday-0030-is-sunday-in-utc",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "30 0 * * 1",
+        "after_ms": 1781395200000,
+        "tz": "Pacific/Auckland"
+      },
+      "expect": {
+        "ok": 1781440200000
+      }
+    },
+    {
+      "id": "next_due/dst-akl/strictly-after-in-local-zone",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 12 * * *",
+        "after_ms": 1781481600000,
+        "tz": "Pacific/Auckland"
+      },
+      "expect": {
+        "ok": 1781568000000
+      }
+    },
+    {
+      "id": "next_due/tz-adl/half-hour-offset-daily",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 9 * * *",
+        "after_ms": 1781047800000,
+        "tz": "Australia/Adelaide"
+      },
+      "expect": {
+        "ok": 1781134200000
+      }
+    },
+    {
+      "id": "next_due/tz-adl/across-spring-forward",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 9 * * *",
+        "after_ms": 1790983800000,
+        "tz": "Australia/Adelaide"
+      },
+      "expect": {
+        "ok": 1791066600000
+      }
+    },
+    {
+      "id": "next_due/tz-sha/noon-local-from-utc-ref",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 12 * * *",
+        "after_ms": 1781063940000,
+        "tz": "Asia/Shanghai"
+      },
+      "expect": {
+        "ok": 1781064000000
+      }
+    },
+    {
+      "id": "next_due/tz-sha/new-year-local",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 0 1 1 *",
+        "after_ms": 1767225600000,
+        "tz": "Asia/Shanghai"
+      },
+      "expect": {
+        "ok": 1798732800000
+      }
+    },
+    {
+      "id": "next_due/tz-sha/no-fold-no-dst",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "30 1 * * *",
+        "after_ms": 1793467800000,
+        "tz": "Asia/Shanghai"
+      },
+      "expect": {
+        "ok": 1793554200000
+      }
+    },
+    {
+      "id": "next_due/default-tz-parity/cron",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "0 */6 * * *",
+        "after_ms": 1781136060000,
+        "tz": "__DEFAULT__"
+      },
+      "expect": {
+        "ok": 1781157600000
+      }
+    },
+    {
+      "id": "next_due/default-tz-parity/interval",
+      "kind": "next_due",
+      "inputs": {
+        "schedule": "60000",
+        "after_ms": 1781136060000,
+        "tz": "__DEFAULT__"
+      },
+      "expect": {
+        "ok": 1781136120000
+      }
+    },
+    {
+      "id": "next_cron_due/direct/utc-noon",
+      "kind": "next_cron_due",
+      "inputs": {
+        "schedule": "0 12 * * *",
+        "after_ms": 1781049600000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1781092800000
+      }
+    },
+    {
+      "id": "next_cron_due/direct/ny-spring-gap",
+      "kind": "next_cron_due",
+      "inputs": {
+        "schedule": "30 2 * * *",
+        "after_ms": 1772868600000,
+        "tz": "America/New_York"
+      },
+      "expect": {
+        "ok": 1773037800000
+      }
+    },
+    {
+      "id": "next_cron_due/direct/feb-31-window-exhausted",
+      "kind": "next_cron_due",
+      "inputs": {
+        "schedule": "0 0 31 2 *",
+        "after_ms": 1767225600000,
+        "tz": null
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "cron schedule has no matching time within search window: '0 0 31 2 *'"
+      }
+    },
+    {
+      "id": "next_cron_due/direct/dom-dow-or",
+      "kind": "next_cron_due",
+      "inputs": {
+        "schedule": "0 0 13 * 5",
+        "after_ms": 1781136060000,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1781222400000
+      }
+    },
+    {
+      "id": "next_cron_due/direct/unresolvable-tz-raw-zoneinfo-error",
+      "kind": "next_cron_due",
+      "inputs": {
+        "schedule": "0 12 * * *",
+        "after_ms": 0,
+        "tz": "Not/AZone"
+      },
+      "expect": {
+        "error": "ZoneInfoNotFoundError",
+        "message": "'No time zone found with key Not/AZone'"
+      }
+    },
+    {
+      "id": "local_wall/utc/plain",
+      "kind": "local_wall",
+      "inputs": {
+        "day": [
+          2026,
+          6,
+          10
+        ],
+        "hour": 12,
+        "minute": 0,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1781092800000
+      }
+    },
+    {
+      "id": "local_wall/shanghai/plain",
+      "kind": "local_wall",
+      "inputs": {
+        "day": [
+          2026,
+          6,
+          10
+        ],
+        "hour": 12,
+        "minute": 0,
+        "tz": "Asia/Shanghai"
+      },
+      "expect": {
+        "ok": 1781064000000
+      }
+    },
+    {
+      "id": "local_wall/ny/spring-gap-none",
+      "kind": "local_wall",
+      "inputs": {
+        "day": [
+          2026,
+          3,
+          8
+        ],
+        "hour": 2,
+        "minute": 30,
+        "tz": "America/New_York"
+      },
+      "expect": {
+        "ok": null
+      }
+    },
+    {
+      "id": "local_wall/ny/fall-fold-first",
+      "kind": "local_wall",
+      "inputs": {
+        "day": [
+          2026,
+          11,
+          1
+        ],
+        "hour": 1,
+        "minute": 30,
+        "tz": "America/New_York"
+      },
+      "expect": {
+        "ok": 1793511000000
+      }
+    },
+    {
+      "id": "local_wall/akl/spring-gap-none",
+      "kind": "local_wall",
+      "inputs": {
+        "day": [
+          2026,
+          9,
+          27
+        ],
+        "hour": 2,
+        "minute": 30,
+        "tz": "Pacific/Auckland"
+      },
+      "expect": {
+        "ok": null
+      }
+    },
+    {
+      "id": "local_wall/akl/fall-fold-first",
+      "kind": "local_wall",
+      "inputs": {
+        "day": [
+          2026,
+          4,
+          5
+        ],
+        "hour": 2,
+        "minute": 30,
+        "tz": "Pacific/Auckland"
+      },
+      "expect": {
+        "ok": 1775309400000
+      }
+    },
+    {
+      "id": "local_wall/adl/spring-gap-none",
+      "kind": "local_wall",
+      "inputs": {
+        "day": [
+          2026,
+          10,
+          4
+        ],
+        "hour": 2,
+        "minute": 30,
+        "tz": "Australia/Adelaide"
+      },
+      "expect": {
+        "ok": null
+      }
+    },
+    {
+      "id": "local_wall/shanghai/no-dst-fold-date",
+      "kind": "local_wall",
+      "inputs": {
+        "day": [
+          2026,
+          11,
+          1
+        ],
+        "hour": 1,
+        "minute": 30,
+        "tz": "Asia/Shanghai"
+      },
+      "expect": {
+        "ok": 1793467800000
+      }
+    },
+    {
+      "id": "local_wall/utc/leap-day",
+      "kind": "local_wall",
+      "inputs": {
+        "day": [
+          2028,
+          2,
+          29
+        ],
+        "hour": 0,
+        "minute": 0,
+        "tz": null
+      },
+      "expect": {
+        "ok": 1835395200000
+      }
+    },
+    {
+      "id": "day_matches/sunday-dow-zero",
+      "kind": "day_matches",
+      "inputs": {
+        "day": [
+          2026,
+          6,
+          14
+        ],
+        "doms": null,
+        "months": null,
+        "dows": [
+          0
+        ]
+      },
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "id": "day_matches/sunday-not-saturday",
+      "kind": "day_matches",
+      "inputs": {
+        "day": [
+          2026,
+          6,
+          14
+        ],
+        "doms": null,
+        "months": null,
+        "dows": [
+          6
+        ]
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "id": "day_matches/friday-dow-five",
+      "kind": "day_matches",
+      "inputs": {
+        "day": [
+          2026,
+          6,
+          12
+        ],
+        "doms": null,
+        "months": null,
+        "dows": [
+          5
+        ]
+      },
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "id": "day_matches/or-dow-wins",
+      "kind": "day_matches",
+      "inputs": {
+        "day": [
+          2026,
+          6,
+          12
+        ],
+        "doms": [
+          13
+        ],
+        "months": null,
+        "dows": [
+          5
+        ]
+      },
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "id": "day_matches/or-dom-wins",
+      "kind": "day_matches",
+      "inputs": {
+        "day": [
+          2026,
+          6,
+          13
+        ],
+        "doms": [
+          13
+        ],
+        "months": null,
+        "dows": [
+          5
+        ]
+      },
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "id": "day_matches/or-neither-matches",
+      "kind": "day_matches",
+      "inputs": {
+        "day": [
+          2026,
+          6,
+          11
+        ],
+        "doms": [
+          13
+        ],
+        "months": null,
+        "dows": [
+          5
+        ]
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "id": "day_matches/month-set-feb",
+      "kind": "day_matches",
+      "inputs": {
+        "day": [
+          2026,
+          2,
+          15
+        ],
+        "doms": null,
+        "months": [
+          2,
+          5,
+          8,
+          11
+        ],
+        "dows": null
+      },
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "id": "day_matches/month-set-mar",
+      "kind": "day_matches",
+      "inputs": {
+        "day": [
+          2026,
+          3,
+          15
+        ],
+        "doms": null,
+        "months": [
+          2,
+          5,
+          8,
+          11
+        ],
+        "dows": null
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "id": "day_matches/month-gate-beats-or",
+      "kind": "day_matches",
+      "inputs": {
+        "day": [
+          2026,
+          3,
+          13
+        ],
+        "doms": [
+          13
+        ],
+        "months": [
+          2
+        ],
+        "dows": [
+          5
+        ]
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "id": "day_matches/dom-only-match",
+      "kind": "day_matches",
+      "inputs": {
+        "day": [
+          2026,
+          6,
+          13
+        ],
+        "doms": [
+          13
+        ],
+        "months": null,
+        "dows": null
+      },
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "id": "day_matches/dow-only-match",
+      "kind": "day_matches",
+      "inputs": {
+        "day": [
+          2026,
+          6,
+          12
+        ],
+        "doms": null,
+        "months": null,
+        "dows": [
+          5
+        ]
+      },
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "id": "day_matches/all-wildcards",
+      "kind": "day_matches",
+      "inputs": {
+        "day": [
+          2026,
+          6,
+          11
+        ],
+        "doms": null,
+        "months": null,
+        "dows": null
+      },
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "id": "day_matches/weekday-set-sunday-out",
+      "kind": "day_matches",
+      "inputs": {
+        "day": [
+          2026,
+          6,
+          14
+        ],
+        "doms": null,
+        "months": null,
+        "dows": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "id": "day_matches/weekday-set-monday-in",
+      "kind": "day_matches",
+      "inputs": {
+        "day": [
+          2026,
+          6,
+          15
+        ],
+        "doms": null,
+        "months": null,
+        "dows": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "id": "parse_cron_field/wildcard-minute",
+      "kind": "parse_cron_field",
+      "inputs": {
+        "part": "*",
+        "low": 0,
+        "high": 59
+      },
+      "expect": {
+        "ok": null
+      }
+    },
+    {
+      "id": "parse_cron_field/step-15-minute",
+      "kind": "parse_cron_field",
+      "inputs": {
+        "part": "*/15",
+        "low": 0,
+        "high": 59
+      },
+      "expect": {
+        "ok": [
+          0,
+          15,
+          30,
+          45
+        ]
+      }
+    },
+    {
+      "id": "parse_cron_field/comma-range-mix",
+      "kind": "parse_cron_field",
+      "inputs": {
+        "part": "1,3-5",
+        "low": 0,
+        "high": 59
+      },
+      "expect": {
+        "ok": [
+          1,
+          3,
+          4,
+          5
+        ]
+      }
+    },
+    {
+      "id": "parse_cron_field/range-dow",
+      "kind": "parse_cron_field",
+      "inputs": {
+        "part": "1-5",
+        "low": 0,
+        "high": 6
+      },
+      "expect": {
+        "ok": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      }
+    },
+    {
+      "id": "parse_cron_field/comma-list-months",
+      "kind": "parse_cron_field",
+      "inputs": {
+        "part": "2,5,8,11",
+        "low": 1,
+        "high": 12
+      },
+      "expect": {
+        "ok": [
+          2,
+          5,
+          8,
+          11
+        ]
+      }
+    },
+    {
+      "id": "parse_cron_field/bare-zero-dow",
+      "kind": "parse_cron_field",
+      "inputs": {
+        "part": "0",
+        "low": 0,
+        "high": 6
+      },
+      "expect": {
+        "ok": [
+          0
+        ]
+      }
+    },
+    {
+      "id": "parse_cron_field/step-2-dom",
+      "kind": "parse_cron_field",
+      "inputs": {
+        "part": "*/2",
+        "low": 1,
+        "high": 31
+      },
+      "expect": {
+        "ok": [
+          1,
+          3,
+          5,
+          7,
+          9,
+          11,
+          13,
+          15,
+          17,
+          19,
+          21,
+          23,
+          25,
+          27,
+          29,
+          31
+        ]
+      }
+    },
+    {
+      "id": "parse_cron_field/full-range-dow",
+      "kind": "parse_cron_field",
+      "inputs": {
+        "part": "0-6",
+        "low": 0,
+        "high": 6
+      },
+      "expect": {
+        "ok": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      }
+    },
+    {
+      "id": "parse_cron_field/step-6-hour",
+      "kind": "parse_cron_field",
+      "inputs": {
+        "part": "*/6",
+        "low": 0,
+        "high": 23
+      },
+      "expect": {
+        "ok": [
+          0,
+          6,
+          12,
+          18
+        ]
+      }
+    },
+    {
+      "id": "validate_schedule/interval-ok",
+      "kind": "validate_schedule",
+      "inputs": {
+        "schedule": "60000"
+      },
+      "expect": {
+        "ok": null
+      }
+    },
+    {
+      "id": "validate_schedule/cron-ok",
+      "kind": "validate_schedule",
+      "inputs": {
+        "schedule": "0 */6 * * *"
+      },
+      "expect": {
+        "ok": null
+      }
+    },
+    {
+      "id": "validate_schedule/dow-7-rejected",
+      "kind": "validate_schedule",
+      "inputs": {
+        "schedule": "0 12 * * 7"
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "cron field '7' is out of range; expected 0-6"
+      }
+    },
+    {
+      "id": "validate_schedule/reversed-range-rejected",
+      "kind": "validate_schedule",
+      "inputs": {
+        "schedule": "5-1 * * * *"
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "cron range '5-1' is reversed; expected low-high"
+      }
+    },
+    {
+      "id": "validate_schedule/empty-rejected",
+      "kind": "validate_schedule",
+      "inputs": {
+        "schedule": ""
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "schedule must be a non-empty string"
+      }
+    },
+    {
+      "id": "validate_schedule/interval-16-digits-rejected",
+      "kind": "validate_schedule",
+      "inputs": {
+        "schedule": "1000000000000000"
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "interval is too large; expected at most 15 digits of milliseconds"
+      }
+    },
+    {
+      "id": "validate_schedule/interval-15-digits-ok",
+      "kind": "validate_schedule",
+      "inputs": {
+        "schedule": "999999999999999"
+      },
+      "expect": {
+        "ok": null
+      }
+    },
+    {
+      "id": "validate_schedule/garbage-rejected",
+      "kind": "validate_schedule",
+      "inputs": {
+        "schedule": "abc"
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "schedule must be a positive integer (ms) or a 5-field cron string; got: 'abc'"
+      }
+    },
+    {
+      "id": "validate_schedule/feb-29-grammar-ok",
+      "kind": "validate_schedule",
+      "inputs": {
+        "schedule": "0 0 29 2 *"
+      },
+      "expect": {
+        "ok": null
+      }
+    },
+    {
+      "id": "validate_schedule/dow-full-range-ok",
+      "kind": "validate_schedule",
+      "inputs": {
+        "schedule": "0 12 * * 0-6"
+      },
+      "expect": {
+        "ok": null
+      }
+    },
+    {
+      "id": "validate_schedule/step-zero-rejected",
+      "kind": "validate_schedule",
+      "inputs": {
+        "schedule": "*/0 * * * *"
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "cron field '*/0' is not valid; each field must be *, */n, or a comma-separated list of numbers and low-high ranges"
+      }
+    },
+    {
+      "id": "validate_schedule/dow-name-rejected",
+      "kind": "validate_schedule",
+      "inputs": {
+        "schedule": "0 12 * * MON"
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "cron field 'MON' is not valid; each field must be *, */n, or a comma-separated list of numbers and low-high ranges"
+      }
+    },
+    {
+      "id": "validate_schedule/non-string-rejected",
+      "kind": "validate_schedule",
+      "inputs": {
+        "schedule": 12345
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "schedule must be a non-empty string"
+      }
+    },
+    {
+      "id": "validate_schedule/six-fields-rejected",
+      "kind": "validate_schedule",
+      "inputs": {
+        "schedule": "0 12 * * 0 2026"
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "schedule must be a positive integer (ms) or a 5-field cron string; got: '0 12 * * 0 2026'"
+      }
+    },
+    {
+      "id": "validate_timezone/none-ok",
+      "kind": "validate_timezone",
+      "inputs": {
+        "tz": null
+      },
+      "expect": {
+        "ok": null
+      }
+    },
+    {
+      "id": "validate_timezone/shanghai-ok",
+      "kind": "validate_timezone",
+      "inputs": {
+        "tz": "Asia/Shanghai"
+      },
+      "expect": {
+        "ok": null
+      }
+    },
+    {
+      "id": "validate_timezone/new-york-ok",
+      "kind": "validate_timezone",
+      "inputs": {
+        "tz": "America/New_York"
+      },
+      "expect": {
+        "ok": null
+      }
+    },
+    {
+      "id": "validate_timezone/unknown-key-rejected",
+      "kind": "validate_timezone",
+      "inputs": {
+        "tz": "Not/AZone"
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "timezone 'Not/AZone' is not a recognized IANA timezone key"
+      }
+    },
+    {
+      "id": "validate_timezone/empty-rejected",
+      "kind": "validate_timezone",
+      "inputs": {
+        "tz": ""
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "timezone must be a non-empty IANA timezone key or null"
+      }
+    },
+    {
+      "id": "validate_timezone_shape/none-ok",
+      "kind": "validate_timezone_shape",
+      "inputs": {
+        "tz": null
+      },
+      "expect": {
+        "ok": null
+      }
+    },
+    {
+      "id": "validate_timezone_shape/unresolvable-key-shape-ok",
+      "kind": "validate_timezone_shape",
+      "inputs": {
+        "tz": "Not/AZone"
+      },
+      "expect": {
+        "ok": null
+      }
+    },
+    {
+      "id": "validate_timezone_shape/empty-rejected",
+      "kind": "validate_timezone_shape",
+      "inputs": {
+        "tz": ""
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "timezone must be a non-empty IANA timezone key or null"
+      }
+    },
+    {
+      "id": "validate_timezone_shape/whitespace-rejected",
+      "kind": "validate_timezone_shape",
+      "inputs": {
+        "tz": "   "
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "timezone must be a non-empty IANA timezone key or null"
+      }
+    },
+    {
+      "id": "validate_timezone_shape/non-string-rejected",
+      "kind": "validate_timezone_shape",
+      "inputs": {
+        "tz": 123
+      },
+      "expect": {
+        "error": "ValueError",
+        "message": "timezone must be a non-empty IANA timezone key or null"
+      }
+    },
+    {
+      "id": "is_interval_schedule/plain-interval",
+      "kind": "is_interval_schedule",
+      "inputs": {
+        "schedule": "60000"
+      },
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "id": "is_interval_schedule/cron",
+      "kind": "is_interval_schedule",
+      "inputs": {
+        "schedule": "0 */6 * * *"
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "id": "is_interval_schedule/zero",
+      "kind": "is_interval_schedule",
+      "inputs": {
+        "schedule": "0"
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "id": "is_interval_schedule/whitespace-padded",
+      "kind": "is_interval_schedule",
+      "inputs": {
+        "schedule": " 60000 "
+      },
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "id": "is_interval_schedule/garbage",
+      "kind": "is_interval_schedule",
+      "inputs": {
+        "schedule": "abc"
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "id": "is_interval_schedule/negative",
+      "kind": "is_interval_schedule",
+      "inputs": {
+        "schedule": "-5"
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "id": "is_interval_schedule/leading-zeros",
+      "kind": "is_interval_schedule",
+      "inputs": {
+        "schedule": "007"
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "id": "is_interval_schedule/empty",
+      "kind": "is_interval_schedule",
+      "inputs": {
+        "schedule": ""
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "id": "const/CRON_BOUNDS",
+      "kind": "const",
+      "inputs": {
+        "name": "CRON_BOUNDS"
+      },
+      "expect": {
+        "ok": [
+          [
+            0,
+            59
+          ],
+          [
+            0,
+            23
+          ],
+          [
+            1,
+            31
+          ],
+          [
+            1,
+            12
+          ],
+          [
+            0,
+            6
+          ]
+        ]
+      }
+    },
+    {
+      "id": "const/_CRON_SEARCH_LIMIT_DAYS",
+      "kind": "const",
+      "inputs": {
+        "name": "_CRON_SEARCH_LIMIT_DAYS"
+      },
+      "expect": {
+        "ok": 2197
+      }
+    }
+  ]
+}

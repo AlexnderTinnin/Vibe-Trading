@@ -75,12 +75,10 @@ class ChannelManager:
         bus: MessageBus,
         *,
         session_service: Any | None = None,
-        cron_service: Any | None = None,
     ) -> None:
         self.config = config
         self.bus = bus
         self._session_service = session_service
-        self._cron_service = cron_service
         self.channels: dict[str, BaseChannel] = {}
         self._dispatch_task: asyncio.Task | None = None
         self._start_tasks: set[asyncio.Task] = set()
@@ -187,7 +185,6 @@ class ChannelManager:
             return {
                 "gateway": build_gateway_services(
                     session_manager=self._session_service,
-                    cron_service=self._cron_service,
                     workspace_path=get_workspace_path(),
                 )
             }

@@ -42,9 +42,26 @@ python -m src.br_data sync --only bcb tesouro
 python -m src.br_data sync --only cotahist --cotahist-from 2025
 ```
 
-The initial full download can be several GB. The daily sync service is off by
-default; enable it explicitly with `--profile br-data-sync` when starting
-Compose. Its schedule is controlled by `VIBE_BR_SYNC_TIME` in São Paulo time.
+The initial full download can be several GB. The daily sync no longer runs as a
+separate sidecar container or Compose profile: it now runs inside the main
+application container as the protected system job `system:br-data-sync`, which
+is seeded and fires only while the main service sets **both**
+`VIBE_TRADING_ENABLE_SCHEDULER=1` and `VIBE_BR_SYNC_ENABLED=1`. This compose
+template sets both; set either to `0` to keep the daily network sync off.
+Note the coupling this creates: `VIBE_TRADING_ENABLE_SCHEDULER=1` is the
+master switch for the whole scheduled-research executor, so besides the sync
+job it also runs **your own** stored scheduled research runs inside this
+container (each firing is an agent run and consumes model tokens). The first
+sync is no longer launched at container start but at the next
+`VIBE_BR_SYNC_TIME` slot (São Paulo wall clock, default 21:30), after B3 and
+CVM publish the day's files, and that multi-GB first download now shares this
+main service's memory/CPU budget (the dedicated sidecar is gone).
+`VIBE_BR_SYNC_TIME` drives the **first seed** only — the row is a protected
+system job (REST/CLI PATCH and DELETE refuse it), so retiming it later means
+editing the `schedule` field of the stored row in
+`~/.vibe-trading/scheduled_research/scheduled_research_jobs.json` (a valid edited schedule is
+trusted at the next startup), or deleting that row and restarting to re-seed
+from the env value.
 Historical coverage starts at `VIBE_BR_COTAHIST_START_YEAR` (default 2015) and
 `VIBE_BR_CVM_START_YEAR` (default 2022). No sync is launched by opening the UI.
 
@@ -66,6 +83,19 @@ roll back, select a previous immutable `sha-<commit>` tag and restart Compose.
 
 Configure a imagem, a pasta persistente e as chaves antes de importar o Compose.
 O aplicativo não inicia com chaves de exemplo. A sincronização diária dos dados
-brasileiros e as atualizações automáticas ficam desativadas por padrão. Ative o
-perfil `br-data-sync` somente se quiser baixar a base oficial e mantê-la atualizada.
-O workflow é um modelo inativo para seu próprio fork; não publica no upstream.
+brasileiros não usa mais contêiner separado nem perfil do Compose: ela roda no
+contêiner principal como tarefa de sistema protegida (`system:br-data-sync`),
+ativada neste modelo por `VIBE_TRADING_ENABLE_SCHEDULER=1` e
+`VIBE_BR_SYNC_ENABLED=1` (defina qualquer um dos dois como `0` para mantê-la
+desativada). A primeira sincronização não ocorre ao iniciar o contêiner, mas no
+próximo horário `VIBE_BR_SYNC_TIME` (fuso de São Paulo, padrão 21:30); esse
+valor vale apenas para a primeira criação da tarefa. Como a tarefa é
+protegida (PATCH/DELETE via REST e CLI são recusados), mudar o horário depois
+exige editar o campo `schedule` da linha armazenada em
+`~/.vibe-trading/scheduled_research/scheduled_research_jobs.json` (uma edição válida é aceita na
+próxima inicialização), ou apagar a linha e reiniciar para recriá-la a partir
+do valor do ambiente. Lembre que `VIBE_TRADING_ENABLE_SCHEDULER=1` também
+executa suas próprias pesquisas agendadas no contêiner principal (cada
+disparo consome tokens do modelo). As atualizações automáticas
+ficam desativadas por padrão. O workflow é um modelo inativo para seu próprio
+fork; não publica no upstream.

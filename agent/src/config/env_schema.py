@@ -248,15 +248,27 @@ class DataConfig(_EnvBase):
     vibe_trading_openalex_mailto: str = Field(alias="VIBE_TRADING_OPENALEX_MAILTO", default="")
     vibe_tw_stock_db: str = Field(alias="VIBE_TW_STOCK_DB", default="")
     # Brazilian official data (B3 COTAHIST, CVM, BCB, Tesouro Direto), synced
-    # by ``vibe-trading br-data sync`` into one SQLite file. Empty = default
+    # by the one-off CLI ``python -m src.br_data sync`` or by the daily
+    # ``system:br-data-sync`` job (gated by ``vibe_br_sync_enabled`` below)
+    # into one SQLite file. Empty = default
     # ``~/.vibe-trading/br-data/br_data.db``.
     vibe_br_data_db: str = Field(alias="VIBE_BR_DATA_DB", default="")
     # First COTAHIST year a sync downloads (B3 publishes from 1986).
     vibe_br_cotahist_start_year: int = Field(alias="VIBE_BR_COTAHIST_START_YEAR", default=2015)
     # First year of CVM fund daily reports / company filings a sync downloads.
     vibe_br_cvm_start_year: int = Field(alias="VIBE_BR_CVM_START_YEAR", default=2022)
-    # Local time (HH:MM, America/Sao_Paulo) of the daily sync in daemon mode.
+    # Local time (HH:MM, America/Sao_Paulo) used as the cron slot for the
+    # FIRST seed of the daily sync system job (see ``vibe_br_sync_enabled``).
     vibe_br_sync_time: str = Field(alias="VIBE_BR_SYNC_TIME", default="21:30")
+    # Opt-in gate for the protected daily-sync system job
+    # (``system:br-data-sync``), read via
+    # src/br_data/scheduling.py. Deliberately not part of any preset, so
+    # enabling the scheduler never silently seeds a daily network sync;
+    # VIBE_BR_SYNC_TIME above drives the first seed's cron slot.
+    vibe_br_sync_enabled: EnvBool = Field(
+        default=False, alias="VIBE_BR_SYNC_ENABLED",
+        description="Enable the daily br-data sync system job",
+    )
     vibe_trading_data_cache: EnvBool = Field(alias="VIBE_TRADING_DATA_CACHE", default=False)
     vibe_trading_data_cache_root: str = Field(alias="VIBE_TRADING_DATA_CACHE_ROOT", default="")
     aliyun_iqs_api_key: str = Field(alias="ALIYUN_IQS_API_KEY", default="")
@@ -663,6 +675,17 @@ class MemoryConfig(_EnvBase):
     fts_index_enabled: EnvBool = Field(
         default=False, alias="VT_MEMORY_FTS_INDEX",
         description="Enable SQLite FTS5 search index",
+    )
+
+    # Scheduled consolidation system job (scheduler unification).
+    # Deliberately NOT listed in the preset flag map or the memory flag alias
+    # map above: the preset machinery only touches fields in the alias map, so
+    # VT_MEMORY=on/full can never silently enable a background timer. This
+    # flag is opt-in on its own; the job it gates also no-ops honestly unless
+    # VT_MEMORY_GC is enabled (see src/memory/consolidation.py).
+    consolidation_enabled: EnvBool = Field(
+        default=False, alias="VT_MEMORY_CONSOLIDATION",
+        description="Enable the daily memory-consolidation system job",
     )
 
     @model_validator(mode="before")

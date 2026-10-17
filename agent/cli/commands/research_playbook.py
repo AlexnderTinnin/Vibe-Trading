@@ -192,6 +192,23 @@ def build_job_from_playbook(
     """
     from src.scheduled_research.playbooks import build_job
 
+    if job_id:
+        # The CLI writes the store directly and bypasses every route, so the
+        # shared id rule the REST surfaces enforce has to be enforced here.
+        from src.scheduling.system_jobs import (
+            JOB_ID_RULE_MESSAGE,
+            is_safe_job_id,
+            is_system_job_id,
+        )
+
+        if is_system_job_id(job_id):
+            return None, (
+                f"job id {job_id!r} is reserved for protected system jobs; "
+                "the 'system:' prefix cannot be authored"
+            )
+        if not is_safe_job_id(job_id):
+            return None, JOB_ID_RULE_MESSAGE
+
     kwargs: Dict[str, Any] = {
         "variables": variables or {},
         "delivery_target_ref": delivery_target_ref,

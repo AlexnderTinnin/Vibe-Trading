@@ -6,7 +6,6 @@ Mounted by ``agent/api_server.py`` via ``register_scheduled_routes(app, ...)``.
 from __future__ import annotations
 
 import logging
-import re
 import sys as _sys
 import time
 import uuid
@@ -31,11 +30,6 @@ logger = logging.getLogger(__name__)
 
 _SCHEDULED_RESEARCH_SCHEDULER_ENV = "VIBE_TRADING_ENABLE_SCHEDULER"
 _SCHEDULED_RESEARCH_TRUE_VALUES = {"1", "true", "yes", "on"}
-
-# Mirrors ``_SAFE_PATH_PARAM_RE`` in src/api/helpers.py, which the delete route
-# enforces on the job id. Kept in sync so a job can never be created under an
-# id the delete route refuses.
-_SAFE_JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
 
 # ---------------------------------------------------------------------------
@@ -163,6 +157,7 @@ def _get_scheduled_research_executor():
     global _scheduled_research_executor
     if _scheduled_research_executor is None:
         from src.scheduled_research.executor import ScheduledResearchExecutor
+        from src.scheduled_research.internal_dispatch import resolve_scheduled_internal_callable
 
         _scheduled_research_executor = ScheduledResearchExecutor(
             _get_scheduled_research_store(),
@@ -170,14 +165,24 @@ def _get_scheduled_research_executor():
             enabled=_scheduled_research_scheduler_enabled(),
             briefing_reader=_read_scheduled_briefing,
             channel_sender=_send_scheduled_briefing,
+            internal_dispatcher=resolve_scheduled_internal_callable,
         )
     return _scheduled_research_executor
 
 
 def _start_scheduled_research_executor() -> None:
-    """Start scheduled research execution when explicitly enabled."""
+    """Start scheduled research execution when explicitly enabled.
+
+    Single-writer invariant: the FastAPI lifespan is the SOLE owner of this
+    call (``src/scheduled_research/store.py``); a duplicate ``start()`` is a
+    no-op. ``ensure_system_jobs`` runs BEFORE ``start()`` (timing contract in
+    :mod:`src.scheduling.system_jobs`); master flag off early-returns.
+    """
     if not _scheduled_research_scheduler_enabled():
         return
+    from src.scheduling.system_jobs import ensure_system_jobs
+
+    ensure_system_jobs(_get_scheduled_research_store())
     _get_scheduled_research_executor().start()
 
 
@@ -480,6 +485,8 @@ def register_scheduled_routes(
 
         The job is persisted immediately. No execution is triggered.
         """
+        from src.api.scheduled_guards import ensure_authorable_job_id
+        from src.scheduled_research.executor import next_due
         from src.scheduled_research.models import (
             JobStatus,
             ScheduledResearchJob,
@@ -489,19 +496,7 @@ def register_scheduled_routes(
             validate_timezone_shape,
         )
 
-        from src.scheduled_research.executor import next_due
-
-        # A job whose id the delete route rejects can never be cancelled
-        # through the API, so the id is held to that same rule at creation
-        # rather than at first attempted delete.
-        if request.id is not None and not _SAFE_JOB_ID_RE.fullmatch(request.id):
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "job id must be 1-128 characters of letters, digits, "
-                    "'_' or '-'"
-                ),
-            )
+        ensure_authorable_job_id(request.id)
         if contains_pdf_password(request.config):
             raise HTTPException(status_code=422, detail="config must not include pdf_password")
 
@@ -656,6 +651,7 @@ def register_scheduled_routes(
         request: UpdateScheduledRunRequest,
     ) -> ScheduledRunResponse:
         """Update future configuration without deleting the job or its history."""
+        from src.api.scheduled_guards import guard_system_job_mutation
         from src.scheduled_research.executor import next_due
         from src.scheduled_research.models import (
             DeliveryRecord,
@@ -674,6 +670,7 @@ def register_scheduled_routes(
             raise HTTPException(
                 status_code=404, detail=f"scheduled run {job_id} not found"
             )
+        guard_system_job_mutation(job.id, job.source_type)
         if job.status == JobStatus.RUNNING or job.delivery.status == DeliveryStatus.SENDING:
             raise HTTPException(
                 status_code=409,
@@ -846,7 +843,10 @@ def register_scheduled_routes(
     )
     async def delete_scheduled_run(job_id: str) -> Response:
         """Cancel (delete) a scheduled research job by id."""
+        from src.api.scheduled_guards import guard_system_job_deletion
+
         _host_validate_path_param(job_id, "job_id")
+        guard_system_job_deletion(job_id)
         removed = _get_scheduled_research_store().delete(job_id)
         if not removed:
             raise HTTPException(

@@ -7,6 +7,18 @@ store survives a SIGKILL at any point without corruption.
 A missing store file is the only clean empty result. A file that exists but
 fails to parse is quarantined and ``load`` raises ``CorruptStoreError`` instead
 of silently returning an empty list.
+
+Single-writer invariant (scheduler unification): the sole owner of the
+store is the FastAPI lifespan in ``agent/api_server.py``, which starts exactly
+one executor per process (``src/api/scheduled_routes.py``'s singleton). The
+atomic replace below protects readers against torn files, but there is NO
+cross-process locking or merging: multi-process concurrent writes are NOT
+supported and two writers would clobber each other's rows. Two executor
+instances sharing one store path in the SAME process are equally unsupported —
+the second instance's one-shot ``recover_stale_running`` cannot distinguish
+the first's live in-flight RUNNING job from a crashed-process leftover, resets
+it to PENDING and dispatches it again (honest failure mode pinned by
+``agent/tests/test_scheduling_lifespan_owner.py``).
 """
 
 from __future__ import annotations
@@ -24,6 +36,13 @@ from src.scheduled_research.models import ScheduledResearchJob, validate_schedul
 logger = logging.getLogger(__name__)
 
 _STORE_FILENAME = "scheduled_research_jobs.json"
+# Stays 1 across scheduler unification: the new job fields (``executor_kind``,
+# ``internal_callable``) and ``source_type="system"`` are additive and this
+# version's reader defaults them for old files. The documented flip side is
+# fail-closed: pre-unification code rejects a ``source_type="system"`` row in
+# ``from_dict`` and quarantines the WHOLE file as ``.corrupt-<ts>`` — so
+# downgrading to a version before scheduler-unification requires removing
+# system job rows first.
 _SCHEMA_VERSION = 1
 
 

@@ -334,7 +334,7 @@ def _ephemeral_kwargs(name: str) -> dict[str, Any]:
     (validation + probe only, it never serves), so a bare
     ``build_gateway_services`` bundle — all in-memory dataclasses, no
     filesystem or network side effects — is sufficient and
-    ``session_manager`` / ``cron_service`` may stay ``None``.
+    ``session_manager`` may stay ``None``.
     """
     if name == "websocket":
         from src.channelsui.gateway_services import build_gateway_services

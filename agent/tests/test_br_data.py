@@ -332,3 +332,251 @@ def test_brl_alias_is_unambiguous():
     assert GroundingLedger._currency_is_surfaced("BRL", "R$ 10.00")
     assert GroundingLedger._currency_is_surfaced("BRL", "10 reais")
     assert not GroundingLedger._currency_is_surfaced("BRL", "These are real observed prices")
+
+
+# ---------------------------------------------------------------------------
+# scheduler-unification T9: the daily sync as protected internal system job.
+# Append-only section — the existing tests above are untouched. Imports are
+# function-level, matching this file's style (module-level imports here would
+# trip ruff E402). The root conftest's autouse _reset_env_config fixture
+# snapshots os.environ and resets the config cache around every test.
+# ---------------------------------------------------------------------------
+
+BR_JOB_ID = "system:br-data-sync"
+
+
+def _set_env(monkeypatch, **vars):
+    """setenv + config-cache reset (T8's test_memory_consolidation_job pattern)."""
+    for key, value in vars.items():
+        monkeypatch.setenv(key, value)
+    from src.config.accessor import reset_env_config
+
+    reset_env_config()
+
+
+def _br_store(tmp_path):
+    from src.scheduled_research.store import ScheduledResearchJobStore
+
+    return ScheduledResearchJobStore(path=tmp_path / "jobs.json")
+
+
+def _production_br_spec():
+    from src.scheduling.system_jobs import system_job_specs
+
+    matches = [s for s in system_job_specs() if s.id == BR_JOB_ID]
+    assert len(matches) == 1, f"expected exactly one {BR_JOB_ID} spec, got {matches}"
+    return matches[0]
+
+
+def test_next_run_parses_hhmm_into_cron_fields():
+    """The repurposed parser: "HH:MM" -> (minute, hour), strict on garbage."""
+    from src.br_data.sync import _next_run
+
+    assert _next_run("21:30") == (30, 21)
+    assert _next_run("07:05") == (5, 7)
+    assert _next_run("00:00") == (0, 0)
+    assert _next_run("23:59") == (59, 23)
+    for bad in ("25:99", "", "abc", "24:00", "12:60", "21:30:00", "21"):
+        with pytest.raises(ValueError):
+            _next_run(bad)
+
+
+def test_daily_cron_from_env_derives_cron_from_sync_time(monkeypatch):
+    from src.br_data.scheduling import daily_cron_from_env
+
+    _set_env(monkeypatch, VIBE_BR_SYNC_TIME="21:30")
+    assert daily_cron_from_env() == "30 21 * * *"
+    _set_env(monkeypatch, VIBE_BR_SYNC_TIME="07:05")
+    assert daily_cron_from_env() == "5 7 * * *"
+    _set_env(monkeypatch, VIBE_BR_SYNC_TIME="00:00")
+    assert daily_cron_from_env() == "0 0 * * *"
+
+
+def test_daily_cron_from_env_invalid_values_fall_back_without_raising(monkeypatch, caplog):
+    """Plan T9 pinned choice: invalid -> default cron + warning, never raise."""
+    import logging
+
+    from src.br_data.scheduling import DEFAULT_DAILY_CRON, daily_cron_from_env
+
+    assert DEFAULT_DAILY_CRON == "30 21 * * *"
+    for bad in ("25:99", "", "abc", "24:00", "12:60"):
+        _set_env(monkeypatch, VIBE_BR_SYNC_TIME=bad)
+        with caplog.at_level(logging.WARNING, logger="src.br_data.scheduling"):
+            assert daily_cron_from_env() == "30 21 * * *"
+        assert "VIBE_BR_SYNC_TIME" in caplog.text
+        caplog.clear()
+
+
+def test_sync_flag_defaults_false_and_gates_seeding(monkeypatch, tmp_path):
+    """QA (a) direction: flag off (default) -> no row, store file never created."""
+    from src.br_data.scheduling import sync_job_enabled
+    from src.config.accessor import get_env_config
+    from src.scheduling.system_jobs import ensure_system_jobs
+
+    monkeypatch.delenv("VIBE_BR_SYNC_ENABLED", raising=False)
+    monkeypatch.delenv("VT_MEMORY_CONSOLIDATION", raising=False)
+    from src.config.accessor import reset_env_config
+
+    reset_env_config()
+    assert get_env_config().data.vibe_br_sync_enabled is False
+    assert sync_job_enabled() is False
+
+    store = _br_store(tmp_path)
+    report = ensure_system_jobs(store, now_fn=lambda: 1000)
+    assert BR_JOB_ID in report.skipped_disabled
+    assert BR_JOB_ID not in report.seeded
+    assert store.get(BR_JOB_ID) is None
+    assert not store.path.exists()
+
+
+def test_flag_on_seeds_br_sync_row_with_spec_fields(monkeypatch, tmp_path):
+    from src.br_data.scheduling import sync_job_enabled
+    from src.scheduled_research.models import JobStatus
+    from src.scheduling.registry import is_registered, resolve_internal
+    from src.scheduling.system_jobs import ensure_system_jobs
+    from src.scheduling.triggers import next_due
+
+    monkeypatch.delenv("VT_MEMORY_CONSOLIDATION", raising=False)
+    _set_env(monkeypatch, VIBE_BR_SYNC_ENABLED="1")
+    assert sync_job_enabled() is True
+
+    spec = _production_br_spec()
+    assert spec.source_type == "system"
+    assert spec.executor_kind == "internal"
+    assert spec.internal_callable == "br_data.run_sync"
+    assert spec.timezone == "America/Sao_Paulo"  # the sync.TZ key, reused
+    assert spec.prompt == ""
+    assert spec.enabled_predicate is sync_job_enabled
+    assert is_registered("br_data.run_sync") is True
+    # The registered entry is a literal wrapper with a deferred domain import:
+    # calling it must delegate to the real sync entry point.
+    calls = []
+    monkeypatch.setattr(
+        "src.br_data.sync.run_sync", lambda *a, **k: calls.append("fired") or {}
+    )
+    resolve_internal("br_data.run_sync")()
+    assert calls == ["fired"]
+
+    store = _br_store(tmp_path)
+    report = ensure_system_jobs(store, now_fn=lambda: 1000)
+    assert report.seeded == (BR_JOB_ID,)
+    job = store.get(BR_JOB_ID)
+    assert job is not None
+    assert job.source_type == "system"
+    assert job.executor_kind == "internal"
+    assert job.internal_callable == "br_data.run_sync"
+    assert job.schedule == spec.resolved_schedule()
+    assert job.timezone == "America/Sao_Paulo"
+    assert job.status == JobStatus.PENDING
+    # cron + tz seeds the NEXT São Paulo slot, not "now"
+    assert job.next_run_at == next_due(spec.resolved_schedule(), 1000, spec.timezone)
+    assert job.next_run_at > 1000
+
+
+def _run_due_internal_job(tmp_path, monkeypatch, fake_run_sync):
+    """Seed with the flag on, make the row due, tick once, drain, return store."""
+    import asyncio
+
+    from src.scheduled_research.executor import ScheduledResearchExecutor
+    from src.scheduling import registry
+    from src.scheduling.registry import resolve_internal
+    from src.scheduling.system_jobs import ensure_system_jobs
+
+    monkeypatch.delenv("VT_MEMORY_CONSOLIDATION", raising=False)
+    _set_env(monkeypatch, VIBE_BR_SYNC_ENABLED="1")
+    store = _br_store(tmp_path)
+    report = ensure_system_jobs(store, now_fn=lambda: 1000)
+    assert report.seeded == (BR_JOB_ID,)
+    jobs = store.load()
+    jobs[BR_JOB_ID].next_run_at = 1200  # make it due for the tick below
+    store.save(jobs)
+
+    # Fake the callable behind the PRODUCTION registry key (auto-restored);
+    # resolution still goes through the real allowlist dict.
+    monkeypatch.setitem(registry._INTERNAL_CALLABLES, "br_data.run_sync", fake_run_sync)
+
+    prompt_calls = []
+
+    async def dispatch(job):
+        prompt_calls.append(job.id)
+
+    async def scenario():
+        executor = ScheduledResearchExecutor(
+            store, dispatch, internal_dispatcher=lambda j: resolve_internal(j.internal_callable),
+            now_fn=lambda: 1500,
+        )
+        await executor.tick(1500)
+        tasks = list(executor._internal._tasks)
+        if tasks:
+            await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=30)
+
+    asyncio.run(scenario())
+    assert prompt_calls == []  # internal jobs never prompt-dispatch
+    return store
+
+
+def test_due_internal_job_calls_run_sync_exactly_once(tmp_path, monkeypatch):
+    """QA happy: due tick -> supervisor -> to_thread -> run_sync once, COMPLETED."""
+    from src.scheduled_research.models import JobStatus
+    from src.scheduling.triggers import next_due
+
+    calls = []
+
+    def fake_run_sync():
+        calls.append("fired")
+        return {"db": "fake"}
+
+    store = _run_due_internal_job(tmp_path, monkeypatch, fake_run_sync)
+
+    assert calls == ["fired"]  # EXACTLY once
+    saved = store.get(BR_JOB_ID)
+    assert saved is not None
+    assert saved.status == JobStatus.COMPLETED
+    assert saved.failure_kind is None
+    assert saved.last_run_at == 1500  # completion time (internal path)
+    spec = _production_br_spec()
+    assert saved.next_run_at == next_due(spec.resolved_schedule(), 1500, spec.timezone)
+
+
+def test_run_sync_exception_lands_in_dispatch_failure_path(tmp_path, monkeypatch):
+    """QA failure (b): a raising callable -> failure_kind='dispatch', bounded
+    backoff retry (PENDING, consecutive_failures=1) — the kernel never stalls."""
+    from src.scheduled_research.models import JobStatus
+
+    def exploding_run_sync():
+        raise RuntimeError("boom")
+
+    store = _run_due_internal_job(tmp_path, monkeypatch, exploding_run_sync)
+
+    saved = store.get(BR_JOB_ID)
+    assert saved is not None
+    assert saved.status == JobStatus.PENDING  # retry scheduled, not terminal
+    assert saved.failure_kind == "dispatch"
+    assert saved.consecutive_failures == 1
+    assert "boom" in (saved.last_error or "")
+    assert saved.next_run_at > 1500
+
+
+def test_daemon_prints_migration_notice_and_returns_zero(capsys):
+    """Retired daemon: bounded return, exit code 0 (compose restart: unless-stopped
+    would crash-loop on non-zero), notice names the job and both env vars."""
+    from src.br_data.__main__ import main
+    from src.br_data.sync import run_daemon
+
+    assert run_daemon() == 0
+    assert run_daemon(["cotahist"]) == 0  # legacy arg accepted and ignored
+    assert main(["daemon"]) == 0
+    out = capsys.readouterr().out
+    assert "system:br-data-sync" in out
+    assert "VIBE_BR_SYNC_ENABLED" in out
+    assert "VIBE_BR_SYNC_TIME" in out
+
+
+def test_sync_module_has_no_unbounded_loop():
+    """Acceptance grep pinned as a test: the daemon loop is gone for good."""
+    from pathlib import Path
+
+    from src.br_data import sync as sync_mod
+
+    source = Path(sync_mod.__file__).read_text(encoding="utf-8")
+    assert "while True" not in source

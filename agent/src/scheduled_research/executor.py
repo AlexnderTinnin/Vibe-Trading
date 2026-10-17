@@ -4,6 +4,18 @@ The executor polls :class:`ScheduledResearchJobStore`, dispatches due jobs via
 an injected async callable, and persists lifecycle/next-run updates after each
 attempt. Schedule math is intentionally pure and clock-injected so tests can
 exercise it without sleeping or reading wall-clock time.
+
+Loop machinery — the tick loop, wakeup event, start/stop lifecycle and retry
+backoff — is delegated to :class:`src.scheduling.kernel.SchedulerKernel`
+(scheduler unification). This module keeps the scheduled-research domain: the
+tick composition (stale recovery, expiry, due dispatch, delivery sweep), the
+job state machine, the delivery outbox and verdict recording.
+
+``executor_kind == "internal"`` jobs are dispatched non-blockingly through
+:class:`src.scheduled_research.internal_dispatch.InternalRunSupervisor`:
+registry-resolved callables run in fire-and-forget background tasks (sync
+ones off the loop via ``asyncio.to_thread``) that own the terminal write, so
+an hours-long internal run never freezes the serialized tick.
 """
 
 from __future__ import annotations
@@ -11,21 +23,20 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from datetime import date, datetime, timedelta, timezone, tzinfo
 from typing import Awaitable, Callable, Optional
-from zoneinfo import ZoneInfo
 
 from src.config.accessor import get_env_config
 from src.channels.bus.events import DeliveryReceipt
+from src.scheduled_research.internal_dispatch import (
+    InternalDispatchCallback,
+    InternalRunSupervisor,
+)
 from src.scheduled_research.models import (
-    CRON_BOUNDS,
     DeliveryRecord,
     DeliveryStatus,
     JobStatus,
     ScheduledResearchJob,
-    parse_cron_field,
     validate_schedule,
-    validate_timezone,
 )
 from src.scheduled_research.store import ScheduledResearchJobStore
 from src.scheduled_research.verdict import (
@@ -33,9 +44,28 @@ from src.scheduled_research.verdict import (
     outcome_of,
     parse_verdict_section,
 )
+from src.scheduling.kernel import SchedulerKernel
 
 from dataclasses import replace as _dc_replace
 from src.tools.redaction import redact_internal_paths, redact_text
+
+# --- Schedule math, moved to src.scheduling.triggers (scheduler unification) ---
+# Re-exported here so existing ``from src.scheduled_research.executor import ...``
+# keeps working (same convention as src/agent/loop.py's llm_usage re-export).
+from src.scheduling.triggers import (
+    CRON_BOUNDS as CRON_BOUNDS,
+    CRON_SEARCH_LIMIT_DAYS as CRON_SEARCH_LIMIT_DAYS,
+    _CRON_SEARCH_LIMIT_DAYS as _CRON_SEARCH_LIMIT_DAYS,
+    _day_matches as _day_matches,
+    _local_wall_time_to_epoch_ms as _local_wall_time_to_epoch_ms,
+    _next_cron_due as _next_cron_due,
+    day_matches as day_matches,
+    local_wall_time_to_epoch_ms as local_wall_time_to_epoch_ms,
+    next_cron_due as next_cron_due,
+    next_due as next_due,
+    parse_cron_field as parse_cron_field,
+    validate_timezone as validate_timezone,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,12 +87,6 @@ BriefingReader = Callable[[str], Optional[tuple[str, str]]]
 ChannelSender = Callable[..., Awaitable[DeliveryReceipt | None]]
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
-# Search by day, not by minute, so an impossible date (e.g. Feb 31) fails fast
-# instead of scanning years of minutes on the event loop. Four years covers any
-# real recurrence, including a Feb-29 leap day; the extra headroom absorbs a
-# yearly occurrence landing in a DST spring-forward gap (skipped by policy)
-# several years in a row before a real instant exists again.
-_CRON_SEARCH_LIMIT_DAYS = 6 * 366 + 1
 
 
 def _now_ms() -> int:
@@ -118,81 +142,16 @@ def _persisted_error(exc: Exception) -> str:
     return f"{safe[: _MAX_PERSISTED_ERROR_CHARS - 3]}..."
 
 
-def next_due(schedule: str, after_ms: int, tz: str | None = None) -> int:
-    """Return the first due epoch-ms strictly after ``after_ms``.
-
-    Supports the scheduled-research schedule format: a bare positive integer
-    string for interval milliseconds, or a simplified 5-field cron expression.
-    Cron is evaluated on the wall clock of *tz* (an IANA timezone key) when
-    one is given, in UTC otherwise — the semantics every job had before the
-    field existed. Interval schedules ignore *tz* entirely.
-    """
-    validate_schedule(schedule)
-    spec = schedule.strip()
-    if spec.isdigit():
-        # Before the timezone check: interval schedules must keep advancing
-        # even when the stored key cannot resolve on this host.
-        return after_ms + int(spec)
-    validate_timezone(tz)
-    return _next_cron_due(spec, after_ms, tz)
-
-
-def _next_cron_due(schedule: str, after_ms: int, tz: str | None = None) -> int:
-    minutes, hours, doms, months, dows = (
-        parse_cron_field(part, low, high) for part, (low, high) in zip(schedule.split(), CRON_BOUNDS)
-    )
-    zone = timezone.utc if tz is None else ZoneInfo(tz)
-    # Walk candidates on the *local* calendar of ``zone`` so field matching —
-    # the weekday in particular — follows the authoring wall clock. Ascending
-    # wall order maps to ascending UTC order under a fixed fold policy, so
-    # "strictly after" stays a plain epoch comparison.
-    day = datetime.fromtimestamp(after_ms / 1000.0, zone).date()
-    for offset in range(_CRON_SEARCH_LIMIT_DAYS):
-        candidate_day = day + timedelta(days=offset)
-        if not _day_matches(candidate_day, doms, months, dows):
-            continue
-        for hour in sorted(hours) if hours is not None else range(24):
-            for minute in sorted(minutes) if minutes is not None else range(60):
-                fire_ms = _local_wall_time_to_epoch_ms(candidate_day, hour, minute, zone)
-                if fire_ms is not None and fire_ms > after_ms:
-                    return fire_ms
-    raise ValueError(f"cron schedule has no matching time within search window: {schedule!r}")
-
-
-def _local_wall_time_to_epoch_ms(day: date, hour: int, minute: int, zone: tzinfo) -> int | None:
-    """Resolve one local wall time to a UTC epoch-ms instant.
-
-    DST policy (#953): a nonexistent wall time — the spring-forward gap —
-    returns ``None`` so the occurrence is skipped; ``ZoneInfo`` would
-    otherwise silently map it past the transition (PEP 495) and run it. An
-    ambiguous wall time — the fall-back fold — resolves with ``fold=0``, the
-    first occurrence, so it runs exactly once.
-    """
-    local = datetime(day.year, day.month, day.day, hour, minute, tzinfo=zone)
-    as_utc = local.astimezone(timezone.utc)
-    if as_utc.astimezone(zone).replace(tzinfo=None) != local.replace(tzinfo=None):
-        return None  # wall time does not exist in this zone (DST gap)
-    return int(as_utc.timestamp() * 1000)
-
-
-def _day_matches(dt: date, doms: set[int] | None, months: set[int] | None, dows: set[int] | None) -> bool:
-    if months is not None and dt.month not in months:
-        return False
-
-    cron_day_of_week = (dt.weekday() + 1) % 7  # cron convention: Sunday == 0
-    day_of_month_matches = doms is None or dt.day in doms
-    day_of_week_matches = dows is None or cron_day_of_week in dows
-
-    # Standard five-field cron treats day-of-month and day-of-week as an OR
-    # when both fields are restricted. A wildcard in either field keeps the
-    # other field authoritative.
-    if doms is not None and dows is not None:
-        return day_of_month_matches or day_of_week_matches
-    return day_of_month_matches and day_of_week_matches
-
-
 class ScheduledResearchExecutor:
-    """Background poller that dispatches due scheduled research jobs."""
+    """Background poller that dispatches due scheduled research jobs.
+
+    The tick loop, wakeup, start/stop lifecycle and retry backoff live in a
+    :class:`~src.scheduling.kernel.SchedulerKernel` instance; this class
+    supplies the kernel's ``on_tick`` composition (stale recovery → expiry →
+    due-job dispatch with per-job isolation → delivery sweep) and owns every
+    scheduled-research semantic (job state machine, delivery outbox, verdict
+    recording).
+    """
 
     def __init__(
         self,
@@ -208,6 +167,7 @@ class ScheduledResearchExecutor:
         briefing_reader: "BriefingReader | None" = None,
         channel_sender: "ChannelSender | None" = None,
         delivery_lease_ms: int = DEFAULT_DELIVERY_LEASE_MS,
+        internal_dispatcher: "InternalDispatchCallback | None" = None,
     ) -> None:
         """Initialize the executor.
 
@@ -229,6 +189,14 @@ class ScheduledResearchExecutor:
             delivery_lease_ms: How long a claimed row stays claimed before a
                 later sweep may take it over. Too short duplicates a slow
                 send; too long strands a briefing behind a dead process.
+            internal_dispatcher: Callable resolving one ``executor_kind ==
+                "internal"`` job to its registered zero-arg callable — in
+                production the exact-key allowlist lookup in
+                :mod:`src.scheduling.registry`. ``None`` (the default) keeps
+                internal jobs fail-closed: their firings take the existing
+                dispatch-failure path. The resolved callable never runs on
+                the tick loop; :class:`InternalRunSupervisor` owns the
+                non-blocking run and its terminal write.
 
         Raises:
             ValueError: If the retry policy is invalid.
@@ -238,12 +206,12 @@ class ScheduledResearchExecutor:
             tuning = get_env_config().agent_tuning
         self._store = store
         self._dispatch = dispatch
+        self._internal_dispatcher = internal_dispatcher
         self._briefing_reader = briefing_reader
         self._channel_sender = channel_sender
         self._delivery_lease_ms = delivery_lease_ms
         self._loop: asyncio.AbstractEventLoop | None = None
         self._sweep_task: asyncio.Task | None = None
-        self._tick_interval_ms = tick_interval_ms
         self._now_fn = now_fn
         self._enabled = enabled
         self._max_consecutive_failures = (
@@ -261,21 +229,32 @@ class ScheduledResearchExecutor:
             if retry_max_delay_ms is not None
             else tuning.vibe_trading_scheduler_retry_max_delay_ms
         )
-        if self._max_consecutive_failures < 1:
-            raise ValueError("max_consecutive_failures must be at least 1")
-        if self._retry_base_delay_ms < 0:
-            raise ValueError("retry_base_delay_ms must be non-negative")
-        if self._retry_max_delay_ms < self._retry_base_delay_ms:
-            raise ValueError("retry_max_delay_ms must be at least retry_base_delay_ms")
-        self._task: asyncio.Task | None = None
-        self._wakeup: asyncio.Event | None = None
-        self._stopping = False
+        # The kernel validates the resolved retry policy; its ValueError
+        # messages are byte-identical to the ones this constructor raised
+        # before the loop machinery moved there. The kernel never reads the
+        # environment — the resolved plain numbers above are the only source.
+        self._kernel = SchedulerKernel(
+            tick_interval_ms=tick_interval_ms,
+            now_fn=now_fn,
+            enabled=enabled,
+            max_consecutive_failures=self._max_consecutive_failures,
+            retry_base_delay_ms=self._retry_base_delay_ms,
+            retry_max_delay_ms=self._retry_max_delay_ms,
+            on_tick=self._on_kernel_tick,
+            task_name="scheduled-research-executor",
+        )
+        self._internal = InternalRunSupervisor(
+            store=store,
+            dispatcher=internal_dispatcher,
+            finish_run=self._finish_run,
+            now_fn=now_fn,
+        )
         self._recovered_stale_running = False
 
     @property
     def is_running(self) -> bool:
         """Return whether the background loop task is active."""
-        return self._task is not None and not self._task.done()
+        return self._kernel.is_running
 
     def start(self) -> None:
         """Start the background loop.
@@ -284,34 +263,26 @@ class ScheduledResearchExecutor:
         """
         if not self._enabled or self.is_running:
             return
-        self._stopping = False
         self.recover_stale_running()
-        self._wakeup = asyncio.Event()
-        loop = asyncio.get_running_loop()
-        self._task = loop.create_task(self._run(), name="scheduled-research-executor")
+        self._kernel.start()
 
     async def stop(self) -> None:
         """Stop the background loop and wait for it to finish.
 
-        Idempotent. When disabled or not started, this is a no-op.
+        Idempotent. When disabled or not started, this is a no-op. The kernel
+        sets the wakeup so a sleeping loop returns at once, and cancels the
+        task as a fallback so shutdown never blocks for a full tick.
+
+        In-flight internal runs are then cancelled at the asyncio-task level,
+        never at the thread level (pinned semantics, see
+        :mod:`src.scheduled_research.internal_dispatch`): a sync callable
+        already inside ``asyncio.to_thread`` finishes harmlessly with its
+        result discarded, and its job stays RUNNING in the store for
+        ``recover_stale_running`` on the next start. ``stop()`` does not wait
+        for those threads, so it stays bounded however long a callable blocks.
         """
-        if not self._enabled:
-            return
-        task = self._task
-        if task is None:
-            return
-        self._stopping = True
-        if self._wakeup is not None:
-            self._wakeup.set()
-        # The set() above wakes a sleeping loop in the common case. Cancel as a
-        # fallback so shutdown never blocks for a full tick if the wakeup raced
-        # the loop's sleep, then await the task to let it unwind cleanly.
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-        self._task = None
+        await self._kernel.stop()
+        await self._internal.cancel_all()
 
     async def tick(self, now_ms: int | None = None) -> None:
         """Run one poll/dispatch pass.
@@ -386,37 +357,24 @@ class ScheduledResearchExecutor:
         self._recovered_stale_running = True
         return recovered
 
-    async def _run(self) -> None:
+    async def _on_kernel_tick(self, now_ms: int) -> None:
+        """Run one executor tick as the kernel's ``on_tick`` callback.
+
+        Exceptions are isolated here (rather than left to the kernel's generic
+        handler) so the log message stays the executor's own; a failing tick
+        never kills the loop and ``asyncio.CancelledError`` propagates so
+        :meth:`stop` stays bounded.
+        """
         # Captured here rather than at construction: the executor is built
         # before the server's loop exists, and request_sweep needs a loop that
         # is actually running to schedule onto.
         self._loop = asyncio.get_running_loop()
-        while not self._stopping:
-            try:
-                await self.tick(self._now_fn())
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                logger.error("scheduled research executor tick failed", exc_info=True)
-            if self._stopping:
-                break
-            await self._sleep_or_wake(self._tick_interval_ms)
-
-    async def _sleep_or_wake(self, sleep_ms: int) -> None:
-        wakeup = self._wakeup
-        if wakeup is None:
-            await asyncio.sleep(sleep_ms / 1000.0)
-            return
-        # Re-check after re-entering: if stop() flipped _stopping and set the
-        # event between the loop's check and here, return at once rather than
-        # clearing the wakeup and blocking for a full tick on shutdown.
-        if self._stopping:
-            return
-        wakeup.clear()
         try:
-            await asyncio.wait_for(wakeup.wait(), timeout=sleep_ms / 1000.0)
-        except asyncio.TimeoutError:
-            pass
+            await self.tick(now_ms)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.error("scheduled research executor tick failed", exc_info=True)
 
     async def _run_job(self, job: ScheduledResearchJob, now_ms: int) -> None:
         # The tick snapshot may be stale by the time we reach this job (an
@@ -442,6 +400,14 @@ class ScheduledResearchExecutor:
             job.last_error = _persisted_error(exc)
             job.last_run_at = now_ms
             self._persist_completion(job)
+            return
+
+        if job.executor_kind == "internal":
+            # Non-blocking internal dispatch: resolve → RUNNING → a
+            # fire-and-forget background task owns the callable and the
+            # terminal write. Awaiting the run here would freeze the
+            # serialized tick loop for hours (see internal_dispatch.py).
+            self._internal.launch(job, now_ms)
             return
 
         job.status = JobStatus.RUNNING
@@ -482,6 +448,18 @@ class ScheduledResearchExecutor:
         else:
             job.consecutive_failures = 0
 
+        self._finish_run(job, dispatch_error, now_ms)
+
+    def _finish_run(
+        self, job: ScheduledResearchJob, dispatch_error: Exception | None, now_ms: int
+    ) -> None:
+        """Record one attempt's outcome and persist the terminal state.
+
+        Shared by the prompt path — *now_ms* is the firing time, dispatch
+        returns at enqueue — and the internal background path, which passes
+        the COMPLETION time so a run longer than its own schedule interval
+        advances past completion instead of re-firing immediately.
+        """
         job.last_run_at = now_ms
         try:
             scheduled_next_run = next_due(job.schedule, now_ms, job.timezone)
@@ -554,8 +532,11 @@ class ScheduledResearchExecutor:
         flight covers anything that arrived while it was running, and the claim
         makes an overlap harmless in any case. Without a running loop this is a
         no-op — the periodic tick is what makes delivery correct, and this only
-        makes it prompt.
+        makes it prompt. The kernel wake shortens the loop's current sleep so
+        the next full tick (which ends in a sweep) follows promptly too; it
+        coalesces and is a no-op without a running kernel loop.
         """
+        self._kernel.request_wake()
         loop = self._loop
         if loop is None or not loop.is_running():
             return
@@ -776,11 +757,7 @@ class ScheduledResearchExecutor:
 
     def _retry_delay_ms(self, consecutive_failures: int) -> int:
         """Return bounded exponential backoff for a dispatch failure count."""
-        exponent = max(0, consecutive_failures - 1)
-        if self._retry_base_delay_ms == 0:
-            return 0
-        delay = self._retry_base_delay_ms * (2 ** min(exponent, 62))
-        return min(delay, self._retry_max_delay_ms)
+        return self._kernel.retry_delay_ms(consecutive_failures)
 
     @staticmethod
     def _same_record(current: ScheduledResearchJob, job: ScheduledResearchJob) -> bool:
