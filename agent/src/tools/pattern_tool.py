@@ -39,6 +39,7 @@ def find_peaks_valleys(close: pd.Series, window: int = 5) -> dict:
 
     values = close.values.astype(float)
     peaks, valleys = [], []
+    last_peak = last_valley = -1
 
     for i in range(window, n - window):
         seg = values[i - window : i + window + 1]
@@ -47,10 +48,17 @@ def find_peaks_valleys(close: pd.Series, window: int = 5) -> dict:
         seg = seg[~np.isnan(seg)]
         if len(seg) == 0:
             continue
+        # A flat top or bottom ties across adjacent bars; report it once, at
+        # its first bar, so one plateau is not read as two separate extrema.
+        tied_prev = values[i] == values[i - 1]
         if values[i] == np.max(seg):
-            peaks.append(i)
+            if not (tied_prev and last_peak == i - 1):
+                peaks.append(i)
+            last_peak = i
         if values[i] == np.min(seg):
-            valleys.append(i)
+            if not (tied_prev and last_valley == i - 1):
+                valleys.append(i)
+            last_valley = i
 
     return {"peaks": peaks, "valleys": valleys}
 

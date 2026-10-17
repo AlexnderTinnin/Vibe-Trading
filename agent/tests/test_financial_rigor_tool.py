@@ -91,6 +91,35 @@ def test_market_cap_fields() -> None:
     assert out["deviation_pct"] == pytest.approx(0.0839, abs=1e-3)
 
 
+def test_market_cap_zero_reported_cap_fails_against_nonzero_product() -> None:
+    out = verify_market_cap(510, 9.11e9, 0)
+    assert out["verdict"] == "fail"
+    assert out["deviation_pct"] is None
+
+
+def test_market_cap_zero_reported_cap_matches_zero_product() -> None:
+    out = verify_market_cap(0, 9.11e9, 0)
+    assert out["verdict"] == "pass"
+    assert out["deviation_pct"] == 0.0
+
+
+def test_cross_validate_flags_a_value_against_a_zero_median() -> None:
+    out = cross_validate("revenue", {"a": 0, "b": 0, "c": 5})
+    assert out["all_consistent"] is False
+    by_source = {row["source"]: row for row in out["per_source"]}
+    assert by_source["c"]["consistent"] is False
+    assert by_source["c"]["deviation_pct"] is None
+    assert by_source["a"]["consistent"] is True
+
+
+def test_cross_validate_negative_median_uses_magnitude() -> None:
+    out = cross_validate("net_income", {"a": -100, "b": -50, "c": -75})
+    assert out["all_consistent"] is False
+    by_source = {row["source"]: row for row in out["per_source"]}
+    assert by_source["a"]["deviation_pct"] == pytest.approx(33.3333, abs=1e-3)
+    assert by_source["a"]["consistent"] is False
+
+
 # ── verify_valuation ──────────────────────────────────────────────────────
 
 
