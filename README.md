@@ -1471,6 +1471,11 @@ an opposite position, its fee is split by quantity between the two legs.
 Profile win rate and the average-win/average-loss ratio use the resulting net
 PnL of FIFO matched portions; those portions are not necessarily whole orders.
 
+Generic journals accept a complete `datetime` column or separate `date` and
+`time` columns (case-insensitive). Split columns are combined before sorting
+and FIFO matching; Excel date serials and time fractions are supported.
+A complete `datetime` column takes precedence when all three are present.
+
 ### Market Research
 
 ```bash
