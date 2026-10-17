@@ -9,25 +9,13 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Maintenance — 2026-10-16
 
-- Run Detail gains a Token-usage section showing the provider, model,
-  input/output/total tokens, call count and per-iteration detail; cache rows
-  appear only when the provider reported them.
-- The chat header shows a live token counter fed by the existing `llm_usage`
-  SSE event, so a running turn's usage is visible before the run finishes.
-- Swarm run detail and the dashboard expose token totals and label each
-  figure as provider-reported or `len//4`-estimated; the swarm worker now
-  captures prompt-cache tokens through backward-compatible `run.json` fields.
-- The swarm provenance label survives the shared tool-result redaction choke
-  point (a `token_source` was previously scrubbed to `[redacted]`); the swarm
-  detail response gates `provider`/`model` through the same public-metadata
-  filter the MCP payload applies; and failed or cancelled tasks report their
-  tokens so the live card matches the run total.
-- This batch is token-count visibility only: it ships no currency cost or
-  cross-run aggregation.
 - Redact bare Groq/NVIDIA keys, Telegram bot tokens and Slack/Discord webhook
   secrets from tool results and diagnostics (#1880). Follow-up coverage includes
   Telegram ids outside the original eight-to-ten-digit assumption, GovSlack and
   case-insensitive webhook hostnames; benign lookalikes remain unchanged.
+- Update the Windows desktop PyJWT pin to 2.15.1, matching the main lock and
+  including the fix for [GHSA-ffc3-869f-jxw9](https://github.com/jpadilla/pyjwt/security/advisories/GHSA-ffc3-869f-jxw9).
+  Artifact hashes are verified against PyPI; other Windows dependency pins stay unchanged.
 - Refresh opt-in local CSV, Parquet and DuckDB caches when source filesystem
   revisions change, including DuckDB WAL changes and deletions (#1879). Reuse
   bounded cache paths and reject mismatched metadata/payload pairs. Edits that
