@@ -94,7 +94,13 @@ def _trace_fields_from_runtime(kwargs: dict[str, Any]) -> tuple[str | None, str 
             artifact_candidate = resolved
             artifact_path = str(resolved)
         elif raw_path.is_absolute():
-            artifact_candidate = raw_path.resolve()
+            resolved = raw_path.resolve()
+            if run_dir is not None:
+                try:
+                    resolved.relative_to(run_dir)
+                except ValueError as exc:
+                    raise ValueError("artifact_path escapes the current run_dir") from exc
+            artifact_candidate = resolved
 
     if artifact_candidate is not None and artifact_candidate.is_file() and not artifact_hash:
         artifact_hash = _sha256_file(artifact_candidate)
