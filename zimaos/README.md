@@ -47,7 +47,7 @@ separate sidecar container or Compose profile: it now runs inside the main
 application container as the protected system job `system:br-data-sync`, which
 is seeded and fires only while the main service sets **both**
 `VIBE_TRADING_ENABLE_SCHEDULER=1` and `VIBE_BR_SYNC_ENABLED=1`. This compose
-template sets both; set either to `0` to keep the daily network sync off.
+template defaults both to `0`; explicitly set both to `1` to enable daily sync.
 Note the coupling this creates: `VIBE_TRADING_ENABLE_SCHEDULER=1` is the
 master switch for the whole scheduled-research executor, so besides the sync
 job it also runs **your own** stored scheduled research runs inside this
@@ -85,9 +85,9 @@ Configure a imagem, a pasta persistente e as chaves antes de importar o Compose.
 O aplicativo não inicia com chaves de exemplo. A sincronização diária dos dados
 brasileiros não usa mais contêiner separado nem perfil do Compose: ela roda no
 contêiner principal como tarefa de sistema protegida (`system:br-data-sync`),
-ativada neste modelo por `VIBE_TRADING_ENABLE_SCHEDULER=1` e
-`VIBE_BR_SYNC_ENABLED=1` (defina qualquer um dos dois como `0` para mantê-la
-desativada). A primeira sincronização não ocorre ao iniciar o contêiner, mas no
+desativada por padrão neste modelo. Para ativá-la, defina explicitamente
+`VIBE_TRADING_ENABLE_SCHEDULER=1` e `VIBE_BR_SYNC_ENABLED=1`.
+A primeira sincronização não ocorre ao iniciar o contêiner, mas no
 próximo horário `VIBE_BR_SYNC_TIME` (fuso de São Paulo, padrão 21:30); esse
 valor vale apenas para a primeira criação da tarefa. Como a tarefa é
 protegida (PATCH/DELETE via REST e CLI são recusados), mudar o horário depois

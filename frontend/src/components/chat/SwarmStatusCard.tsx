@@ -107,8 +107,8 @@ function LayerStepper({
   );
 }
 
-function formatPositive(value: number | undefined): string | null {
-  return value != null && Number.isFinite(value) && value > 0
+function formatTokenCount(value: number | undefined): string | null {
+  return value != null && Number.isFinite(value) && value >= 0
     ? abbreviateNum(value)
     : null;
 }
@@ -126,8 +126,9 @@ function TokenUsageLine({
   status: SwarmRunStatus;
   t: ManifestTranslation;
 }) {
-  const input = formatPositive(status.total_input_tokens);
-  const output = formatPositive(status.total_output_tokens);
+  if (!status.total_input_tokens && !status.total_output_tokens) return null;
+  const input = formatTokenCount(status.total_input_tokens);
+  const output = formatTokenCount(status.total_output_tokens);
   if (!input && !output) return null;
 
   const label = t("swarmStatus.tokens", {
@@ -139,7 +140,7 @@ function TokenUsageLine({
     <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
       <span
         className="font-mono"
-        title={`\u2191${String(status.total_input_tokens ?? 0)} \u2193${String(status.total_output_tokens ?? 0)}`}
+        title={`\u2191${String(status.total_input_tokens ?? "—")} \u2193${String(status.total_output_tokens ?? "—")}`}
       >
         {label}
       </span>

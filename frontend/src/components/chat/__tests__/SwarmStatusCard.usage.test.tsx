@@ -31,6 +31,24 @@ function statusWith(overrides: Partial<SwarmRunStatus>): SwarmRunStatus {
 }
 
 describe("SwarmStatusCard token usage line", () => {
+  it("distinguishes a reported zero from an unreported direction", () => {
+    const { container } = render(
+      <SwarmStatusCard status={statusWith({
+        total_input_tokens: 42,
+        total_output_tokens: 0,
+        token_source: "provider",
+        agents: [
+          { agentId: "analyst", taskId: "t1", status: "done", input_tokens: 42, output_tokens: 0 },
+          { agentId: "risk", taskId: "t2", status: "failed", input_tokens: 12 },
+        ],
+      })} />,
+    );
+    expect(container.textContent).toContain("↑42 ↓0 tokens");
+    const rows = container.querySelector('[role="rowgroup"]');
+    expect(rows?.textContent).toContain("↑42 ↓0");
+    expect(rows?.textContent).toContain("↑12 ↓—");
+  });
+
   it("shows exact totals with a provider source and no caveat badge", () => {
     const { container } = render(
       <SwarmStatusCard

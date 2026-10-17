@@ -81,10 +81,10 @@ services:
       # re-seed. NOTE: VIBE_TRADING_ENABLE_SCHEDULER=1 is the master switch
       # for ALL scheduled research — it also runs the user's own stored
       # scheduled runs (agent runs consuming model tokens) in this service.
-      # Set either flag to "0" to keep the daily network sync off.
-      VIBE_TRADING_ENABLE_SCHEDULER: "1"
-      VIBE_BR_SYNC_ENABLED: "1"
-      VIBE_BR_SYNC_TIME: "21:30"
+      # Both flags default off. Set both to "1" to opt into daily sync.
+      VIBE_TRADING_ENABLE_SCHEDULER: "${VIBE_TRADING_ENABLE_SCHEDULER:-0}"
+      VIBE_BR_SYNC_ENABLED: "${VIBE_BR_SYNC_ENABLED:-0}"
+      VIBE_BR_SYNC_TIME: "${VIBE_BR_SYNC_TIME:-21:30}"
       # Do NOT set VIBE_TRADING_TRUST_DOCKER_LOOPBACK here: with a LAN-published
       # port it would treat LAN clients as local.
     volumes:

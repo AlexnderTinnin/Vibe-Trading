@@ -123,10 +123,11 @@ function agentKey(agent: SwarmAgentStatus): string {
 }
 
 function agentTokenText(agent: SwarmAgentStatus): string | null {
-  const input = agent.input_tokens != null && agent.input_tokens > 0
+  if (!agent.input_tokens && !agent.output_tokens) return null;
+  const input = agent.input_tokens != null && Number.isFinite(agent.input_tokens) && agent.input_tokens >= 0
     ? abbreviateNum(agent.input_tokens)
     : null;
-  const output = agent.output_tokens != null && agent.output_tokens > 0
+  const output = agent.output_tokens != null && Number.isFinite(agent.output_tokens) && agent.output_tokens >= 0
     ? abbreviateNum(agent.output_tokens)
     : null;
   if (!input && !output) return null;

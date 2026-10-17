@@ -161,12 +161,20 @@ def _br_data_run_sync() -> None:
 
     Backs the ``br_data.run_sync`` key: daily sync, opt-in via
     ``VIBE_BR_SYNC_ENABLED``; replaces the retired ``src.br_data`` daemon —
-    per-source failures are reported in ``run_sync``'s return value, not
-    raised (see :mod:`src.br_data.scheduling`).
+    Per-source errors become a failed scheduled attempt, so the executor
+    records the failure and applies its existing retry budget.
     """
     from src.br_data.sync import run_sync
 
-    run_sync()
+    report = run_sync()
+    failed = sorted(
+        name for name, outcome in report.items()
+        if isinstance(outcome, dict) and "error" in outcome
+    )
+    if failed:
+        # Report source names only; upstream diagnostics can carry local
+        # paths or credentials and must not be copied into the job store.
+        raise RuntimeError(f"Brazilian dataset sync failed for: {', '.join(failed)}")
 
 
 # ---------------------------------------------------------------------------

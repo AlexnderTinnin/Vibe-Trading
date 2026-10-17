@@ -35,9 +35,9 @@ The runnable itself is ``sync.run_sync``, registered under the literal key
 ``"br_data.run_sync"`` in :mod:`src.scheduling.registry`. It is SYNC by
 design: the executor's internal-run supervisor offloads sync callables via
 ``asyncio.to_thread``, so the (network-heavy) sync pass never runs on the
-event loop. Per-source failures are reported in ``run_sync``'s return value,
-not raised; an exception that does escape lands in the executor's existing
-failure path (``failure_kind="dispatch"``, bounded backoff). The retired
+event loop. The registry wrapper converts per-source errors in ``run_sync``'s
+report into an exception naming the failed sources. This reaches the executor's
+existing failure path (``failure_kind="dispatch"``, bounded backoff). The retired
 ``python -m src.br_data daemon`` loop is replaced by this job (its
 ``run_daemon`` now prints a migration notice and returns 0).
 """
