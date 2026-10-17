@@ -143,6 +143,7 @@ def register_swarm_routes(
 
         run = runtime._store.reconcile_run(loaded, write=True)
 
+        from src.swarm.models import public_model_metadata, public_provider_metadata
         from src.swarm.serialization import serialize_task
 
         return {
@@ -164,6 +165,17 @@ def register_swarm_routes(
             "created_at": run.created_at,
             "completed_at": run.completed_at,
             "final_report": run.final_report,
+            # Key names AND value policy mirror the MCP run payload
+            # (mcp_server._run_to_dict): provider/model pass through the same
+            # public-metadata gate on read, so a run.json written before that
+            # gate existed cannot leak an endpoint- or credential-shaped string
+            # to a browser client. Totals come from the reconciled run, so a
+            # never-run run reports int 0 totals and token_source None.
+            "total_input_tokens": run.total_input_tokens,
+            "total_output_tokens": run.total_output_tokens,
+            "provider": public_provider_metadata(run.provider),
+            "model": public_model_metadata(run.model),
+            "token_source": run.token_source,
         }
 
     @app.get(

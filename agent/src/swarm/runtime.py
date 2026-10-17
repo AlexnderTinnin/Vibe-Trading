@@ -95,6 +95,21 @@ def _wait_for_worker_retry(
     return False
 
 
+def _merge_token_source(current: str | None, incoming: str | None) -> str | None:
+    """Merge two usage-provenance labels conservatively.
+
+    ``None`` (unlabeled) never overwrites a real label, and a single
+    ``"estimated"`` contribution contaminates the cumulative total — mixed
+    provider+estimated sums are labeled ``"estimated"`` so consumers never
+    mistake a partly-heuristic total for exact billing data.
+    """
+    if incoming is None:
+        return current
+    if current is None or incoming == "estimated":
+        return incoming
+    return current
+
+
 def _rehome_artifact_paths(
     artifact_paths: list[str],
     source_run_dir: Path,
@@ -526,6 +541,11 @@ class SwarmRuntime:
                     # Accumulate token counts to run totals
                     run.total_input_tokens += result.input_tokens
                     run.total_output_tokens += result.output_tokens
+                    run.cache_read_tokens += result.cache_read_tokens
+                    run.cache_creation_tokens += result.cache_creation_tokens
+                    run.token_source = _merge_token_source(
+                        run.token_source, result.token_source
+                    )
 
                     if result.status == "completed":
                         task_summaries[tid] = result.summary
@@ -549,6 +569,9 @@ class SwarmRuntime:
                                     "iterations": result.iterations,
                                     "input_tokens": result.input_tokens,
                                     "output_tokens": result.output_tokens,
+                                    "cache_read_tokens": result.cache_read_tokens,
+                                    "cache_creation_tokens": result.cache_creation_tokens,
+                                    "token_source": result.token_source,
                                 },
                             ),
                         )
@@ -580,6 +603,9 @@ class SwarmRuntime:
                                     "iterations": result.iterations,
                                     "input_tokens": result.input_tokens,
                                     "output_tokens": result.output_tokens,
+                                    "cache_read_tokens": result.cache_read_tokens,
+                                    "cache_creation_tokens": result.cache_creation_tokens,
+                                    "token_source": result.token_source,
                                 },
                             ),
                         )
@@ -602,6 +628,9 @@ class SwarmRuntime:
                                     "error": redact_internal_paths(result.error),
                                     "input_tokens": result.input_tokens,
                                     "output_tokens": result.output_tokens,
+                                    "cache_read_tokens": result.cache_read_tokens,
+                                    "cache_creation_tokens": result.cache_creation_tokens,
+                                    "token_source": result.token_source,
                                 },
                             ),
                         )
@@ -1087,6 +1116,9 @@ class SwarmRuntime:
         max_retries = agent_spec.max_retries
         cumulative_input_tokens = 0
         cumulative_output_tokens = 0
+        cumulative_cache_read_tokens = 0
+        cumulative_cache_creation_tokens = 0
+        cumulative_token_source: str | None = None
         result: WorkerResult | None = None
 
         # agent_artifact_dir is keyed by (agent_id, task_id), so this task's
@@ -1125,6 +1157,9 @@ class SwarmRuntime:
                             "error": None,
                             "input_tokens": cumulative_input_tokens,
                             "output_tokens": cumulative_output_tokens,
+                            "cache_read_tokens": cumulative_cache_read_tokens,
+                            "cache_creation_tokens": cumulative_cache_creation_tokens,
+                            "token_source": cumulative_token_source,
                         }
                     )
                 # A retry re-invokes run_worker against the same artifact
@@ -1152,6 +1187,11 @@ class SwarmRuntime:
 
             cumulative_input_tokens += result.input_tokens
             cumulative_output_tokens += result.output_tokens
+            cumulative_cache_read_tokens += result.cache_read_tokens
+            cumulative_cache_creation_tokens += result.cache_creation_tokens
+            cumulative_token_source = _merge_token_source(
+                cumulative_token_source, result.token_source
+            )
 
             if result.status != "failed":
                 # Success (or timeout/token_limit/completed) — no more retries
@@ -1159,6 +1199,9 @@ class SwarmRuntime:
                     update={
                         "input_tokens": cumulative_input_tokens,
                         "output_tokens": cumulative_output_tokens,
+                        "cache_read_tokens": cumulative_cache_read_tokens,
+                        "cache_creation_tokens": cumulative_cache_creation_tokens,
+                        "token_source": cumulative_token_source,
                     }
                 )
                 return result
@@ -1169,6 +1212,9 @@ class SwarmRuntime:
                 update={
                     "input_tokens": cumulative_input_tokens,
                     "output_tokens": cumulative_output_tokens,
+                    "cache_read_tokens": cumulative_cache_read_tokens,
+                    "cache_creation_tokens": cumulative_cache_creation_tokens,
+                    "token_source": cumulative_token_source,
                 }
             )
         return result  # type: ignore[return-value]

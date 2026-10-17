@@ -1199,7 +1199,10 @@
     "resumeConnectorTitle": "Acil durdurmayı kaldır ve bağlantı faaliyetlerini yeniden etkinleştir",
     "connectorResumed": "Bağlantı yeniden etkinleştirildi",
     "failedToResumeConnector": "Bağlantı yeniden etkinleştirilemedi.",
-    "messageTooLong": "Mesaj, ekler ve ekip talimatlarıyla birlikte {{limit}} karakteri aşıyor. Göndermeden önce kısaltın."
+    "messageTooLong": "Mesaj, ekler ve ekip talimatlarıyla birlikte {{limit}} karakteri aşıyor. Göndermeden önce kısaltın.",
+    "tokenUsage": {
+      "live": "belirteç"
+    }
   },
   "runDetail": {
     "title": "Çalışma ayrıntıları",
@@ -1305,6 +1308,19 @@
     "ddNotRecovered": "Toparlanmadı",
     "ddDays": "{{count}} gün",
     "dashboard": "Araştırma paneli",
+    "llmUsage": {
+      "tab": "Token kullanımı",
+      "provider": "Sağlayıcı",
+      "model": "Model",
+      "inputTokens": "Girdi belirteçleri",
+      "outputTokens": "Çıktı belirteçleri",
+      "totalTokens": "Toplam belirteç",
+      "calls": "Çağrı sayısı",
+      "cacheRead": "Önbellek okuma belirteçleri",
+      "cacheCreation": "Önbellek oluşturma belirteçleri",
+      "perIteration": "Yineleme ayrıntıları",
+      "iteration": "Yineleme"
+    },
     "positions": {
       "tab": "Pozisyonlar",
       "weightDistribution": "Ağırlık dağılımı",
@@ -1804,7 +1820,10 @@
     "output": "Çıktı",
     "waitingForEvents": "Aracı olayları bekleniyor…",
     "teamStarting": "Ekip hazırlanıyor; ilk güncellemeler birkaç saniye içinde…",
-    "detailsUnavailable": "ayrıntılar alınamıyor"
+    "detailsUnavailable": "ayrıntılar alınamıyor",
+    "tokens": "↑{{input}} ↓{{output}} belirteç",
+    "estimated": "tahmini",
+    "tokenSourceUnlabeled": "kaynak etiketsiz"
   },
   "mandate": {
     "runtimeMandate": "Bağlantı işlem yetkisi",

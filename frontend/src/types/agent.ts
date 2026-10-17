@@ -24,6 +24,12 @@ export interface SwarmAgentStatus {
   lastText?: string;
   error?: string;
   layer?: number;
+  // Per-task cost telemetry from the swarm.event task_completed payload.
+  // Names mirror the backend event keys; absent when the worker never reported.
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_tokens?: number;
+  cache_creation_tokens?: number;
 }
 
 export interface SwarmRunStatus {
@@ -35,6 +41,15 @@ export interface SwarmRunStatus {
   startedAt: number;
   completedAt?: number;
   agents: SwarmAgentStatus[];
+  // Run-level cost telemetry. Names mirror the GET /swarm/runs/{id} response,
+  // but the values arrive from swarm events or, on replay, are hydrated from
+  // that endpoint. All optional: absent on runs created before the fields existed.
+  total_input_tokens?: number;
+  total_output_tokens?: number;
+  provider?: string | null;
+  model?: string | null;
+  /** Origin of the token counts (exact provider usage vs local estimate), per the backend's run metadata. */
+  token_source?: string | null;
 }
 
 export interface AgentMessage {

@@ -10,6 +10,7 @@ import {
   type StoredAgentMessage,
 } from "@/stores/agent";
 import { useSSE } from "@/hooks/useSSE";
+import { useLlmUsageCounter } from "@/hooks/useLlmUsageCounter";
 import { ApiError, AUTH_REQUIRED_MESSAGE, api, isAuthRequiredError, type GoalSnapshot, type MandateProposal, type MandateCommitted, type ScheduledResearchProposal, type LiveAction, type LiveHalted, type LLMSettings, type RunPreview } from "@/lib/api";
 import {
   extractUploadedAttachments,
@@ -24,6 +25,7 @@ import { ModelRuntimeBar } from "@/components/chat/ModelRuntimeBar";
 import { ThinkingTimeline } from "@/components/chat/ThinkingTimeline";
 import { ConversationTimeline } from "@/components/chat/ConversationTimeline";
 import { ActivityLine } from "@/components/chat/ActivityLine";
+import { LlmUsageCounter } from "@/components/chat/LlmUsageCounter";
 import { MandateProposalCard } from "@/components/chat/MandateProposalCard";
 import { ScheduledResearchProposalCard } from "@/components/chat/ScheduledResearchProposalCard";
 import { SwarmStatusCard } from "@/components/chat/SwarmStatusCard";
@@ -40,8 +42,10 @@ import {
 } from "@/components/chat/LiveRuntimePanel";
 import {
   applySwarmEvent,
+  buildSwarmStatusFromRunDetail,
   buildSwarmStatusFromStarted,
   buildSwarmStatusFromToolResultPreview,
+  mergeSwarmRunUsage,
 } from "@/lib/swarmStatus";
 import { buildToolTimelineMessages } from "@/pages/agentToolTimeline";
 
@@ -75,6 +79,15 @@ function groupMessages(msgs: StoredAgentMessage[]): MsgGroup[] {
 }
 
 const act = () => useAgentStore.getState();
+
+function hydrateSwarmRunUsage(runId: string): void {
+  void api.getSwarmRun(runId).then((payload) => {
+    const current = act().swarmRuns[runId]
+      ?? buildSwarmStatusFromRunDetail(payload, runId);
+    if (!current) return;
+    act().upsertSwarmStatus(mergeSwarmRunUsage(current, payload));
+  }).catch(() => undefined);
+}
 
 function eventCallId(data: Record<string, unknown>): string | undefined {
   return typeof data.call_id === "string" && data.call_id
@@ -272,6 +285,14 @@ export function Agent() {
   const previousStatusRef = useRef(status);
 
   const { connect, disconnect, onStatusChange } = useSSE();
+
+  /* Live token totals for the in-flight attempt, fed by `llm_usage` events. */
+  const {
+    input: usageInput,
+    output: usageOutput,
+    record: recordLlmUsage,
+    reset: resetLlmUsage,
+  } = useLlmUsageCounter();
 
   const urlSessionId = searchParams.get("session");
   const visibleRuntimeIdentity = runtimeIdentity.sessionId === urlSessionId
@@ -754,6 +775,11 @@ export function Agent() {
         replayAttemptSeenRef.current = true;
         identifyActivity(d, "thinking");
       },
+      llm_usage: (d) => {
+        touch();
+        replayAttemptSeenRef.current = true;
+        recordLlmUsage(String(d.attempt_id || ""), Number(d.iter || 0), d);
+      },
 
       reasoning_delta: (d) => {
         touch();
@@ -831,6 +857,7 @@ export function Agent() {
           const fallback = buildSwarmStatusFromToolResultPreview(String(d.preview || ""));
           if (fallback && !act().swarmRuns[fallback.runId]) {
             act().upsertSwarmStatus(fallback);
+            hydrateSwarmRunUsage(fallback.runId);
           }
         }
       },
@@ -1264,6 +1291,7 @@ export function Agent() {
     loadGoalSnapshot,
     markBackgroundCompletion,
     queueStreamUpdate,
+    recordLlmUsage,
     scrollToBottom,
   ]);
 
@@ -1331,6 +1359,12 @@ export function Agent() {
       reset();
     }
   }, [urlSessionId, doDisconnect, loadSessionMessages, setupSSE, scheduleHistoryScroll]);
+
+  /* The live token counter belongs to one session; zero it on a real switch,
+     not on callback-identity churn of the rehydration effect above. */
+  useEffect(() => {
+    resetLlmUsage();
+  }, [sessionId, resetLlmUsage]);
 
   useEffect(() => {
     if (!sessionId) {
@@ -1901,6 +1935,7 @@ export function Agent() {
               <AgentAvatar />
               <div className="flex-1 min-w-0 space-y-2">
                 {activity && <ActivityLine activity={activity} reasoningTail={reasoningTail} />}
+                <LlmUsageCounter input={usageInput} output={usageOutput} />
                 {groundingRound !== null && (
                   <p
                     role="status"

@@ -39,3 +39,29 @@ export function formatRunCardValue(value: unknown): string {
   if (typeof value === "object" && value !== null) return JSON.stringify(value);
   return String(value ?? "");
 }
+
+/**
+ * Key/value table used by the Run-Card panels and the token-usage panel.
+ * Lives here (not in pages/RunDetail.tsx) so components can reuse it without
+ * importing the page module, which imports them back.
+ */
+export function KeyValueTable({ data, empty, monospaceValues = false }: { data: Record<string, unknown>; empty: string; monospaceValues?: boolean }) {
+  const entries = Object.entries(data).filter(([, value]) => value !== undefined && value !== null && value !== "");
+  if (entries.length === 0) {
+    return <p className="text-sm text-muted-foreground">{empty}</p>;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full table-fixed text-sm">
+        <tbody>
+          {entries.map(([key, value]) => (
+            <tr key={key} className="border-b last:border-0 hover:bg-muted/40">
+              <td className="w-36 break-words py-2 ps-4 pr-4 align-top text-muted-foreground">{key}</td>
+              <td className={cn("py-2 align-top", monospaceValues ? "break-all font-mono text-xs" : "break-words text-right tabular-nums")}>{formatRunCardValue(value)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

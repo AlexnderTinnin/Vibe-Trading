@@ -1228,7 +1228,10 @@
     "resumeConnector": "استئناف الموصل",
     "resumeConnectorTitle": "مسح مفتاح الإيقاف واستئناف نشاط الموصل",
     "connectorResumed": "تم استئناف الموصل",
-    "failedToResumeConnector": "فشل استئناف الموصل."
+    "failedToResumeConnector": "فشل استئناف الموصل.",
+    "tokenUsage": {
+      "live": "رموز"
+    }
   },
   "runDetail": {
     "title": "تفاصيل التشغيل",
@@ -1361,6 +1364,19 @@
     "ddNotRecovered": "لم يتعافَ",
     "ddDays": "{{count}} يوم",
     "dashboard": "لوحة البحث",
+    "llmUsage": {
+      "tab": "استخدام الرموز",
+      "provider": "المزوّد",
+      "model": "النموذج",
+      "inputTokens": "رموز الإدخال",
+      "outputTokens": "رموز الإخراج",
+      "totalTokens": "إجمالي الرموز",
+      "calls": "عدد الاستدعاءات",
+      "cacheRead": "رموز قراءة التخزين المؤقت",
+      "cacheCreation": "رموز إنشاء التخزين المؤقت",
+      "perIteration": "التفصيل لكل تكرار",
+      "iteration": "التكرار"
+    },
     "positions": {
       "tab": "المراكز",
       "weightDistribution": "توزيع الأوزان",
@@ -1833,7 +1849,10 @@
     "output": "المخرجات",
     "waitingForEvents": "بانتظار أحداث الوكيل...",
     "teamStarting": "الفريق قيد التشغيل — أولى التحديثات خلال ثوانٍ…",
-    "detailsUnavailable": "التفاصيل غير متاحة"
+    "detailsUnavailable": "التفاصيل غير متاحة",
+    "tokens": "↑{{input}} ↓{{output}} رموز",
+    "estimated": "تقديرية",
+    "tokenSourceUnlabeled": "مصدر غير موسوم"
   },
   "mandate": {
     "runtimeMandate": "تفويض وقت تشغيل الموصل",

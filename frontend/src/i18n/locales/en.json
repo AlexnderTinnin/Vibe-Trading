@@ -1233,7 +1233,10 @@
     "resumeConnector": "Resume connector",
     "resumeConnectorTitle": "Clear the kill switch and re-enable connector activity",
     "connectorResumed": "Connector resumed",
-    "failedToResumeConnector": "Failed to resume connector."
+    "failedToResumeConnector": "Failed to resume connector.",
+    "tokenUsage": {
+      "live": "tokens"
+    }
   },
   "runDetail": {
     "title": "Run Detail",
@@ -1366,6 +1369,19 @@
     "ddNotRecovered": "Not recovered",
     "ddDays": "{{count}} d",
     "dashboard": "Research dashboard",
+    "llmUsage": {
+      "tab": "Token Usage",
+      "provider": "Provider",
+      "model": "Model",
+      "inputTokens": "Input tokens",
+      "outputTokens": "Output tokens",
+      "totalTokens": "Total tokens",
+      "calls": "Calls",
+      "cacheRead": "Cache read tokens",
+      "cacheCreation": "Cache creation tokens",
+      "perIteration": "Per-iteration detail",
+      "iteration": "Iteration"
+    },
     "positions": {
       "tab": "Positions",
       "weightDistribution": "Weight distribution",
@@ -1838,7 +1854,10 @@
     "output": "Output",
     "waitingForEvents": "Waiting for agent events...",
     "teamStarting": "The team is spinning up — first updates in a few seconds…",
-    "detailsUnavailable": "details unavailable"
+    "detailsUnavailable": "details unavailable",
+    "tokens": "↑{{input}} ↓{{output}} tokens",
+    "estimated": "estimated",
+    "tokenSourceUnlabeled": "source unlabeled"
   },
   "mandate": {
     "runtimeMandate": "Connector runtime mandate",

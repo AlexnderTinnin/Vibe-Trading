@@ -1228,7 +1228,10 @@
     "resumeConnector": "恢复连接器",
     "resumeConnectorTitle": "清除熔断开关并恢复连接器活动",
     "connectorResumed": "连接器已恢复",
-    "failedToResumeConnector": "恢复连接器失败。"
+    "failedToResumeConnector": "恢复连接器失败。",
+    "tokenUsage": {
+      "live": "Token"
+    }
   },
   "runDetail": {
     "title": "运行详情",
@@ -1361,6 +1364,19 @@
     "ddNotRecovered": "未恢复",
     "ddDays": "{{count}} 天",
     "dashboard": "研究仪表盘",
+    "llmUsage": {
+      "tab": "Token 用量",
+      "provider": "服务商",
+      "model": "模型",
+      "inputTokens": "输入 Token",
+      "outputTokens": "输出 Token",
+      "totalTokens": "总 Token",
+      "calls": "调用次数",
+      "cacheRead": "缓存读取 Token",
+      "cacheCreation": "缓存写入 Token",
+      "perIteration": "按迭代明细",
+      "iteration": "迭代"
+    },
     "positions": {
       "tab": "持仓",
       "weightDistribution": "权重分布",
@@ -1833,7 +1849,10 @@
     "output": "输出",
     "waitingForEvents": "等待智能体事件...",
     "teamStarting": "智能体团队正在启动，稍等几秒就有第一批进展…",
-    "detailsUnavailable": "暂无详细信息"
+    "detailsUnavailable": "暂无详细信息",
+    "tokens": "↑{{input}} ↓{{output}} Token",
+    "estimated": "估算",
+    "tokenSourceUnlabeled": "来源未标注"
   },
   "mandate": {
     "runtimeMandate": "连接器交易授权（mandate）",

@@ -1233,7 +1233,10 @@
     "resumeConnector": "Reanudar conector",
     "resumeConnectorTitle": "Desactivar el interruptor de emergencia y reanudar la actividad del conector",
     "connectorResumed": "Conector reanudado",
-    "failedToResumeConnector": "Error al reanudar el conector."
+    "failedToResumeConnector": "Error al reanudar el conector.",
+    "tokenUsage": {
+      "live": "tokens"
+    }
   },
   "runDetail": {
     "title": "Detalle de ejecución",
@@ -1366,6 +1369,19 @@
     "ddNotRecovered": "No recuperado",
     "ddDays": "{{count}} d",
     "dashboard": "Panel de investigación",
+    "llmUsage": {
+      "tab": "Uso de tokens",
+      "provider": "Proveedor",
+      "model": "Modelo",
+      "inputTokens": "Tokens de entrada",
+      "outputTokens": "Tokens de salida",
+      "totalTokens": "Tokens totales",
+      "calls": "Llamadas",
+      "cacheRead": "Tokens de lectura de caché",
+      "cacheCreation": "Tokens de creación de caché",
+      "perIteration": "Detalle por iteración",
+      "iteration": "Iteración"
+    },
     "positions": {
       "tab": "Posiciones",
       "weightDistribution": "Distribución de pesos",
@@ -1838,7 +1854,10 @@
     "output": "Salida",
     "waitingForEvents": "Esperando eventos del agente...",
     "teamStarting": "El equipo se está preparando — primeras actualizaciones en unos segundos…",
-    "detailsUnavailable": "detalles no disponibles"
+    "detailsUnavailable": "detalles no disponibles",
+    "tokens": "↑{{input}} ↓{{output}} tokens",
+    "estimated": "estimados",
+    "tokenSourceUnlabeled": "fuente sin etiqueta"
   },
   "mandate": {
     "runtimeMandate": "Mandato de runtime del conector",

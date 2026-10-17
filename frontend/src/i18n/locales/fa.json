@@ -1233,7 +1233,10 @@
     "resumeConnector": "ازسرگیری کانکتور",
     "resumeConnectorTitle": "کلید قطع را پاک کنید و فعالیت کانکتور را دوباره فعال کنید",
     "connectorResumed": "کانکتور ازسرگیری شد",
-    "failedToResumeConnector": "ازسرگیری کانکتور ناموفق بود."
+    "failedToResumeConnector": "ازسرگیری کانکتور ناموفق بود.",
+    "tokenUsage": {
+      "live": "توکن"
+    }
   },
   "runDetail": {
     "title": "جزئیات اجرا",
@@ -1366,6 +1369,19 @@
     "ddNotRecovered": "بازیابی نشده",
     "ddDays": "{{count}} روز",
     "dashboard": "داشبورد پژوهش",
+    "llmUsage": {
+      "tab": "مصرف توکن",
+      "provider": "ارائه‌دهنده",
+      "model": "مدل",
+      "inputTokens": "توکن‌های ورودی",
+      "outputTokens": "توکن‌های خروجی",
+      "totalTokens": "مجموع توکن‌ها",
+      "calls": "تعداد فراخوانی‌ها",
+      "cacheRead": "توکن‌های خواندن کش",
+      "cacheCreation": "توکن‌های ایجاد کش",
+      "perIteration": "جزئیات هر تکرار",
+      "iteration": "تکرار"
+    },
     "positions": {
       "tab": "موقعیت‌ها",
       "weightDistribution": "توزیع وزن",
@@ -1838,7 +1854,10 @@
     "output": "خروجی",
     "waitingForEvents": "در انتظار رویدادهای ایجنت…",
     "teamStarting": "تیم در حال آماده‌سازی است — اولین به‌روزرسانی‌ها در چند ثانیه…",
-    "detailsUnavailable": "جزئیات در دسترس نیست"
+    "detailsUnavailable": "جزئیات در دسترس نیست",
+    "tokens": "↑{{input}} ↓{{output}} توکن",
+    "estimated": "تخمینی",
+    "tokenSourceUnlabeled": "منبع بدون برچسب"
   },
   "mandate": {
     "runtimeMandate": "ماندیت ران‌تایم کانکتور",

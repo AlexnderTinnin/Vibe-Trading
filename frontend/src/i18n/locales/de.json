@@ -1233,7 +1233,10 @@
     "resumeConnector": "Connector fortsetzen",
     "resumeConnectorTitle": "Kill-Switch löschen und Connector-Aktivität wieder aktivieren",
     "connectorResumed": "Connector fortgesetzt",
-    "failedToResumeConnector": "Connector konnte nicht fortgesetzt werden."
+    "failedToResumeConnector": "Connector konnte nicht fortgesetzt werden.",
+    "tokenUsage": {
+      "live": "Tokens"
+    }
   },
   "runDetail": {
     "title": "Durchlauf-Details",
@@ -1366,6 +1369,19 @@
     "ddNotRecovered": "Nicht erholt",
     "ddDays": "{{count}} T",
     "dashboard": "Research-Dashboard",
+    "llmUsage": {
+      "tab": "Token-Nutzung",
+      "provider": "Anbieter",
+      "model": "Modell",
+      "inputTokens": "Eingabe-Tokens",
+      "outputTokens": "Ausgabe-Tokens",
+      "totalTokens": "Tokens gesamt",
+      "calls": "Aufrufe",
+      "cacheRead": "Cache-Lese-Tokens",
+      "cacheCreation": "Tokens für Cache-Erstellung",
+      "perIteration": "Detail nach Iteration",
+      "iteration": "Iteration"
+    },
     "positions": {
       "tab": "Positionen",
       "weightDistribution": "Gewichtsverteilung",
@@ -1838,7 +1854,10 @@
     "output": "Ausgabe",
     "waitingForEvents": "Warten auf Agent-Ereignisse...",
     "teamStarting": "Das Team startet — erste Updates in wenigen Sekunden…",
-    "detailsUnavailable": "Details nicht verfügbar"
+    "detailsUnavailable": "Details nicht verfügbar",
+    "tokens": "↑{{input}} ↓{{output}} Tokens",
+    "estimated": "geschätzt",
+    "tokenSourceUnlabeled": "Quelle nicht gekennzeichnet"
   },
   "mandate": {
     "runtimeMandate": "Connector-Runtime-Mandat",

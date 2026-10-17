@@ -1228,7 +1228,10 @@
     "resumeConnector": "コネクタを再開",
     "resumeConnectorTitle": "キルスイッチを解除してコネクタ活動を再開",
     "connectorResumed": "コネクタを再開しました",
-    "failedToResumeConnector": "コネクタの再開に失敗しました。"
+    "failedToResumeConnector": "コネクタの再開に失敗しました。",
+    "tokenUsage": {
+      "live": "トークン"
+    }
   },
   "runDetail": {
     "title": "実行詳細",
@@ -1361,6 +1364,19 @@
     "ddNotRecovered": "未回復",
     "ddDays": "{{count}}日",
     "dashboard": "リサーチダッシュボード",
+    "llmUsage": {
+      "tab": "トークン使用量",
+      "provider": "プロバイダー",
+      "model": "モデル",
+      "inputTokens": "入力トークン",
+      "outputTokens": "出力トークン",
+      "totalTokens": "合計トークン",
+      "calls": "呼び出し回数",
+      "cacheRead": "キャッシュ読み込みトークン",
+      "cacheCreation": "キャッシュ作成トークン",
+      "perIteration": "イテレーション別明細",
+      "iteration": "イテレーション"
+    },
     "positions": {
       "tab": "ポジション",
       "weightDistribution": "ウェイト分布",
@@ -1833,7 +1849,10 @@
     "output": "出力",
     "waitingForEvents": "エージェントイベントを待機中...",
     "teamStarting": "チームを起動中です。数秒で最初の進捗が届きます…",
-    "detailsUnavailable": "詳細は利用できません"
+    "detailsUnavailable": "詳細は利用できません",
+    "tokens": "↑{{input}} ↓{{output}} トークン",
+    "estimated": "推定",
+    "tokenSourceUnlabeled": "出典未表記"
   },
   "mandate": {
     "runtimeMandate": "コネクタマンデート",

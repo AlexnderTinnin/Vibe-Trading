@@ -13,9 +13,10 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, NamedTuple
 
 from src.agent.context import ContextBuilder
+from src.agent.llm_usage import _normalize_llm_usage
 from src.agent.progress import HeartbeatTimer
 from src.agent.skills import SkillsLoader
 from src.agent.tools import BaseTool, ToolRegistry
@@ -168,19 +169,42 @@ def _filter_skill_descriptions(loader: SkillsLoader, skill_names: list[str]) -> 
     return "\n".join(lines) if lines else "(no matching skills)"
 
 
-def _estimate_tokens(
+class UsageMeasure(NamedTuple):
+    """Token usage of a single LLM call, with cache breakdown and provenance.
+
+    Attributes:
+        input_tokens: Input tokens — provider-reported or heuristic estimate.
+        output_tokens: Output tokens — provider-reported or heuristic estimate.
+        cache_read_tokens: Prompt-cache read tokens (0 when estimated).
+        cache_creation_tokens: Prompt-cache creation tokens (0 when estimated).
+        token_source: ``"provider"`` when the counts came from real
+            ``usage_metadata``, ``"estimated"`` when they came from the
+            ``len // 4`` heuristic.
+    """
+
+    input_tokens: int
+    output_tokens: int
+    cache_read_tokens: int
+    cache_creation_tokens: int
+    token_source: str
+
+
+def _measure_usage(
     messages: list[dict],
     response: object,
-) -> tuple[int, int]:
-    """Return token usage for a single LLM call, real if available.
+) -> UsageMeasure:
+    """Return full token usage for a single LLM call, real if available.
 
     Prefers the provider-reported counts attached to the response by
-    :func:`ChatLLM._parse_response` (``usage_metadata``). Falls back to a
-    character-length heuristic (``len // 4``) only when the provider
-    didn't return usage data — keeps the behaviour contract for legacy
-    or partial responses while making per-run totals (which feed
-    ``SwarmRun.total_input_tokens`` / ``total_output_tokens``) reflect
-    real billing instead of a CJK-hostile char-count guess.
+    :func:`ChatLLM._parse_response` (``usage_metadata``), normalized through
+    :func:`src.agent.llm_usage._normalize_llm_usage` — the exact same
+    normalization the main agent loop applies behind ``llm_usage.json``, so
+    the swarm never grows a second cache-token accounting rule. Falls back to a
+    character-length heuristic (``len // 4``) only when the provider didn't
+    return usage data — keeps the behaviour contract for legacy or partial
+    responses while making per-run totals (which feed
+    ``SwarmRun.total_input_tokens`` / ``total_output_tokens`` and the cache
+    totals) reflect real billing instead of a CJK-hostile char-count guess.
 
     Args:
         messages: Messages sent to the LLM for this call. Used only for
@@ -190,18 +214,25 @@ def _estimate_tokens(
             ``ChatLLM.stream_chat``.
 
     Returns:
-        Tuple of (input_tokens, output_tokens). Either component may be
-        zero — that simply means the provider didn't report it and the
-        fallback couldn't compute it either (e.g. binary content).
+        :class:`UsageMeasure` with input/output tokens, the prompt-cache
+        breakdown (zero on the heuristic path — a cache count is never
+        estimated) and the ``token_source`` provenance label. Any token
+        component may be zero — that simply means the provider didn't
+        report it and the fallback couldn't compute it either (e.g.
+        binary content).
     """
     from src.providers.chat import LLMResponse
 
     if isinstance(response, LLMResponse) and response.usage_metadata:
-        usage = response.usage_metadata
-        real_input = int(usage.get("input_tokens") or 0)
-        real_output = int(usage.get("output_tokens") or 0)
-        if real_input or real_output:
-            return real_input, real_output
+        normalized = _normalize_llm_usage(response.usage_metadata)
+        if normalized is not None:
+            return UsageMeasure(
+                input_tokens=normalized["input_tokens"],
+                output_tokens=normalized["output_tokens"],
+                cache_read_tokens=normalized.get("cache_read_tokens", 0),
+                cache_creation_tokens=normalized.get("cache_creation_tokens", 0),
+                token_source="provider",
+            )
 
     # Fallback: provider didn't return usage_metadata. Estimate from
     # serialized message length and response content length. ~4 chars per
@@ -217,7 +248,36 @@ def _estimate_tokens(
     else:
         output_tokens = 0
 
-    return input_tokens, output_tokens
+    return UsageMeasure(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cache_read_tokens=0,
+        cache_creation_tokens=0,
+        token_source="estimated",
+    )
+
+
+def _estimate_tokens(
+    messages: list[dict],
+    response: object,
+) -> tuple[int, int]:
+    """Return (input_tokens, output_tokens) for a single LLM call.
+
+    Thin wrapper over :func:`_measure_usage` preserving the historical
+    2-tuple contract for existing callers and tests; the cache breakdown
+    and ``token_source`` provenance label are available from
+    :func:`_measure_usage` directly.
+
+    Args:
+        messages: Messages sent to the LLM for this call.
+        response: ``LLMResponse`` from ``ChatLLM.chat`` /
+            ``ChatLLM.stream_chat``.
+
+    Returns:
+        Tuple of (input_tokens, output_tokens).
+    """
+    measured = _measure_usage(messages, response)
+    return measured.input_tokens, measured.output_tokens
 
 
 def build_worker_prompt(
@@ -608,6 +668,15 @@ def _run_worker_impl(
         agent_spec, upstream_summaries, skill_desc, grounding_block=grounding_block,
     )
 
+    # Token accounting accumulators — initialized before the first exit path
+    # (template render failure) so every WorkerResult return below carries the
+    # accumulated cache breakdown and provenance label, never silent defaults.
+    total_input_tokens = 0
+    total_output_tokens = 0
+    total_cache_read_tokens = 0
+    total_cache_creation_tokens = 0
+    token_source: str | None = None
+
     # 4. Resolve prompt template with user vars (missing vars → LLM infers)
     class _FallbackDict(dict):
         """Dict that hints LLM to infer missing template variables."""
@@ -623,7 +692,10 @@ def _run_worker_impl(
         _emit(event_callback, "worker_failed", agent_id, task_id, {"error": error_msg})
         return WorkerResult(
             status="failed", summary="", iterations=0, error=error_msg,
-            input_tokens=0, output_tokens=0,
+            input_tokens=total_input_tokens, output_tokens=total_output_tokens,
+            cache_read_tokens=total_cache_read_tokens,
+            cache_creation_tokens=total_cache_creation_tokens,
+            token_source=token_source,
         )
 
     # 5. Build initial messages
@@ -639,8 +711,6 @@ def _run_worker_impl(
     t0 = time.monotonic()
     iteration = 0
     summary = ""
-    total_input_tokens = 0
-    total_output_tokens = 0
 
     # Threshold for injecting a "wrap up" nudge (80% of budget)
     wrap_up_at = max(1, int(max_iterations * 0.8))
@@ -675,6 +745,9 @@ def _run_worker_impl(
                 iterations=iteration,
                 input_tokens=total_input_tokens,
                 output_tokens=total_output_tokens,
+                cache_read_tokens=total_cache_read_tokens,
+                cache_creation_tokens=total_cache_creation_tokens,
+                token_source=token_source,
                 content_filter_warnings=compute_content_filter_warnings(
                     content_filter_count, iteration + 1,
                 ),
@@ -694,6 +767,9 @@ def _run_worker_impl(
                 iterations=iteration,
                 input_tokens=total_input_tokens,
                 output_tokens=total_output_tokens,
+                cache_read_tokens=total_cache_read_tokens,
+                cache_creation_tokens=total_cache_creation_tokens,
+                token_source=token_source,
                 content_filter_warnings=compute_content_filter_warnings(
                     content_filter_count, iteration + 1,
                 ),
@@ -713,6 +789,9 @@ def _run_worker_impl(
                 iterations=iteration,
                 input_tokens=total_input_tokens,
                 output_tokens=total_output_tokens,
+                cache_read_tokens=total_cache_read_tokens,
+                cache_creation_tokens=total_cache_creation_tokens,
+                token_source=token_source,
                 content_filter_warnings=compute_content_filter_warnings(
                     content_filter_count, iteration + 1,
                 ),
@@ -859,6 +938,9 @@ def _run_worker_impl(
                     iterations=iteration,
                     input_tokens=total_input_tokens,
                     output_tokens=total_output_tokens,
+                    cache_read_tokens=total_cache_read_tokens,
+                    cache_creation_tokens=total_cache_creation_tokens,
+                    token_source=token_source,
                     content_filter_warnings=compute_content_filter_warnings(
                         content_filter_count, iteration + 1,
                     ),
@@ -875,15 +957,28 @@ def _run_worker_impl(
                 error=error_msg,
                 input_tokens=total_input_tokens,
                 output_tokens=total_output_tokens,
+                cache_read_tokens=total_cache_read_tokens,
+                cache_creation_tokens=total_cache_creation_tokens,
+                token_source=token_source,
                 content_filter_warnings=compute_content_filter_warnings(
                     content_filter_count, iteration + 1,
                 ),
             )
 
-        # Accumulate token counts
-        iter_in, iter_out = _estimate_tokens(messages, response)
-        total_input_tokens += iter_in
-        total_output_tokens += iter_out
+        # Accumulate token counts (provider-reported when available, with the
+        # cache breakdown). The provenance label is sticky-estimated, mirroring
+        # runtime._merge_token_source: one heuristic iteration contaminates the
+        # cumulative total, so a partly-estimated sum never reads as billed.
+        measured = _measure_usage(messages, response)
+        total_input_tokens += measured.input_tokens
+        total_output_tokens += measured.output_tokens
+        total_cache_read_tokens += measured.cache_read_tokens
+        total_cache_creation_tokens += measured.cache_creation_tokens
+        token_source = (
+            "estimated"
+            if token_source == "estimated" or measured.token_source == "estimated"
+            else "provider"
+        )
 
         # Track last meaningful assistant content
         if response.content and len(response.content.strip()) > 20:
@@ -916,6 +1011,9 @@ def _run_worker_impl(
                     ),
                     input_tokens=total_input_tokens,
                     output_tokens=total_output_tokens,
+                    cache_read_tokens=total_cache_read_tokens,
+                    cache_creation_tokens=total_cache_creation_tokens,
+                    token_source=token_source,
                     content_filter_warnings=compute_content_filter_warnings(
                         content_filter_count, iteration + 1,
                     ),
@@ -957,6 +1055,9 @@ def _run_worker_impl(
                     error=f"output contract not met: {reason}",
                     input_tokens=total_input_tokens,
                     output_tokens=total_output_tokens,
+                    cache_read_tokens=total_cache_read_tokens,
+                    cache_creation_tokens=total_cache_creation_tokens,
+                    token_source=token_source,
                     content_filter_warnings=compute_content_filter_warnings(
                         content_filter_count, iteration + 1,
                     ),
@@ -969,6 +1070,9 @@ def _run_worker_impl(
                 iterations=iteration + 1,
                 input_tokens=total_input_tokens,
                 output_tokens=total_output_tokens,
+                cache_read_tokens=total_cache_read_tokens,
+                cache_creation_tokens=total_cache_creation_tokens,
+                token_source=token_source,
                 content_filter_warnings=compute_content_filter_warnings(
                     content_filter_count, iteration + 1,
                 ),
@@ -1074,6 +1178,9 @@ def _run_worker_impl(
             error=f"hit iteration limit without a valid deliverable: {reason}",
             input_tokens=total_input_tokens,
             output_tokens=total_output_tokens,
+            cache_read_tokens=total_cache_read_tokens,
+            cache_creation_tokens=total_cache_creation_tokens,
+            token_source=token_source,
             content_filter_warnings=content_filter_warnings,
         )
     _emit(event_callback, "worker_iteration_limit", agent_id, task_id)
@@ -1084,6 +1191,9 @@ def _run_worker_impl(
         iterations=max_iterations,
         input_tokens=total_input_tokens,
         output_tokens=total_output_tokens,
+        cache_read_tokens=total_cache_read_tokens,
+        cache_creation_tokens=total_cache_creation_tokens,
+        token_source=token_source,
         content_filter_warnings=content_filter_warnings,
     )
 

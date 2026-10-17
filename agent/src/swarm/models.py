@@ -275,6 +275,19 @@ class SwarmRun(BaseModel):
         final_report: Final aggregated report text.
         total_input_tokens: Cumulative input tokens across all workers.
         total_output_tokens: Cumulative output tokens across all workers.
+        cache_read_tokens: Cumulative prompt-cache read tokens across all
+            workers, normalized exactly like ``llm_usage.json``'s
+            ``cache_read_tokens`` (see
+            :func:`src.agent.llm_usage._normalize_llm_usage`). ``0`` for runs
+            persisted before cache tracking existed.
+        cache_creation_tokens: Cumulative prompt-cache creation tokens across
+            all workers (``cache_creation`` + ``ephemeral_5m_input_tokens`` +
+            ``ephemeral_1h_input_tokens``). ``0`` for old runs.
+        token_source: Provenance label for the cumulative token totals —
+            ``"provider"`` when every contributing worker reported real usage,
+            ``"estimated"`` when at least one fell back to the ``len // 4``
+            heuristic. ``None`` for runs persisted before this label existed
+            (honestly "unlabeled", never silently "provider").
         provider: LLM provider name in effect when the run started
             (e.g. ``"openai"``, ``"anthropic"``, ``"deepseek"``). Captured from
             ``LANGCHAIN_PROVIDER`` at run-creation time. ``None`` if the
@@ -303,6 +316,9 @@ class SwarmRun(BaseModel):
     final_report: str | None = None
     total_input_tokens: int = 0
     total_output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_creation_tokens: int = 0
+    token_source: str | None = None
     provider: str | None = None
     model: str | None = None
     reasoning_effort: str | None = None
@@ -321,6 +337,21 @@ class WorkerResult(BaseModel):
         error: Error message on failure.
         input_tokens: Cumulative input tokens (exact or estimated).
         output_tokens: Cumulative output tokens (exact or estimated).
+        cache_read_tokens: Cumulative prompt-cache read tokens, normalized
+            exactly like ``llm_usage.json``'s ``cache_read_tokens`` (see
+            :func:`src.agent.llm_usage._normalize_llm_usage`). Defaults to
+            ``0`` so results constructed without cache data (runtime
+            timeout/error paths, pre-cache ``run.json``) stay valid.
+        cache_creation_tokens: Cumulative prompt-cache creation tokens
+            (``cache_creation`` + ``ephemeral_5m_input_tokens`` +
+            ``ephemeral_1h_input_tokens``). Defaults to ``0``.
+        token_source: Provenance of the token counts above — ``"provider"``
+            when every measured LLM call reported real ``usage_metadata``,
+            ``"estimated"`` when at least one fell back to the ``len // 4``
+            heuristic (sticky: a partly-heuristic total is never labeled as
+            billed data). ``None`` when no LLM call was measured (early
+            exits, runtime timeout/error paths, old persisted data) —
+            honestly unlabeled.
     """
 
     status: WorkerStatus
@@ -330,4 +361,7 @@ class WorkerResult(BaseModel):
     error: str | None = None
     input_tokens: int = 0
     output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_creation_tokens: int = 0
+    token_source: str | None = None
     content_filter_warnings: list[str] = Field(default_factory=list)
