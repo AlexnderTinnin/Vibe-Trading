@@ -7,65 +7,32 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Maintenance — 2026-10-17
-
-- The live-trading scheduler (`agent/src/live/runtime/scheduler.py`) now runs
-  on the shared scheduling kernel: the kernel owns the loop task, wakeup and
-  sleep machinery, while the module keeps the live vocabulary (`Job`,
-  `interval:<ms>` / `once`, the pure decision helpers) as a thin façade. Its
-  adaptive "sleep until the earliest deadline, capped at a re-check interval"
-  shape is preserved through a new consumer-provided kernel sleep hint
-  (`sleep_hint_fn`); a hint that raises is logged and falls back to the fixed
-  tick. Public surface, task name (`live-scheduler`), fire semantics,
-  per-job exception isolation and the mandate gate / kill-switch /
-  market-hours layers above it are unchanged — the pre-move test battery is
-  unmodified and green, and `agent/src/live/**` outside the scheduler module
-  is untouched.
-
 ### Maintenance — 2026-10-16
 
-- Extracted a shared scheduling kernel under `agent/src/scheduling/`: trigger
-  grammar and next-due math are pure functions (cron evaluated on the stored
-  timezone's wall clock, interval, once), and the tick-loop kernel takes an
-  injectable clock, backoff policy and wake coalescing. The scheduled-research
-  executor is now a kernel consumer; its external REST contract, job statuses
-  and fire semantics are unchanged.
-- Folded the Brazil data daily sync into the kernel as a protected internal
-  job (`system:br-data-sync`) and retired the standalone `while True` daemon:
-  `run_daemon` now prints a migration notice and returns exit 0 in bounded
-  time, and the ZimaOS sidecar service is gone. First-sync timing changed:
-  instead of syncing at every container start, the job seeds its first run at
-  the next 21:30 America/Sao_Paulo wall-clock slot, and `VIBE_BR_SYNC_TIME`
-  only takes effect while first seeding — changing it later does not
-  reschedule the stored row.
-- Added a protected `system` job category (ids prefixed `system:`, seeded
-  idempotently at startup): rows cannot be deleted or patched through REST
-  or CLI surfaces. The first job in the category is the memory
-  lifecycle-consolidation pass. Both system jobs fire only when the double
-  gate holds — `VIBE_TRADING_ENABLE_SCHEDULER` and the job's own flag
-  (`VT_MEMORY_CONSOLIDATION`, `VIBE_BR_SYNC_ENABLED`) — and both default off
-  outside the shipped ZimaOS template, which hardcodes the scheduler and the
-  daily Brazil sync on. Cancelling a system job by hand-editing the store
-  file is undone at the next startup; turning its flag off halts the row. A
-  system job that exhausted its retry budget (terminal `failed` after
-  consecutive dispatch failures) is reset to `pending` with its failure
-  counters cleared at the next startup while its flag is on — no API surface
-  can resurrect a protected row, so the startup reset is its only recovery
-  path; the `scheduled_research` agent tool's draft schema now also rejects
-  unknown keys (`additionalProperties: false`).
-- Removed the vestigial `cron_service` residue from the channel stack
-  (manager.py constructor parameter, gateway_services.py dataclass fields,
-  channels_config_routes.py docstring), and corrected stale `env_schema.py`
-  comments that named a nonexistent `vibe-trading br-data sync` subcommand
-  instead of the real entry point `python -m src.br_data sync`.
-- Explicitly untouched by this batch: the live/runtime scheduler, channel
-  polling, and the JSON file store — no new database, no destructive
-  migration, `_SCHEMA_VERSION` stays 1 — and there is still no cross-process
-  merge of job stores across multiple instances; two executors on one store
-  remain unsupported.
-- Downgrade warning: the schema version stays 1, but older code reading a
-  store file that contains `system:` rows quarantines the whole file. Delete
-  the system job rows before rolling back.
+- Redact bare Groq/NVIDIA keys, Telegram bot tokens and Slack/Discord webhook
+  secrets from tool results and diagnostics (#1880). Follow-up coverage includes
+  Telegram ids outside the original eight-to-ten-digit assumption, GovSlack and
+  case-insensitive webhook hostnames; benign lookalikes remain unchanged.
+- Update the Windows desktop PyJWT pin to 2.15.1, matching the main lock and
+  including the fix for [GHSA-ffc3-869f-jxw9](https://github.com/jpadilla/pyjwt/security/advisories/GHSA-ffc3-869f-jxw9).
+  Artifact hashes are verified against PyPI; other Windows dependency pins stay unchanged.
+- Refresh opt-in local CSV, Parquet and DuckDB caches when source filesystem
+  revisions change, including DuckDB WAL changes and deletions (#1879). Reuse
+  bounded cache paths and reject mismatched metadata/payload pairs. Edits that
+  preserve all observed filesystem identity fields remain outside this check.
+- Split reversal fees between closed and newly opened quantities so FIFO PnL
+  counts each recorded fee once (#1891). Parse dot-grouped, comma-decimal journal
+  amounts correctly (#1881); ambiguous comma-only thousands retain their prior
+  interpretation. Emit strict JSON with null for unbounded ratios (#1884), and
+  avoid diagnosing disposition bias from zero holding times on both sides.
+- Reject false agreement against zero market-cap references or zero/negative
+  cross-source medians (#1883). Undefined percentage deviations are null.
+- Include completed zero-bar trades in average holding periods (#1876); retain
+  the existing bar-based measure behind the `avg_holding_days` compatibility key.
+  Infeasible minimum weights fall back to equal active magnitudes while keeping
+  signs and gross exposure (#1885). Count one flat peak/trough only once (#1882).
+- Serve Shadow Account reports from the configured runtime root used by the
+  report writer, restoring report links when `VIBE_TRADING_HOME` is set (#1887).
 
 ### Maintenance — 2026-10-15
 

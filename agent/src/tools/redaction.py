@@ -563,8 +563,27 @@ _TEXT_TOKEN_PATTERN = re.compile(
     r"|glpat-[A-Za-z0-9_-]{20,}"             # GitLab PAT
     r"|npm_[A-Za-z0-9]{36}"                  # npm access token
     r"|hf_[A-Za-z0-9]{30,}"                  # Hugging Face token
+    r"|gsk_[A-Za-z0-9]{20,}"                 # Groq API key
+    r"|nvapi-[A-Za-z0-9_-]{20,}"             # NVIDIA API key
     r"|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}"  # JWT
     r")(?![A-Za-z0-9_-])"
+)
+
+#: Channel credentials that embed the secret in a URL path or a bare token, so
+#: neither the key-based nor the issuer-prefix patterns see them. The Telegram
+#: bot token (``<numeric id>:<35 chars>``) appears in the request URL
+#: ``https://api.telegram.org/bot<token>/sendMessage``, which HTTP client error
+#: messages echo verbatim; Slack and Discord incoming-webhook URLs are bearer
+#: credentials whose last path segment is the secret. The Telegram body is a
+#: fixed-length class and the webhook secrets are bounded runs, so matching
+#: stays linear.
+_TEXT_TELEGRAM_BOT_TOKEN_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9_-])(?:bot)?\d+:[A-Za-z0-9_-]{35}(?![A-Za-z0-9_-])"
+)
+_TEXT_WEBHOOK_URL_PATTERN = re.compile(
+    r"(?P<head>(?i:https://hooks\.slack(?:-gov)?\.com)/(?:services|triggers)/[A-Za-z0-9]+/[A-Za-z0-9]+/"
+    r"|(?i:https://(?:[a-z]+\.)?discord(?:app)?\.com)/api/(?:v\d+/)?webhooks/\d+/)"
+    r"[A-Za-z0-9_-]{20,}"
 )
 
 
@@ -602,6 +621,8 @@ def redact_text(text: object) -> str:
     s = _TEXT_AUTH_SCHEME_PATTERN.sub(r"\g<head>\g<scheme> " + _REDACTED, s)
     s = _TEXT_URL_USERINFO_PATTERN.sub(_REDACTED + "@", s)
     s = _TEXT_KV_PATTERN.sub(_sub_credential_pair, s)
+    s = _TEXT_WEBHOOK_URL_PATTERN.sub(r"\g<head>" + _REDACTED, s)
+    s = _TEXT_TELEGRAM_BOT_TOKEN_PATTERN.sub(_REDACTED, s)
     # Bare tokens with no key label in front of them.
     return _TEXT_TOKEN_PATTERN.sub(_REDACTED, s)
 

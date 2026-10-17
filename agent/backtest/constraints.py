@@ -96,7 +96,10 @@ class MinWeight:
             need = float((self.floor - w[below]).sum())
             above = w > self.floor + _TOL
             avail = float((w[above] - self.floor).sum())
-            if avail <= _TOL:
+            # Funding the lift needs more than the names above the floor can
+            # give: the floor is infeasible for this book. Lifting anyway would
+            # push a funder through zero, so degrade to equal weights.
+            if avail <= _TOL or need > avail + _TOL:
                 n = len(w)
                 return np.full(n, w.sum() / n) if n else w
             w[below] = self.floor
