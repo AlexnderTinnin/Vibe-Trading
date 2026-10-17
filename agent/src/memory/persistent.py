@@ -15,10 +15,11 @@ from pathlib import Path
 from typing import Generator, List, Optional
 
 from src.agent.frontmatter import parse_frontmatter as _parse_frontmatter
+from src.config.paths import get_runtime_root
 
 logger = logging.getLogger(__name__)
 
-MEMORY_BASE = Path.home() / ".vibe-trading" / "memory"
+MEMORY_BASE = get_runtime_root() / "memory"
 MAX_INDEX_LINES = 200
 MAX_ENTRY_CHARS = 8000
 MAX_RESULTS = 5
