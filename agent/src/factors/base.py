@@ -294,14 +294,16 @@ def _argmax_last(arr: np.ndarray) -> float:
     if np.isnan(arr).all():
         return np.nan
     arr_filled = np.where(np.isnan(arr), -np.inf, arr)
-    return float(np.argmax(arr_filled))
+    # Ties resolve to the most recent bar, matching bottleneck's move_argmax.
+    return float(len(arr) - 1 - np.argmax(arr_filled[::-1]))
 
 
 def _argmin_last(arr: np.ndarray) -> float:
     if np.isnan(arr).all():
         return np.nan
     arr_filled = np.where(np.isnan(arr), np.inf, arr)
-    return float(np.argmin(arr_filled))
+    # Ties resolve to the most recent bar, matching bottleneck's move_argmin.
+    return float(len(arr) - 1 - np.argmin(arr_filled[::-1]))
 
 
 def ts_argmax(df: pd.DataFrame, n: int) -> pd.DataFrame:
