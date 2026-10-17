@@ -7,6 +7,21 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Maintenance — 2026-10-17
+
+- The live-trading scheduler (`agent/src/live/runtime/scheduler.py`) now runs
+  on the shared scheduling kernel: the kernel owns the loop task, wakeup and
+  sleep machinery, while the module keeps the live vocabulary (`Job`,
+  `interval:<ms>` / `once`, the pure decision helpers) as a thin façade. Its
+  adaptive "sleep until the earliest deadline, capped at a re-check interval"
+  shape is preserved through a new consumer-provided kernel sleep hint
+  (`sleep_hint_fn`); a hint that raises is logged and falls back to the fixed
+  tick. Public surface, task name (`live-scheduler`), fire semantics,
+  per-job exception isolation and the mandate gate / kill-switch /
+  market-hours layers above it are unchanged — the pre-move test battery is
+  unmodified and green, and `agent/src/live/**` outside the scheduler module
+  is untouched.
+
 ### Maintenance — 2026-10-16
 
 - Extracted a shared scheduling kernel under `agent/src/scheduling/`: trigger
