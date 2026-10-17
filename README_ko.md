@@ -52,6 +52,8 @@
 
 > ⚠️ **보안 경고:** X 계정 `VibeTrading_HKU`, Virtuals 프로젝트 `101845`, 토큰 컨트랙트 `0x640BDBF77b6447E8b7DB7894cED84BD1c40571f4`는 모두 Vibe-Trading 공식과 무관합니다. Vibe-Trading은 어떠한 토큰이나 밈코인도 발행하거나 공식적으로 지지한 적이 없습니다. 해당 토큰을 구매하거나 지갑을 연결하거나 어떠한 서명도 하지 마세요. [자세히 보기](SECURITY.md#official-channels--impersonation).
 
+- **2026-10-17** 🛠️ **Token 사용량과 리서치 신뢰성**: 실행 상세·채팅·swarm에서 모델 사용량을 확인할 수 있습니다([#1890](https://github.com/HKUDS/Vibe-Trading/pull/1890)). 리서치와 선택적 백그라운드 작업에 공통 스케줄러를 적용했으며([#1893](https://github.com/HKUDS/Vibe-Trading/pull/1893)), 실거래 스케줄러는 변경하지 않았습니다. 거래 일지 날짜·시간 결합, 근거 파일 경로, 팩터 동률 처리, 메모리 저장 경로, 수치 오류 처리와 채널 진행 표시를 수정했습니다. [CHANGELOG](CHANGELOG.md)를 참조하세요.
+
 - **2026-10-16** 🛠️ **인증 정보 보호와 금융 계산 수정**: 채널·모델 인증 정보 마스킹을 확대하고([#1880](https://github.com/HKUDS/Vibe-Trading/pull/1880)), 로컬 데이터 수정 후 가격 캐시를 갱신하며([#1879](https://github.com/HKUDS/Vibe-Trading/pull/1879)), 포지션 전환 수수료 중복 계산을 수정했습니다([#1891](https://github.com/HKUDS/Vibe-Trading/pull/1891)). 유럽식 거래 금액, 엄격한 JSON, 0·음수 비교, 보유 기간, 최소 비중, 평평한 고점·저점 판정, 보고서 경로도 수정했습니다. [CHANGELOG](CHANGELOG.md)를 참조하세요.
 
 - **2026-10-15** 🛠️ **모델 비용 관리와 리서치 신뢰성**: 실거래 러너는 판단마다 독립된 세션을 사용하며, 판단 주기와 재시작 후에도 유지되는 일일 사용량 한도를 설정할 수 있습니다([#1854](https://github.com/HKUDS/Vibe-Trading/issues/1854)). 가벼운 백테스트 미리보기와 전체 거래 내역을 함께 제공합니다([#1853](https://github.com/HKUDS/Vibe-Trading/pull/1853), [#1865](https://github.com/HKUDS/Vibe-Trading/pull/1865)). 백분율 근거 계산, 복사한 실행 기록의 중복 제거, 스윙 신호 시점, 암호화폐 라우팅 및 인증 정보 마스킹을 수정했습니다. 범위와 제한은 [CHANGELOG](CHANGELOG.md)를 참고하세요.

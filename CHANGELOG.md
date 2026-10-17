@@ -7,6 +7,30 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Maintenance — 2026-10-17
+
+- Surface provider-reported LLM usage and cache counts in Run Detail, live chat
+  usage, and swarm totals with estimated/unlabeled provenance (#1890). Swarm
+  history hydration restores missing task rows. A reported zero remains zero
+  beside a nonzero count; an unreported direction stays unknown. These are token
+  counts, not monetary cost or cross-run billing totals.
+- Share the scheduler kernel across scheduled research and opt-in memory/Brazil
+  background jobs (#1893). The live-trading scheduler is unchanged. ZimaOS keeps
+  both scheduler and daily-sync flags off by default. Brazilian source failures
+  now reach the scheduler's existing retry budget instead of recording success.
+  The first daily sync waits for its configured slot; manual sync remains available.
+  Before downgrading to code without system-job support, remove `system:` rows
+  from the stored job file: older readers reject them and quarantine that file.
+- Combine generic trade-journal date/time columns before FIFO matching, including
+  Excel serial dates and time fractions (#1900). Complete datetime columns retain
+  precedence. Reject goal evidence artifacts outside their claimed run (#1895).
+- Resolve tied rolling extrema consistently across pandas and bottleneck (#1898),
+  and return an error envelope when options-payoff results overflow (#1897).
+- Honor `VIBE_TRADING_HOME` for persistent memory and its search index (#1896),
+  reject non-positive CLI list/search limits (#1886), keep trade-symbol choices
+  in code order (#1877), and deduplicate channel progress against visible statuses
+  rather than hidden tool hints (#1878).
+
 ### Maintenance — 2026-10-16
 
 - Redact bare Groq/NVIDIA keys, Telegram bot tokens and Slack/Discord webhook

@@ -52,6 +52,8 @@
 
 > ⚠️ **セキュリティ警告：** Xアカウント `VibeTrading_HKU`、Virtualsプロジェクト `101845`、およびトークンコントラクト `0x640BDBF77b6447E8b7DB7894cED84BD1c40571f4` は、いずれもVibe-Trading公式のものではありません。Vibe-Tradingはこれまで、いかなるトークンやミームコインも発行・公認していません。購入、ウォレットの接続、署名は行わないでください。[詳細](SECURITY.md#official-channels--impersonation)
 
+- **2026-10-17** 🛠️ **Token 使用量とリサーチの信頼性**：実行詳細・チャット・swarm でモデル使用量を確認できます（[#1890](https://github.com/HKUDS/Vibe-Trading/pull/1890)）。リサーチと任意のバックグラウンドジョブに共通スケジューラを導入しました（[#1893](https://github.com/HKUDS/Vibe-Trading/pull/1893)）。実取引のスケジューラは変更していません。取引記録の日時結合、根拠ファイルのパス、因子の同値処理、メモリ保存先、数値エラー処理、チャネル進捗を修正。詳細は [CHANGELOG](CHANGELOG.md)。
+
 - **2026-10-16** 🛠️ **認証情報の保護と金融計算の修正**：チャネル・モデルの認証情報のマスキングを拡充（[#1880](https://github.com/HKUDS/Vibe-Trading/pull/1880)）、ローカルデータ更新後の価格キャッシュを更新（[#1879](https://github.com/HKUDS/Vibe-Trading/pull/1879)）、ドテン売買の手数料の二重計上を修正（[#1891](https://github.com/HKUDS/Vibe-Trading/pull/1891)）。欧州形式の取引金額、厳密な JSON、ゼロ・負値の比較、保有期間、最低ウェイト、横ばいの高値・安値判定、レポートのパスも修正。[CHANGELOG](CHANGELOG.md) を参照。
 
 - **2026-10-15** 🛠️ **モデル利用費用の管理とリサーチの信頼性**：ライブランナーは判断ごとに独立したセッションを使い、判断間隔と永続化された日次利用上限を設定できます（[#1854](https://github.com/HKUDS/Vibe-Trading/issues/1854)）。軽量なバックテストプレビューと完全な取引履歴を両立（[#1853](https://github.com/HKUDS/Vibe-Trading/pull/1853)、[#1865](https://github.com/HKUDS/Vibe-Trading/pull/1865)）。百分率の根拠計算、コピーした実行履歴の重複排除、スイング信号の発生時点、暗号資産のルーティング、認証情報のマスキングを修正しました。範囲と制約は [CHANGELOG](CHANGELOG.md) を参照。

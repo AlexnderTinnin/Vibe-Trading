@@ -52,6 +52,8 @@
 
 > ⚠️ **安全警告：** X 账号 `VibeTrading_HKU`、Virtuals 项目 `101845` 及代币合约 `0x640BDBF77b6447E8b7DB7894cED84BD1c40571f4` 均非 Vibe-Trading 官方。我们从未发行或背书任何代币或 meme 币。请勿购买、连接钱包或签名。[详细说明](SECURITY.md#official-channels--impersonation)。
 
+- **2026-10-17** 🛠️ **Token 用量与研究可靠性**：运行详情、聊天和 swarm 展示模型用量（[#1890](https://github.com/HKUDS/Vibe-Trading/pull/1890)）。研究任务与可选后台任务采用共享调度内核（[#1893](https://github.com/HKUDS/Vibe-Trading/pull/1893)），实盘调度保持不变。修复交易日志日期时间配对、证据路径、因子并列值、记忆目录、数值错误处理与渠道进度。详见 [CHANGELOG](CHANGELOG.md)。
+
 - **2026-10-16** 🛠️ **凭据安全与金融计算修复**：扩大渠道及模型凭据脱敏覆盖（[#1880](https://github.com/HKUDS/Vibe-Trading/pull/1880)），本地数据修改后刷新行情缓存（[#1879](https://github.com/HKUDS/Vibe-Trading/pull/1879)），反向开仓手续费只计一次（[#1891](https://github.com/HKUDS/Vibe-Trading/pull/1891)）。修正欧洲格式交易金额、严格 JSON、零值及负值比较、持仓周期、最低权重、平台型峰谷识别与报告路径。详见 [CHANGELOG](CHANGELOG.md)。
 
 - **2026-10-15** 🛠️ **模型费用控制与研究可靠性**：实盘执行程序每次决策使用独立会话，支持可配置频率与持久化每日用量预算（[#1854](https://github.com/HKUDS/Vibe-Trading/issues/1854)）。回测采用轻量预览，同时保留完整交易记录（[#1853](https://github.com/HKUDS/Vibe-Trading/pull/1853)、[#1865](https://github.com/HKUDS/Vibe-Trading/pull/1865)）。修正百分比证据运算、复制回测历史去重、波峰波谷信号时点、加密货币路由与凭证脱敏。范围及限制见 [CHANGELOG](CHANGELOG.md)。
