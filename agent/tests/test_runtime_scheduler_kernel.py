@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from src.live.runtime.scheduler import (
     DEFAULT_MAX_RECHECK_MS,
     TASK_NAME,
@@ -181,3 +183,12 @@ def test_default_max_recheck_is_unchanged() -> None:
     assert sched._max_recheck_ms == DEFAULT_MAX_RECHECK_MS == 5 * 60 * 1000
     # No jobs: the hinted sleep is the idle-poll cap.
     assert sched._sleep_hint(0) == DEFAULT_MAX_RECHECK_MS
+
+
+def test_task_property_on_the_facade_is_read_only() -> None:
+    """``_task`` was a writable attribute before the kernel adoption; as a
+    property it must reject assignment so owners cannot bypass the kernel's
+    guarded handle release."""
+    sched = Scheduler(_noop_fire)
+    with pytest.raises(AttributeError):
+        sched._task = None

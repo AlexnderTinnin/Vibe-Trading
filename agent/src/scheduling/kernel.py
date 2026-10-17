@@ -30,8 +30,9 @@ arguments whose defaults mirror ``AgentTuningConfig`` in
 inject configured values.
 
 Single-writer invariant: one kernel instance is owned by exactly one
-composition root (the FastAPI lifespan for the scheduled-research executor).
-The kernel does not coordinate multiple owners and must not be started from
+composition root — today the FastAPI lifespan owns the scheduled-research
+executor's kernel, and the live runtime owns one kernel per runner start —
+so the kernel never coordinates multiple owners and must not be started from
 two loops.
 """
 
@@ -202,7 +203,14 @@ class SchedulerKernel:
         Idempotent. When disabled, this is a no-op. Must be called from the
         event loop that will own the task.
         """
-        if not self._enabled or self.is_running:
+        if not self._enabled:
+            return
+        if self.is_running:
+            if self._stopping:
+                # A stop() is in flight and the old loop task has not been reaped
+                # yet: refuse rather than risk racing the teardown. Logged so a
+                # refused restart is visible instead of a silent no-op.
+                logger.warning("scheduler kernel start refused: a stop is in flight")
             return
         self._stopping = False
         self._wakeup = asyncio.Event()
@@ -216,7 +224,8 @@ class SchedulerKernel:
         even when a tick is wedged: the wakeup set below releases a sleeping
         loop in the common case, and ``task.cancel()`` is the fallback so
         shutdown never blocks for a full tick (or forever) if the wakeup
-        raced the loop's sleep or the tick itself is stuck.
+        raced the loop's sleep or the tick itself is stuck. The loop-task
+        handle is released only if this stop() still owns it.
         """
         if not self._enabled:
             return
@@ -231,7 +240,13 @@ class SchedulerKernel:
             await task
         except asyncio.CancelledError:
             pass
-        self._task = None
+        # Release the handle only if this stop() still owns it. A concurrent
+        # start() can legitimately land between the old loop task finishing and
+        # this line (once the task is done, is_running is False) and install a
+        # NEW loop task; clearing it here would orphan a running loop that
+        # reports itself stopped and that no later stop() can reach.
+        if self._task is task:
+            self._task = None
 
     # -- loop internals -------------------------------------------------------
 

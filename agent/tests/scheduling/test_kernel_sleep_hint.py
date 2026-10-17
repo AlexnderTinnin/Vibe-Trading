@@ -14,10 +14,21 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+import logging
 
 import pytest
 
 from src.scheduling.kernel import SchedulerKernel
+
+
+async def _noop_tick(now_ms: int) -> None:  # pragma: no cover - does nothing
+    pass
+
+
+def _tasks_named(name: str) -> list[asyncio.Task]:
+    """Return the not-yet-finished tasks with ``name``, excluding this one."""
+    current = asyncio.current_task()
+    return [t for t in asyncio.all_tasks() if t.get_name() == name and t is not current]
 
 
 def test_sleep_hint_replaces_the_fixed_tick() -> None:
@@ -178,3 +189,95 @@ def test_wakeup_still_shortens_a_hinted_sleep() -> None:
     asyncio.run(scenario())
 
     assert len(ticks) >= 2
+
+
+def test_concurrent_start_while_stopping_does_not_orphan_the_loop() -> None:
+    """Regression: the old unconditional ``self._task = None`` at the tail of
+    stop() nulled a NEW loop task installed by a start() that landed in the
+    microstep where the old task was already done but stop() had not resumed.
+    The kernel must release the handle only if this stop() still owns it."""
+
+    async def scenario() -> None:
+        kernel = SchedulerKernel(
+            tick_interval_ms=60_000,
+            now_fn=lambda: 1000,
+            on_tick=_noop_tick,
+            task_name="t-orphan",
+            sleep_hint_fn=lambda now_ms: 60_000,
+        )
+        kernel.start()
+        first = kernel.task
+        assert first is not None
+        # Registered BEFORE stop() awaits the task, so this callback runs in
+        # the same completion batch but ahead of stop()'s own resume callback:
+        # at that point first is done (is_running is False) and start()
+        # legitimately installs a NEW loop task.
+        first.add_done_callback(lambda _t: kernel.start())
+        try:
+            await asyncio.wait_for(kernel.stop(), timeout=5.0)
+
+            live = _tasks_named("t-orphan")
+            assert len(live) == 1, "the restarted loop must still be alive"
+            assert kernel.task is not None
+            assert kernel.task is not first
+            assert not kernel.task.done()
+            assert kernel.is_running is True
+
+            # And the public stop() must be able to reap the replacement.
+            await asyncio.wait_for(kernel.stop(), timeout=5.0)
+            assert _tasks_named("t-orphan") == []
+            assert kernel.task is None
+        finally:
+            for t in _tasks_named("t-orphan"):
+                t.cancel()
+
+    asyncio.run(scenario())
+
+
+def test_start_refused_while_stop_in_flight_logs_and_does_not_spawn_second_task() -> None:
+    """While stop() is in flight and its loop task has not been reaped yet
+    (is_running still True), start() must refuse: no second loop task, and a
+    visible refusal log instead of a silent no-op."""
+    records: list[logging.LogRecord] = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    async def scenario() -> None:
+        kernel = SchedulerKernel(
+            tick_interval_ms=60_000,
+            now_fn=lambda: 1000,
+            on_tick=_noop_tick,
+            task_name="t-refuse",
+            sleep_hint_fn=lambda now_ms: 60_000,
+        )
+        kernel.start()
+        first = kernel.task
+        assert first is not None
+        stopper = asyncio.create_task(kernel.stop())
+        await asyncio.sleep(0)  # let stop() set _stopping and cancel the loop
+        assert kernel._stopping is True
+
+        kernel.start()  # refused: the old task is still running (not reaped)
+        assert len(_tasks_named("t-refuse")) == 1  # no second loop spawned
+
+        await asyncio.wait_for(stopper, timeout=5.0)
+        assert kernel.task is None
+        assert kernel.is_running is False
+
+    handler = _Capture()
+    kernel_logger = logging.getLogger("src.scheduling.kernel")
+    old_propagate = kernel_logger.propagate
+    kernel_logger.propagate = False
+    kernel_logger.addHandler(handler)
+    try:
+        asyncio.run(scenario())
+    finally:
+        kernel_logger.removeHandler(handler)
+        kernel_logger.propagate = old_propagate
+
+    assert any(
+        record.levelno == logging.WARNING and "start refused" in record.getMessage()
+        for record in records
+    )

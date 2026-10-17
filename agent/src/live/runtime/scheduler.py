@@ -229,7 +229,6 @@ class Scheduler:
         """
         self._on_fire = on_fire
         self._max_recheck_ms = max_recheck_ms
-        self._now_fn = now_fn
         self._jobs: dict[str, Job] = {}
         self._kernel = SchedulerKernel(
             now_fn=now_fn,
