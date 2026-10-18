@@ -232,10 +232,13 @@ class SchedulerKernel:
         task = self._task
         if task is None:
             return
-        self._stopping = True
-        if self._wakeup is not None:
-            self._wakeup.set()
-        task.cancel()
+        if not self._stopping:
+            self._stopping = True
+            if self._wakeup is not None:
+                self._wakeup.set()
+            # A second cancellation interrupts the tick's async finally block.
+            # Concurrent callers share the first cancellation and await cleanup.
+            task.cancel()
         try:
             await task
         except asyncio.CancelledError:

@@ -7,6 +7,21 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Maintenance — 2026-10-18
+
+- Preserve explicit zero financial-rigor parameters and hypothesis backtest
+  validation evidence; accept Shanghai ETF `.SS` aliases (#1906, #1902, #1907).
+- Respect `VIBE_TRADING_HOME` for autopilot runs, alpha-bench caches/reports and
+  Gildata code mappings; keep overflowed Calmar ratios finite, consistent with
+  the existing risk-ratio fallback (#1904, #1901).
+- Tolerate incomplete JSON/UTF-8 Swarm event tails while still rejecting complete
+  invalid records. Deliver Matrix final replies when preview sending failed;
+  CI installs the Matrix extra and executes the regression (#1908, #1903).
+- Match explicit currency identities to financial evidence, including SEC XBRL
+  units and magnitude-scaled amounts. Bare `$` and `¥` remain ambiguous (#1905).
+- Adopt the shared scheduler kernel for live scheduling with adaptive wakeups;
+  concurrent stops await cleanup without cancelling it a second time (#1899).
+
 ### Maintenance — 2026-10-17
 
 - Surface provider-reported LLM usage and cache counts in Run Detail, live chat
