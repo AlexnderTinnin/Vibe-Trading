@@ -85,6 +85,7 @@ _CURRENCY_CODES = frozenset(
     {
         "USD", "CNY", "CNH", "RMB", "HKD", "JPY", "EUR", "GBP", "KRW", "INR",
         "CAD", "AUD", "SGD", "TWD", "THB", "IRR", "IRT", "USDT", "USDC",
+        "CHF", "NZD", "BRL", "ARS", "VND",
     }
 )
 
@@ -901,13 +902,15 @@ def _currency_code_for_figure(text: str, start: int, end: int) -> str | None:
         return "EUR"
     if head.endswith("£") or tail.startswith("£"):
         return "GBP"
-    if tail.startswith("人民币"):
-        return "CNY"
-    if tail.startswith("美元"):
-        return "USD"
-    if tail.startswith("円"):
-        return "JPY"
-    if tail.startswith("원"):
+    if head.endswith("₩") or tail.startswith("₩"):
+        return "KRW"
+    if head.endswith("₹") or tail.startswith("₹"):
+        return "INR"
+    # Match complete currency units, not the opening of an unrelated word.
+    word = _cjk_run(tail)
+    if word in {"人民币", "美元", "円"}:
+        return {"人民币": "CNY", "美元": "USD", "円": "JPY"}[word]
+    if tail.startswith("원") and (len(tail) == 1 or not tail[1].isalpha()):
         return "KRW"
 
     return None
@@ -1134,8 +1137,9 @@ def scan_figures(content: str, block: FiguresBlock) -> list[Figure]:
         cell = next((entry for entry in cells if entry[0] <= start and end <= entry[1]), None)
         row, position = (cell[2], cell[3]) if cell else (None, None)
         structural = row is not None and position in (row.date_column, row.symbol_column)
-        currency = _currency_before(text, token.start) or _currency_after(text, token.end)
-        currency_code = _currency_code_for_figure(text, token.start, token.end)
+        currency_end = magnitude_suffix(text, token.end)[1]
+        currency = _currency_before(text, token.start) or _currency_after(text, currency_end)
+        currency_code = _currency_code_for_figure(text, token.start, currency_end)
         marked = percent or currency or "." in token.digits or token.grouped
         # A cell that also holds a word is prose set in a table: its plain
         # integer is a count or a horizon, as it would be in a sentence (#1471).
