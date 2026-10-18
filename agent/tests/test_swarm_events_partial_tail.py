@@ -38,3 +38,30 @@ def test_corrupt_terminated_line_still_raises(tmp_path):
         f.write("not json\n")
     with pytest.raises(ValueError):
         store.read_events("run1")
+
+
+def test_partial_utf8_tail_is_retried_after_completion(tmp_path):
+    store = _store(tmp_path)
+    event = SwarmEvent(type="run_started", timestamp="2026-01-01T00:00:00+00:00", data={"text": "中文"})
+    encoded = (event.model_dump_json() + "\n").encode("utf-8")
+    split = encoded.index("中".encode("utf-8")) + 1
+    path = tmp_path / "run1" / "events.jsonl"
+    path.write_bytes(encoded[:split])
+    assert store.read_events("run1") == []
+    with path.open("ab") as stream:
+        stream.write(encoded[split:])
+    assert store.read_events("run1") == [event]
+
+
+def test_complete_json_with_invalid_schema_is_not_a_partial_tail(tmp_path):
+    store = _store(tmp_path)
+    (tmp_path / "run1" / "events.jsonl").write_text('{}', encoding="utf-8")
+    with pytest.raises(ValueError):
+        store.read_events("run1")
+
+
+def test_complete_unterminated_event_is_read(tmp_path):
+    store = _store(tmp_path)
+    event = SwarmEvent(type="run_started", timestamp="2026-01-01T00:00:00+00:00")
+    (tmp_path / "run1" / "events.jsonl").write_text(event.model_dump_json(), encoding="utf-8")
+    assert store.read_events("run1") == [event]
