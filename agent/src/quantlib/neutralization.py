@@ -85,11 +85,19 @@ def _weights(values: np.ndarray) -> np.ndarray:
     return values / values.max()
 
 
+def _bounded(values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Change units before centering/squaring to avoid float overflow/underflow."""
+    units = np.max(np.abs(values), axis=0)
+    units = np.where(units > 0, units, 1.0)
+    return values / units, units
+
+
 def _design(x: np.ndarray, weights: np.ndarray) -> np.ndarray:
     # Center/scale only on the current complete cross-section; this preserves
     # the regression span while making rank checks insensitive to input units.
     probability = weights / weights.sum()
-    centered = x - probability @ x
+    bounded, _ = _bounded(x)
+    centered = bounded - probability @ bounded
     scale = np.sqrt(probability @ np.square(centered))
     scaled = centered / np.where(scale > 0, scale, 1.0)
     return np.column_stack([np.ones(len(x)), scaled])
@@ -102,6 +110,8 @@ def _rank(design: np.ndarray, weights: np.ndarray, rcond: float) -> int:
 
 def _correlation(a: np.ndarray, b: np.ndarray, weights: np.ndarray) -> float | None:
     probability = weights / weights.sum()
+    a, _ = _bounded(a)
+    b, _ = _bounded(b)
     a = a - probability @ a
     b = b - probability @ b
     scale_a = float(np.sqrt(probability @ np.square(a)))
@@ -333,7 +343,8 @@ def neutralize_factor(
             detail["reason"] = "insufficient_residual_dof"
             continue
         fit_y = y[valid]
-        centered_y = fit_y - (fit_w / fit_w.sum()) @ fit_y
+        bounded_y, signal_units = _bounded(fit_y)
+        centered_y = bounded_y - (fit_w / fit_w.sum()) @ bounded_y
         root_w = np.sqrt(fit_w)
         beta = np.linalg.lstsq(
             design * root_w[:, None], centered_y * root_w, rcond=rcond
@@ -347,6 +358,12 @@ def neutralize_factor(
             residual = np.zeros(count)
         elif standardize:
             residual /= np.sqrt((fit_w / fit_w.sum()) @ np.square(residual))
+        elif not standardize:
+            with np.errstate(over="ignore", invalid="ignore"):
+                residual *= signal_units
+        if not np.isfinite(residual).all():
+            detail["reason"] = "nonfinite_result"
+            continue
         residuals.iloc[row, np.flatnonzero(valid)] = residual
         detail.update(
             status="ok",
@@ -445,13 +462,25 @@ def pca_factors(
             detail["reason"] = "insufficient_sample"
             continue
         x = x[valid]
-        means = x.mean(axis=0)
-        scales = x.std(axis=0)
-        if np.any(scales == 0):
+        bounded, units = _bounded(x)
+        bounded_means = bounded.mean(axis=0)
+        centered = bounded - bounded_means
+        bounded_scales = np.sqrt(np.mean(np.square(centered), axis=0))
+        means = bounded_means * units
+        scales = bounded_scales * units
+        if np.any(bounded_scales == 0):
             detail["reason"] = "constant_factor"
             continue
         fitted_scales = scales if standardize else np.ones(len(panels))
-        z = (x - means) / fitted_scales
+        # Covariance PCA must retain relative factor units: use ONE common
+        # scale, then restore score units. Per-column scaling here would
+        # accidentally turn covariance PCA into correlation PCA.
+        score_units = 1.0 if standardize else float(units.max())
+        z = (
+            centered / bounded_scales
+            if standardize
+            else centered * (units / score_units)
+        )
         rank = np.linalg.matrix_rank(z)
         detail["rank"] = int(rank)
         if rank == 0 or (fixed_count and n_components > rank):
@@ -473,8 +502,21 @@ def pca_factors(
             )
         )
         loadings = model.components_[:keep].copy()
+        with np.errstate(over="ignore", invalid="ignore"):
+            scores = scores[:, :keep] * score_units
+        if not np.isfinite(scores).all():
+            detail["reason"] = "nonfinite_result"
+            continue
         for col in range(keep):
-            if loadings[col, np.argmax(np.abs(loadings[col]))] < 0:
+            magnitude = np.abs(loadings[col])
+            # Equal-magnitude loadings are common with two standardized
+            # factors. Resolve roundoff ties in input order, not by SVD noise.
+            anchor = np.flatnonzero(
+                np.isclose(
+                    magnitude, magnitude.max(), rtol=32 * np.finfo(float).eps, atol=0
+                )
+            )[0]
+            if loadings[col, anchor] < 0:
                 loadings[col] *= -1
                 scores[:, col] *= -1
             name = f"PC{col + 1}"

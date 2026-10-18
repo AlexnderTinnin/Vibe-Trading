@@ -285,7 +285,15 @@ def test_pca_components_are_uncorrelated_and_full_components_reconstruct_inputs(
         np.testing.assert_allclose(scores @ loadings, expected, atol=1e-12)
         assert sum(detail["explained_variance_ratio"]) == pytest.approx(1)
         for loading in loadings:
-            assert loading[np.argmax(np.abs(loading))] >= 0
+            anchors = np.flatnonzero(
+                np.isclose(
+                    np.abs(loading),
+                    np.abs(loading).max(),
+                    rtol=32 * np.finfo(float).eps,
+                    atol=0,
+                )
+            )
+            assert loading[anchors[0]] >= 0
 
 
 def test_pca_variance_fraction_handles_variable_component_counts_and_missing_assets():
@@ -409,3 +417,89 @@ def test_quantlib_tool_lists_calls_and_serializes_both_transforms():
     )
     assert not error["ok"]
     assert "requires weights" in error["error"]
+
+
+@pytest.mark.parametrize("units", [1e-200, 1e200])
+@pytest.mark.parametrize("method", ["ols", "wls"])
+def test_residualization_is_stable_under_finite_unit_changes(units, method):
+    signal, controls = sample(n_rows=1)
+    kwargs = {"method": method}
+    if method == "wls":
+        kwargs["weights"] = panel([np.arange(1, 21)])
+    reference = neutralize_factor(signal, controls, **kwargs)
+    changed = {name: value * units for name, value in controls.items()}
+    actual = neutralize_factor(signal * units, changed, **kwargs)
+    assert actual.diagnostics[0]["status"] == "ok"
+    np.testing.assert_allclose(actual.residuals, reference.residuals, atol=1e-12)
+    raw = neutralize_factor(signal * units, changed, standardize=False, **kwargs)
+    expected = neutralize_factor(signal, controls, standardize=False, **kwargs)
+    np.testing.assert_allclose(raw.residuals / units, expected.residuals, atol=1e-12)
+    assert all(
+        np.isfinite(v) for v in actual.diagnostics[0]["exposure_before"].values()
+    )
+
+
+@pytest.mark.parametrize("units", [1e-200, 1e200])
+@pytest.mark.parametrize("standardize", [False, True])
+def test_pca_preserves_variance_and_reconstruction_across_units(units, standardize):
+    _, factors = sample(n_rows=1)
+    reference = pca_factors(factors, n_components=2, standardize=standardize)
+    changed = {name: value * units for name, value in factors.items()}
+    actual = pca_factors(changed, n_components=2, standardize=standardize)
+    detail = actual.diagnostics[0]
+    assert detail["status"] == "ok"
+    np.testing.assert_allclose(
+        detail["explained_variance_ratio"],
+        reference.diagnostics[0]["explained_variance_ratio"],
+        atol=1e-12,
+    )
+    for name, scores in actual.components.items():
+        np.testing.assert_allclose(
+            scores / (1 if standardize else units),
+            reference.components[name],
+            atol=1e-12,
+        )
+    scores = np.column_stack([frame.iloc[0] for frame in actual.components.values()])
+    loadings = np.array([list(v.values()) for v in detail["loadings"].values()])
+    scales = np.array(list(detail["scales"].values()))
+    means = np.array(list(detail["means"].values()))
+    # Normalize before comparing to avoid an absolute tolerance hiding tiny output.
+    reconstructed = (scores @ loadings) * (scales / units) + means / units
+    original = np.column_stack([frame.iloc[0] for frame in factors.values()])
+    np.testing.assert_allclose(reconstructed, original, atol=1e-12)
+
+
+@pytest.mark.parametrize("units", [1e-200, 1e200])
+def test_signal_units_alone_never_turn_real_residuals_into_zero(units):
+    signal, controls = sample(n_rows=1)
+    reference = neutralize_factor(signal, controls)
+    result = neutralize_factor(signal * units, controls)
+    assert not result.diagnostics[0]["zero_residual"]
+    np.testing.assert_allclose(result.residuals, reference.residuals, atol=1e-12)
+
+
+def test_raw_pca_preserves_relative_factor_units_against_independent_svd():
+    _, factors = sample(n_rows=1)
+    factors["momentum"] *= 100
+    x = np.column_stack([frame.iloc[0] for frame in factors.values()])
+    centered = x - x.mean(axis=0)
+    _, singular, vt = np.linalg.svd(centered, full_matrices=False)
+    result = pca_factors(factors, n_components=2, standardize=False)
+    detail = result.diagnostics[0]
+    np.testing.assert_allclose(
+        detail["explained_variance_ratio"], singular**2 / (singular**2).sum()
+    )
+    actual = np.array([list(v.values()) for v in detail["loadings"].values()])
+    np.testing.assert_allclose(np.abs(actual), np.abs(vt), atol=1e-12)
+
+
+def test_unrepresentable_raw_pca_scores_skip_instead_of_successful_infinities():
+    factor = panel([1e308, -1e308] * 6)
+    result = pca_factors(
+        {"a": factor, "b": factor, "c": factor, "d": factor},
+        n_components=1,
+        standardize=False,
+    )
+    assert result.components == {}
+    assert result.diagnostics[0]["reason"] == "nonfinite_result"
+    assert result.diagnostics[0]["fit_count"] == 0

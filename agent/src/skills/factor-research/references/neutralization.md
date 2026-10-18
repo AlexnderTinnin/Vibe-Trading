@@ -130,11 +130,34 @@ counts, with unused component rows kept NaN.
 
 Per-time diagnostics include loadings, factor means/scales, explained-variance
 ratios and retained variance. The largest absolute loading anchors each
-component's sign. It does not prevent rotation, permutation or instability
+component's sign; roundoff ties use the first factor in input order. It does not prevent rotation, permutation or instability
 between times when eigenvalues are close; do not assume `PC1` is a stable
 tradable economic factor without assessing this. PCA decorrelates components,
 not designated industry/style exposures. Avoid choosing PCA settings on the
 final test period.
+
+## User entry points
+
+- **Web chat / interactive CLI**: ask to load `factor-research` and its
+  `references/neutralization.md`, then use `quantlib_call` with your supplied
+  time-by-asset panels. For example: "Use neutralize_factor with my signal and
+  size/industry controls; report missing observations, selected controls and
+  exposure before/after. Then use pca_factors on my factor panels and report
+  retained variance. Do not invent missing inputs or infer profitability."
+- **CLI prompt file**: put that request and the indexed JSON panels in
+  `request.txt`, then run `vibe-trading run --prompt-file request.txt`.
+- **REST chat**: send the same prompt as `content` to the authenticated
+  `POST /sessions/{session_id}/messages` route of an existing session. This
+  starts the ordinary agent run; it is not a synchronous transform endpoint.
+- **MCP**: call the served `quantlib_call` tool directly with the arguments
+  below. This executes the calculation without an LLM or shell tool.
+- **Python**: import the two functions as above for deterministic processing
+  and full-size output.
+
+Chat entry points require a configured model and an enabled `quantlib_call`
+tool. This workflow does not add an `alpha neutralize` subcommand or a dedicated
+Alpha Zoo form. Panel inputs and economically justified controls are supplied
+by the caller; no exposure data source is fetched automatically.
 
 ## Tool invocation
 
@@ -172,7 +195,10 @@ which would change each cross-section.
 ## Diagnostics and evaluation
 
 Every observation reports status, complete/fitted counts and output coverage.
-Skipped observations have zero output coverage. Residualization also reports
+Skipped observations have zero output coverage. Calculations rescale finite
+inputs before centering/squaring to preserve unit invariance. If raw residuals
+or raw PCA scores exceed floating-point range, that observation is skipped with
+`nonfinite_result`, never reported as a successful infinite panel. Residualization also reports
 selected/dropped controls, exclusion reasons, rank, residual degrees of freedom,
 zero-residual flags and Pearson exposures before/after on identical fit assets.
 WLS exposures use its regression weights. Undefined correlations are `None`.
@@ -187,7 +213,7 @@ profitable alpha.
 ## Local validation
 
 ```bash
-pytest agent/tests/quantlib/test_neutralization.py agent/tests/test_quantlib_tool.py -q
+pytest agent/tests/quantlib/test_neutralization.py agent/tests/test_quantlib_tool.py agent/tests/test_mcp_neutralization.py -q
 ```
 
 Fixtures are synthetic and offline. Tests cover OLS/WLS reference fits, weighted
